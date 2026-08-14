@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "serverless-crm-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-08-22",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "CORP_ID": "REPLACE_WITH_WECHAT_CORP_ID"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crm_db",
+      "database_id": "2d22512b-69dd-47ea-bb89-7f776847eff4",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "0d660dec0a0148edbb1b7a480218c94a"
+    }
+  ]
+}

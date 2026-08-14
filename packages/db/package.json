@@ -1,0 +1,28 @@
+{
+  "name": "@crm/db",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rimraf dist",
+    "generate": "drizzle-kit generate",
+    "migrate:local": "wrangler d1 migrations apply serverless-crm --local"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20250816.0",
+    "drizzle-kit": "^0.31.4",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.3",
+    "wrangler": "4.31.0"
+  }
+}
