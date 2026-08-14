@@ -1,61 +1,39 @@
 // apps/api/src/routes/auth.ts
 import { createDb } from '@crm/db/client'
 import { users } from '@crm/db/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { sign } from 'hono/jwt'
 import type { Env } from '../env'
-import { getWeChatAccessToken, isWeChatApiError } from '../services/wechat'
 
 const JWT_TTL_SECONDS = 60 * 60 * 8
 
-interface WeChatUserInfoResponse {
-  errcode?: number
-  errmsg?: string
-  UserId?: string
+interface LoginPayload {
+  username?: unknown
+  pin_code?: unknown
 }
 
 export const auth = new Hono<{ Bindings: Env }>()
 
-auth.post('/wechat', async (c) => {
-  let body: { code?: unknown }
+auth.post('/login', async (c) => {
+  let body: LoginPayload
 
   try {
-    body = await c.req.json<{ code?: unknown }>()
+    body = await c.req.json<LoginPayload>()
   } catch {
     return c.json({ error: '请求体必须是 JSON' }, 400)
   }
 
-  if (typeof body.code !== 'string' || body.code.trim().length === 0) {
-    return c.json({ error: 'code 是必填项' }, 400)
+  if (
+    typeof body.username !== 'string' ||
+    body.username.trim().length === 0 ||
+    typeof body.pin_code !== 'string' ||
+    body.pin_code.length === 0
+  ) {
+    return c.json({ error: 'username 和 pin_code 是必填项' }, 400)
   }
 
-  let accessToken: string
-  try {
-    accessToken = await getWeChatAccessToken(c.env)
-  } catch {
-    return c.json({ error: '获取企业微信 access_token 失败' }, 502)
-  }
-
-  const url = new URL('https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo')
-  url.searchParams.set('access_token', accessToken)
-  url.searchParams.set('code', body.code)
-
-  let weChatUser: WeChatUserInfoResponse
-  try {
-    const response = await fetch(url)
-    if (!response.ok) {
-      return c.json({ error: '企业微信用户信息请求失败' }, 502)
-    }
-    weChatUser = (await response.json()) as WeChatUserInfoResponse
-  } catch {
-    return c.json({ error: '企业微信用户信息请求失败' }, 502)
-  }
-
-  if (isWeChatApiError(weChatUser) || !weChatUser.UserId) {
-    return c.json({ error: '企业微信授权码无效或已过期' }, 401)
-  }
-
+  const username = body.username.trim()
   const db = createDb(c.env.DB)
   const [user] = await db
     .select({
@@ -65,11 +43,16 @@ auth.post('/wechat', async (c) => {
       role: users.role,
     })
     .from(users)
-    .where(eq(users.id, weChatUser.UserId))
+    .where(
+      and(
+        or(eq(users.id, username), eq(users.name, username)),
+        eq(users.pinCode, body.pin_code),
+      ),
+    )
     .limit(1)
 
   if (!user) {
-    return c.json({ error: '该企业微信用户尚未开通 CRM 权限' }, 403)
+    return c.json({ error: '账号或 PIN 密码错误' }, 401)
   }
 
   const now = Math.floor(Date.now() / 1000)

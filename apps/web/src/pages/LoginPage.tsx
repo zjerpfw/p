@@ -1,53 +1,76 @@
 // apps/web/src/pages/LoginPage.tsx
-import { MessageCircleMore } from 'lucide-react'
-import { Navigate } from 'react-router-dom'
+import { LockKeyhole, UserRound } from 'lucide-react'
+import { useState } from 'react'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getAccessToken } from '@/lib/api'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { apiFetch, getAccessToken, setAccessToken } from '@/lib/api'
 
-const WECHAT_AUTHORIZE_URL = 'https://open.weixin.qq.com/connect/oauth2/authorize'
-const OAUTH_STATE_STORAGE_KEY = 'crm_wechat_oauth_state'
-
-function createWeChatAuthorizeUrl(state: string) {
-  const corpId = import.meta.env.VITE_WECHAT_CORP_ID ?? 'WECHAT_CORP_ID_PLACEHOLDER'
-  const redirectUri = import.meta.env.VITE_WECHAT_REDIRECT_URI ?? 'http://localhost:5173/auth/wechat/callback'
-
-  const url = new URL(WECHAT_AUTHORIZE_URL)
-  url.searchParams.set('appid', corpId)
-  url.searchParams.set('redirect_uri', redirectUri)
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', 'snsapi_base')
-  url.searchParams.set('state', state)
-
-  return `${url.toString()}#wechat_redirect`
+interface LoginResponse {
+  token: string
 }
 
 export default function LoginPage() {
+  const navigate = useNavigate()
+  const [username, setUsername] = useState('zhangsan')
+  const [pinCode, setPinCode] = useState('123456')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   if (getAccessToken()) {
     return <Navigate replace to="/" />
   }
 
-  function handleLogin() {
-    const state = crypto.randomUUID()
-    const authorizeUrl = createWeChatAuthorizeUrl(state)
-    sessionStorage.setItem(OAUTH_STATE_STORAGE_KEY, state)
-    window.location.assign(authorizeUrl)
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const response = await apiFetch<LoginResponse>('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, pin_code: pinCode }),
+      })
+      setAccessToken(response.token)
+      navigate('/', { replace: true })
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : '登录失败，请重试')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <main className="grid min-h-screen place-items-center bg-stone-100 p-5 text-foreground">
       <Card className="w-full max-w-sm border-border shadow-sm">
         <CardHeader className="items-center pb-3 text-center">
-          <div className="grid size-12 place-items-center rounded-lg bg-[#07c160] text-white">
-            <MessageCircleMore aria-hidden="true" className="size-6" />
+          <div className="grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
+            <LockKeyhole aria-hidden="true" className="size-6" />
           </div>
           <CardTitle className="mt-4 text-xl">CRM 工作台</CardTitle>
-          <CardDescription>使用企业微信账号安全登录</CardDescription>
+          <CardDescription>使用内部账号和临时 PIN 登录</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button className="w-full bg-[#07c160] hover:bg-[#06ad56]" onClick={handleLogin} type="button">
-            企业微信登录
-          </Button>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-1.5">
+              <Label htmlFor="username">账号或姓名</Label>
+              <div className="relative">
+                <UserRound aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Input autoComplete="username" className="pl-9" id="username" onChange={(event) => setUsername(event.target.value)} value={username} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pin-code">PIN 密码</Label>
+              <Input autoComplete="current-password" id="pin-code" inputMode="numeric" onChange={(event) => setPinCode(event.target.value)} type="password" value={pinCode} />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button className="w-full" disabled={isSubmitting || !username || !pinCode} type="submit">
+              {isSubmitting ? '正在登录' : '登录'}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </main>

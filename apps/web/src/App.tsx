@@ -7,13 +7,11 @@ import CustomerDetailPage from './pages/CustomerDetailPage'
 import DealsPage from './pages/DealsPage'
 import LoginPage from './pages/LoginPage'
 import MyWorkPage from './pages/MyWorkPage'
-import WeChatCallbackPage from './pages/WeChatCallbackPage'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/auth/wechat/callback" element={<WeChatCallbackPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route index element={<Navigate replace to="/customers" />} />

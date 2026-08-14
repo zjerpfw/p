@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `pin_code` text DEFAULT '123456' NOT NULL;

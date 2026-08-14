@@ -22,6 +22,7 @@ export const users = sqliteTable('users', {
   name: text('name').notNull(),
   avatarUrl: text('avatar_url'),
   role: text('role').notNull(),
+  pinCode: text('pin_code').notNull().default('123456'),
 })
 
 export const customers = sqliteTable('customers', {
