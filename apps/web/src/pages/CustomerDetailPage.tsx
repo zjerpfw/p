@@ -49,7 +49,13 @@ export default function CustomerDetailPage() {
   const [activityType, setActivityType] = useState<CreateActivityPayload['type']>('Meeting')
   const [selectedDealId, setSelectedDealId] = useState('')
   const [coordinates, setCoordinates] = useState<{ lng: number; lat: number } | null>(null)
-  const { getLocation, isLoading: isLocating, error: locationError } = useAMapLocation()
+  const {
+    getLocation,
+    isLoading: isLocating,
+    isConfigLoading: isMapConfigLoading,
+    isConfigured: isMapConfigured,
+    error: locationError,
+  } = useAMapLocation()
 
   const customer = data?.customer
 
@@ -225,15 +231,19 @@ export default function CustomerDetailPage() {
             </div>
             <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
               <p className="font-medium">当前位置</p>
-              {isLocating ? (
+              {isMapConfigLoading ? (
+                <p className="mt-1 text-muted-foreground">正在加载地图配置...</p>
+              ) : isLocating ? (
                 <p className="mt-1 text-muted-foreground">正在获取精准位置...</p>
+              ) : !isMapConfigured ? (
+                <p className="mt-1 text-destructive">系统未配置地图密钥，无法获取定位，请联系管理员在系统设置中配置。</p>
               ) : (
                 <p className="mt-1 text-muted-foreground">{locationAddress ?? locationError ?? '尚未获取位置'}</p>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button disabled={isLocating} onClick={getCurrentLocation} type="button" variant="outline">
+            <Button disabled={isLocating || isMapConfigLoading || !isMapConfigured} onClick={getCurrentLocation} type="button" variant="outline">
               <MapPin aria-hidden="true" />{isLocating ? '正在定位' : '获取当前位置'}
             </Button>
             <Button disabled={createActivity.isPending || !data?.deals.length} onClick={submitVisitRecord} type="button">

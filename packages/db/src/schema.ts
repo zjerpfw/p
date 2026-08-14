@@ -1,4 +1,5 @@
 // packages/db/src/schema.ts
+import { sql } from 'drizzle-orm'
 import {
   integer,
   real,
@@ -23,6 +24,14 @@ export const users = sqliteTable('users', {
   avatarUrl: text('avatar_url'),
   role: text('role').notNull(),
   pinCode: text('pin_code').notNull().default('123456'),
+})
+
+export const systemConfigs = sqliteTable('system_configs', {
+  configKey: text('config_key').primaryKey(),
+  configValue: text('config_value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
 })
 
 export const customers = sqliteTable('customers', {

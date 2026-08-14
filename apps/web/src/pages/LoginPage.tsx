@@ -14,8 +14,8 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [username, setUsername] = useState('zhangsan')
-  const [pinCode, setPinCode] = useState('123456')
+  const [username, setUsername] = useState('')
+  const [pinCode, setPinCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -35,7 +35,7 @@ export default function LoginPage() {
         body: JSON.stringify({ username, pin_code: pinCode }),
       })
       setAccessToken(response.token)
-      navigate('/', { replace: true })
+      navigate('/deals', { replace: true })
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : '登录失败，请重试')
     } finally {
@@ -51,22 +51,22 @@ export default function LoginPage() {
             <LockKeyhole aria-hidden="true" className="size-6" />
           </div>
           <CardTitle className="mt-4 text-xl">CRM 工作台</CardTitle>
-          <CardDescription>使用内部账号和临时 PIN 登录</CardDescription>
+          <CardDescription>使用内部用户名和 PIN 码登录</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
-              <Label htmlFor="username">账号或姓名</Label>
+              <Label htmlFor="username">用户名</Label>
               <div className="relative">
                 <UserRound aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                <Input autoComplete="username" className="pl-9" id="username" onChange={(event) => setUsername(event.target.value)} value={username} />
+                <Input autoComplete="username" autoFocus className="pl-9" id="username" onChange={(event) => setUsername(event.target.value)} required value={username} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="pin-code">PIN 密码</Label>
-              <Input autoComplete="current-password" id="pin-code" inputMode="numeric" onChange={(event) => setPinCode(event.target.value)} type="password" value={pinCode} />
+              <Label htmlFor="pin-code">PIN 码</Label>
+              <Input autoComplete="current-password" id="pin-code" inputMode="numeric" onChange={(event) => setPinCode(event.target.value)} required type="password" value={pinCode} />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p aria-live="polite" className="text-sm text-destructive">{error}</p>}
             <Button className="w-full" disabled={isSubmitting || !username || !pinCode} type="submit">
               {isSubmitting ? '正在登录' : '登录'}
             </Button>

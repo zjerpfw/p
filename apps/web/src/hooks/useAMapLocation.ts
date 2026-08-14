@@ -1,6 +1,8 @@
 // apps/web/src/hooks/useAMapLocation.ts
 import AMapLoader from '@amap/amap-jsapi-loader'
+import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
+import { apiFetch } from '@/lib/api'
 
 interface AMapPosition {
   lng: number
@@ -27,24 +29,25 @@ interface LocationResult {
   formattedAddress: string
 }
 
+interface PublicConfigResponse {
+  configs: Record<string, string>
+}
+
 declare global {
   interface Window {
     _AMapSecurityConfig?: { securityJsCode: string }
   }
 }
 
+const MAP_CONFIG_ERROR = '系统未配置地图密钥，无法获取定位'
 let amapPromise: Promise<AMapInstance> | null = null
+let amapConfigFingerprint: string | null = null
 
-function loadAMap() {
-  if (!amapPromise) {
-    const key = import.meta.env.VITE_AMAP_KEY
-    const securityJsCode = import.meta.env.VITE_AMAP_SECURITY_CODE
-
-    if (!key || !securityJsCode) {
-      return Promise.reject(new Error('请配置高德地图 VITE_AMAP_KEY 和 VITE_AMAP_SECURITY_CODE'))
-    }
-
+function loadAMap(key: string, securityJsCode: string) {
+  const fingerprint = `${key}:${securityJsCode}`
+  if (!amapPromise || amapConfigFingerprint !== fingerprint) {
     window._AMapSecurityConfig = { securityJsCode }
+    amapConfigFingerprint = fingerprint
     amapPromise = AMapLoader.load({
       key,
       version: '2.0',
@@ -56,24 +59,48 @@ function loadAMap() {
 }
 
 export function useAMapLocation() {
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const configQuery = useQuery({
+    queryKey: ['public-configs'],
+    queryFn: () => apiFetch<PublicConfigResponse>('/api/configs/public'),
+  })
+  const amapKey = configQuery.data?.configs.amap_key?.trim() ?? ''
+  const securityJsCode = configQuery.data?.configs.amap_security_code?.trim() ?? ''
+  const isConfigured = Boolean(amapKey && securityJsCode)
 
   useEffect(() => {
-    void loadAMap()
+    if (configQuery.isLoading || configQuery.isError) return
+    if (!isConfigured) {
+      setError(MAP_CONFIG_ERROR)
+      return
+    }
+
+    setIsLoading(true)
+    void loadAMap(amapKey, securityJsCode)
       .then(() => setError(null))
       .catch((loadError: unknown) => {
         setError(loadError instanceof Error ? loadError.message : '高德地图加载失败')
       })
       .finally(() => setIsLoading(false))
-  }, [])
+  }, [amapKey, configQuery.isError, configQuery.isLoading, isConfigured, securityJsCode])
 
   const getLocation = useCallback(async (): Promise<LocationResult> => {
     setIsLoading(true)
     setError(null)
 
     try {
-      const AMap = await loadAMap()
+      if (configQuery.isLoading) {
+        throw new Error('正在加载地图配置，请稍后重试')
+      }
+      if (configQuery.isError) {
+        throw new Error('地图配置加载失败，请稍后重试')
+      }
+      if (!isConfigured) {
+        throw new Error(MAP_CONFIG_ERROR)
+      }
+
+      const AMap = await loadAMap(amapKey, securityJsCode)
       const result = await new Promise<AMapGeolocationResult>((resolve, reject) => {
         AMap.plugin('AMap.Geolocation', () => {
           const geolocation = new AMap.Geolocation({
@@ -105,7 +132,13 @@ export function useAMapLocation() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [amapKey, configQuery.isError, configQuery.isLoading, isConfigured, securityJsCode])
 
-  return { getLocation, isLoading, error }
+  return {
+    getLocation,
+    isLoading,
+    isConfigLoading: configQuery.isLoading,
+    isConfigured,
+    error: error ?? (configQuery.error instanceof Error ? configQuery.error.message : null),
+  }
 }

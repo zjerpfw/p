@@ -7,6 +7,7 @@ import CustomerDetailPage from './pages/CustomerDetailPage'
 import DealsPage from './pages/DealsPage'
 import LoginPage from './pages/LoginPage'
 import MyWorkPage from './pages/MyWorkPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/deals" element={<DealsPage />} />
           <Route path="/my-work" element={<MyWorkPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />

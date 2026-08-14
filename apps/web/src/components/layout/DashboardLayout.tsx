@@ -1,5 +1,5 @@
 // apps/web/src/components/layout/DashboardLayout.tsx
-import { BriefcaseBusiness, LayoutDashboard, UsersRound } from 'lucide-react'
+import { BriefcaseBusiness, LayoutDashboard, Settings, UsersRound } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 
@@ -7,11 +7,12 @@ const navigation = [
   { to: '/customers', label: '客户池', icon: UsersRound },
   { to: '/deals', label: '商机看板', icon: LayoutDashboard },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
+  { to: '/settings', label: '系统设置', icon: Settings },
 ]
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   return (
-    <nav className={cn(mobile ? 'grid grid-cols-3' : 'space-y-1')}>
+    <nav className={cn(mobile ? 'grid grid-cols-4' : 'space-y-1')}>
       {navigation.map(({ icon: Icon, label, to }) => (
         <NavLink
           className={({ isActive }) =>

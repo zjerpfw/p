@@ -29,6 +29,13 @@
       "when": 1786713863411,
       "tag": "0003_tranquil_molly_hayes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786714898828,
+      "tag": "0004_fixed_inertia",
+      "breakpoints": true
     }
   ]
 }
