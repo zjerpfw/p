@@ -1,14 +1,16 @@
 // apps/web/src/pages/LoginPage.tsx
+import { MessageCircleMore } from 'lucide-react'
+import { Navigate } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAccessToken } from '@/lib/api'
+
 const WECHAT_AUTHORIZE_URL = 'https://open.weixin.qq.com/connect/oauth2/authorize'
 const OAUTH_STATE_STORAGE_KEY = 'crm_wechat_oauth_state'
 
 function createWeChatAuthorizeUrl(state: string) {
-  const corpId = import.meta.env.VITE_WECHAT_CORP_ID
-  const redirectUri = import.meta.env.VITE_WECHAT_REDIRECT_URI
-
-  if (!corpId || !redirectUri) {
-    return null
-  }
+  const corpId = import.meta.env.VITE_WECHAT_CORP_ID ?? 'WECHAT_CORP_ID_PLACEHOLDER'
+  const redirectUri = import.meta.env.VITE_WECHAT_REDIRECT_URI ?? 'http://localhost:5173/auth/wechat/callback'
 
   const url = new URL(WECHAT_AUTHORIZE_URL)
   url.searchParams.set('appid', corpId)
@@ -21,36 +23,33 @@ function createWeChatAuthorizeUrl(state: string) {
 }
 
 export default function LoginPage() {
-  const isConfigured = Boolean(
-    import.meta.env.VITE_WECHAT_CORP_ID && import.meta.env.VITE_WECHAT_REDIRECT_URI,
-  )
+  if (getAccessToken()) {
+    return <Navigate replace to="/" />
+  }
 
   function handleLogin() {
     const state = crypto.randomUUID()
     const authorizeUrl = createWeChatAuthorizeUrl(state)
-    if (authorizeUrl) {
-      sessionStorage.setItem(OAUTH_STATE_STORAGE_KEY, state)
-      window.location.assign(authorizeUrl)
-    }
+    sessionStorage.setItem(OAUTH_STATE_STORAGE_KEY, state)
+    window.location.assign(authorizeUrl)
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-50 p-6 text-slate-950">
-      <section className="w-full max-w-sm border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <p className="text-sm font-medium text-emerald-700">Serverless CRM</p>
-        <h1 className="mt-2 text-2xl font-semibold">登录工作台</h1>
-        <button
-          className="mt-8 w-full bg-emerald-700 px-4 py-2.5 font-medium text-white enabled:hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={!isConfigured}
-          onClick={handleLogin}
-          type="button"
-        >
-          企业微信登录
-        </button>
-        {!isConfigured && (
-          <p className="mt-3 text-sm text-red-700">请配置企业微信登录环境变量。</p>
-        )}
-      </section>
+    <main className="grid min-h-screen place-items-center bg-stone-100 p-5 text-foreground">
+      <Card className="w-full max-w-sm border-border shadow-sm">
+        <CardHeader className="items-center pb-3 text-center">
+          <div className="grid size-12 place-items-center rounded-lg bg-[#07c160] text-white">
+            <MessageCircleMore aria-hidden="true" className="size-6" />
+          </div>
+          <CardTitle className="mt-4 text-xl">CRM 工作台</CardTitle>
+          <CardDescription>使用企业微信账号安全登录</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button className="w-full bg-[#07c160] hover:bg-[#06ad56]" onClick={handleLogin} type="button">
+            企业微信登录
+          </Button>
+        </CardContent>
+      </Card>
     </main>
   )
 }

@@ -5,52 +5,14 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { sign } from 'hono/jwt'
 import type { Env } from '../env'
+import { getWeChatAccessToken, isWeChatApiError } from '../services/wechat'
 
-const WECHAT_ACCESS_TOKEN_KEY = 'wechat_access_token'
-const WECHAT_ACCESS_TOKEN_TTL_SECONDS = 7000
 const JWT_TTL_SECONDS = 60 * 60 * 8
-
-interface WeChatAccessTokenResponse {
-  errcode?: number
-  errmsg?: string
-  access_token?: string
-}
 
 interface WeChatUserInfoResponse {
   errcode?: number
   errmsg?: string
   UserId?: string
-}
-
-function weChatApiError(response: { errcode?: number; errmsg?: string }) {
-  return response.errcode !== undefined && response.errcode !== 0
-}
-
-async function getWeChatAccessToken(env: Env): Promise<string> {
-  const cachedToken = await env.CACHE.get(WECHAT_ACCESS_TOKEN_KEY)
-  if (cachedToken) {
-    return cachedToken
-  }
-
-  const url = new URL('https://qyapi.weixin.qq.com/cgi-bin/gettoken')
-  url.searchParams.set('corpid', env.CORP_ID)
-  url.searchParams.set('corpsecret', env.CORP_SECRET)
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error('WeChat token request failed')
-  }
-
-  const data = (await response.json()) as WeChatAccessTokenResponse
-  if (weChatApiError(data) || !data.access_token) {
-    throw new Error(`WeChat token request failed: ${data.errcode ?? 'unknown'}`)
-  }
-
-  await env.CACHE.put(WECHAT_ACCESS_TOKEN_KEY, data.access_token, {
-    expirationTtl: WECHAT_ACCESS_TOKEN_TTL_SECONDS,
-  })
-
-  return data.access_token
 }
 
 export const auth = new Hono<{ Bindings: Env }>()
@@ -90,7 +52,7 @@ auth.post('/wechat', async (c) => {
     return c.json({ error: '企业微信用户信息请求失败' }, 502)
   }
 
-  if (weChatApiError(weChatUser) || !weChatUser.UserId) {
+  if (isWeChatApiError(weChatUser) || !weChatUser.UserId) {
     return c.json({ error: '企业微信授权码无效或已过期' }, 401)
   }
 

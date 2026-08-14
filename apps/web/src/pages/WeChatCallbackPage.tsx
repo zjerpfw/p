@@ -1,5 +1,6 @@
 // apps/web/src/pages/WeChatCallbackPage.tsx
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiFetch, setAccessToken } from '../lib/api'
 
 const OAUTH_STATE_STORAGE_KEY = 'crm_wechat_oauth_state'
@@ -10,6 +11,7 @@ interface LoginResponse {
 
 export default function WeChatCallbackPage() {
   const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     async function completeLogin() {
@@ -32,14 +34,14 @@ export default function WeChatCallbackPage() {
           body: JSON.stringify({ code }),
         })
         setAccessToken(response.token)
-        window.location.replace('/')
+        navigate('/', { replace: true })
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : '登录失败，请重试。')
       }
     }
 
     void completeLogin()
-  }, [])
+  }, [navigate])
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-50 p-6 text-slate-950">

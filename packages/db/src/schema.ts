@@ -47,7 +47,26 @@ export const deals = sqliteTable('deals', {
   amount: integer('amount').notNull(),
   stage: text('stage', { enum: dealStages }).notNull(),
   expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
+  startDate: integer('start_date', { mode: 'timestamp' }),
+  durationYears: integer('duration_years'),
+  expireDate: integer('expire_date', { mode: 'timestamp' }),
+  renewalReminderDays: integer('renewal_reminder_days').notNull().default(30),
+  softwareCost: integer('software_cost'),
+  taxCost: integer('tax_cost'),
+  rebateAmount: integer('rebate_amount'),
+  netProfit: integer('net_profit'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+})
+
+export const dealSplits = sqliteTable('deal_splits', {
+  id: text('id').primaryKey(),
+  dealId: text('deal_id')
+    .notNull()
+    .references(() => deals.id),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id),
+  splitAmount: integer('split_amount').notNull(),
 })
 
 export const activities = sqliteTable('activities', {
@@ -59,6 +78,7 @@ export const activities = sqliteTable('activities', {
   notes: text('notes'),
   checkInLng: real('check_in_lng'),
   checkInLat: real('check_in_lat'),
+  checkInAddress: text('check_in_address'),
   createdBy: text('created_by')
     .notNull()
     .references(() => users.id),

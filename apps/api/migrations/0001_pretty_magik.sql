@@ -1,0 +1,1 @@
+ALTER TABLE `activities` ADD `check_in_address` text;

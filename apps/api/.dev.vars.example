@@ -1,6 +1,7 @@
 # apps/api/.dev.vars.example
 CORP_ID=wwxxxxxxxxxxxxxxxx
 CORP_SECRET=replace-with-enterprise-wechat-app-secret
+WECHAT_AGENT_ID=1000002
 JWT_SECRET=replace-with-a-random-32-byte-or-longer-secret
 GITHUB_OWNER=your-github-organization-or-user
 GITHUB_REPOSITORY=your-private-image-repository

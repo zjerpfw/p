@@ -1,6 +1,8 @@
 // apps/web/src/lib/api.ts
 const TOKEN_STORAGE_KEY = 'crm_jwt'
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+const API_BASE_URL = import.meta.env.PROD
+  ? (import.meta.env.VITE_API_BASE_URL ?? '')
+  : 'http://localhost:8787'
 
 export class ApiError extends Error {
   constructor(

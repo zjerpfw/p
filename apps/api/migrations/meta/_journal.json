@@ -8,6 +8,20 @@
       "when": 1786696113120,
       "tag": "0000_foamy_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786703856124,
+      "tag": "0001_pretty_magik",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786704201118,
+      "tag": "0002_hard_punisher",
+      "breakpoints": true
     }
   ]
 }
