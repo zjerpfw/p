@@ -239,8 +239,7 @@ storage.post('/attachments', async (c) => {
     const [activity] = await db
       .select({ id: activities.id })
       .from(activities)
-      .innerJoin(deals, eq(activities.dealId, deals.id))
-      .where(and(eq(activities.id, body.activity_id), eq(deals.customerId, customer.id), eq(deals.isDeleted, false)))
+      .where(and(eq(activities.id, body.activity_id), eq(activities.customerId, customer.id)))
       .limit(1)
     if (!activity) return c.json({ error: '关联跟进记录不存在或不属于当前客户' }, 400)
   }

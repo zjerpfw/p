@@ -20,6 +20,8 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
   const [customerId, setCustomerId] = useState('')
   const [productName, setProductName] = useState('')
   const [amount, setAmount] = useState('')
+  const [channel, setChannel] = useState('')
+  const [originalPrice, setOriginalPrice] = useState('')
   const [expectedCloseDate, setExpectedCloseDate] = useState('')
 
   const createDeal = useMutation({
@@ -30,6 +32,8 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
         customer_id: customerId,
         product_name: productName.trim(),
         amount: Number(amount),
+        channel: channel.trim(),
+        original_price: originalPrice ? Number(originalPrice) : Number(amount),
         expected_close_date: expectedCloseDate,
       }),
     }),
@@ -41,6 +45,8 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
       setCustomerId('')
       setProductName('')
       setAmount('')
+      setChannel('')
+      setOriginalPrice('')
       setExpectedCloseDate('')
       onOpenChange(false)
       toast.success('商机已新建')
@@ -66,8 +72,10 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
             </select>
           </div>
           <div className="space-y-1.5"><Label htmlFor="create-deal-product">意向产品 / 版本</Label><Input id="create-deal-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div>
+          <div className="space-y-1.5"><Label htmlFor="create-deal-channel">渠道 / 来源</Label><Input id="create-deal-channel" list="deal-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="deal-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5"><Label htmlFor="create-deal-amount">预计金额（元）</Label><Input id="create-deal-amount" min="0" onChange={(event) => setAmount(event.target.value)} placeholder="0" type="number" value={amount} /></div>
+            <div className="space-y-1.5"><Label htmlFor="create-deal-original-price">原价 / 刊例价（元）</Label><Input id="create-deal-original-price" min="0" onChange={(event) => setOriginalPrice(event.target.value)} placeholder="默认与预计金额一致" type="number" value={originalPrice} /></div>
             <div className="space-y-1.5"><Label htmlFor="create-deal-close-date">预计成交日</Label><Input id="create-deal-close-date" onChange={(event) => setExpectedCloseDate(event.target.value)} type="date" value={expectedCloseDate} /></div>
           </div>
         </div>

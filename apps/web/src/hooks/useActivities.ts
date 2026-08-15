@@ -13,7 +13,7 @@ export interface WorkActivity {
   customerId: string
   customerName: string
   productName: string
-  dealStage: DealStage
+  dealStage: DealStage | null
 }
 
 export function useActivities() {

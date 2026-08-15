@@ -77,6 +77,8 @@ export const deals = sqliteTable(
       .notNull()
       .references(() => customers.id),
     amount: integer('amount').notNull(),
+    channel: text('channel'),
+    originalPrice: integer('original_price'),
     productName: text('product_name').notNull().default('未填写产品'),
     stage: text('stage', { enum: dealStages }).notNull(),
     expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
@@ -111,8 +113,10 @@ export const dealSplits = sqliteTable('deal_splits', {
 
 export const activities = sqliteTable('activities', {
   id: text('id').primaryKey(),
-  dealId: text('deal_id')
+  customerId: text('customer_id')
     .notNull()
+    .references(() => customers.id),
+  dealId: text('deal_id')
     .references(() => deals.id),
   type: text('type', { enum: activityTypes }).notNull(),
   notes: text('notes'),
@@ -123,7 +127,10 @@ export const activities = sqliteTable('activities', {
     .notNull()
     .references(() => users.id),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-})
+}, (table) => [
+  index('activities_customer_id_idx').on(table.customerId),
+  index('activities_deal_id_idx').on(table.dealId),
+])
 
 export const attachments = sqliteTable(
   'attachments',

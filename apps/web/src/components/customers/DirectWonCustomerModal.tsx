@@ -39,6 +39,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
   const [contactPhone, setContactPhone] = useState('')
   const [address, setAddress] = useState('')
   const [productName, setProductName] = useState('')
+  const [channel, setChannel] = useState('')
+  const [originalPrice, setOriginalPrice] = useState(0)
   const [amount, setAmount] = useState(0)
   const [startDate, setStartDate] = useState(today)
   const [durationYears, setDurationYears] = useState(1)
@@ -72,6 +74,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
         address: address.trim(),
         product_name: productName.trim(),
         amount,
+        channel: channel.trim(),
+        original_price: originalPrice || amount,
         start_date: startDate,
         duration_years: durationYears,
         gift_months: giftMonths,
@@ -94,6 +98,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
       setContactPhone('')
       setAddress('')
       setProductName('')
+      setChannel('')
+      setOriginalPrice(0)
       setAmount(0)
       setDurationYears(1)
       setGiftMonths(0)
@@ -138,7 +144,7 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <h3 className="text-sm font-semibold">购买服务</h3>
-            <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="direct-won-product">产品 / 版本</Label><Input id="direct-won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-amount">成交金额（元）</Label><Input id="direct-won-amount" min="0" onChange={(event) => setAmount(toInteger(event.target.value))} type="number" value={amount} /></div></div>
+            <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="direct-won-product">产品 / 版本</Label><Input id="direct-won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-channel">渠道 / 来源</Label><Input id="direct-won-channel" list="direct-won-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="direct-won-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div><div className="space-y-1.5"><Label htmlFor="direct-won-amount">成交金额（元）</Label><Input id="direct-won-amount" min="0" onChange={(event) => setAmount(toInteger(event.target.value))} type="number" value={amount} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-original-price">原价 / 刊例价（元）</Label><Input id="direct-won-original-price" min="0" onChange={(event) => setOriginalPrice(toInteger(event.target.value))} placeholder="默认与成交金额一致" type="number" value={originalPrice} /></div></div>
           </section>
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">

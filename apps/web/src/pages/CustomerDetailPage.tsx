@@ -6,20 +6,12 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { CreateActivitySheet } from '@/components/activities/CreateActivitySheet'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { customerDetailQueryKey, useCustomerDetail } from '@/hooks/useCustomerDetail'
-import { useAMapLocation } from '@/hooks/useAMapLocation'
 import { apiFetch } from '@/lib/api'
 import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel, getCustomerStatusTone, getDealStageTone } from '@/lib/presentation'
 import { toast } from 'sonner'
@@ -34,7 +26,8 @@ interface PreviewResponse {
 }
 
 interface CreateActivityPayload {
-  deal_id: string
+  customer_id: string
+  deal_id?: string
   type: 'Call' | 'Meeting' | 'Email'
   notes: string
   check_in_lng: number | null
@@ -62,31 +55,15 @@ export default function CustomerDetailPage() {
   const { data, error, isLoading } = useCustomerDetail(id)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [visitDialogOpen, setVisitDialogOpen] = useState(false)
+  const [activitySheetOpen, setActivitySheetOpen] = useState(false)
   const [editCustomerOpen, setEditCustomerOpen] = useState(false)
-  const [locationAddress, setLocationAddress] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadMessage, setUploadMessage] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [activityType, setActivityType] = useState<CreateActivityPayload['type']>('Meeting')
-  const [selectedDealId, setSelectedDealId] = useState('')
   const [selectedAttachmentActivityId, setSelectedAttachmentActivityId] = useState('')
-  const [coordinates, setCoordinates] = useState<{ lng: number; lat: number } | null>(null)
-  const {
-    getLocation,
-    isLoading: isLocating,
-    isConfigLoading: isMapConfigLoading,
-    isConfigured: isMapConfigured,
-    error: locationError,
-  } = useAMapLocation()
 
   const customer = data?.customer
-
-  useEffect(() => {
-    if (!selectedDealId && data?.deals[0]?.id) {
-      setSelectedDealId(data.deals[0].id)
-    }
-  }, [data?.deals, selectedDealId])
 
   const createActivity = useMutation({
     mutationFn: (payload: CreateActivityPayload) =>
@@ -100,10 +77,7 @@ export default function CustomerDetailPage() {
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
         queryClient.invalidateQueries({ queryKey: ['activities'] }),
       ])
-      setVisitDialogOpen(false)
       setNotes('')
-      setCoordinates(null)
-      setLocationAddress(null)
       toast.success('跟进记录已保存')
     },
     onError: (activityError) => toast.error(activityError instanceof Error ? activityError.message : '跟进记录保存失败'),
@@ -133,39 +107,20 @@ export default function CustomerDetailPage() {
     deleteCustomer.mutate()
   }
 
-  async function getCurrentLocation() {
-    try {
-      const location = await getLocation()
-      setCoordinates({ lng: location.lng, lat: location.lat })
-      setLocationAddress(location.formattedAddress)
-    } catch {
-      // The hook already exposes a user-facing error state.
-    }
-  }
-
-  function submitVisitRecord() {
-    const dealId = selectedDealId || data?.deals[0]?.id
-    if (!dealId) {
-      toast.error('请先关联一条商机后再提交跟进记录')
-      return
-    }
-
-    createActivity.mutate({
-      deal_id: dealId,
-      type: activityType,
-      notes: notes.trim(),
-      check_in_lng: coordinates?.lng ?? null,
-      check_in_lat: coordinates?.lat ?? null,
-      check_in_address: locationAddress,
-    })
-  }
-
   function submitQuickNote() {
+    if (!customer) return
     if (!notes.trim()) {
       toast.error('请先填写沟通纪要')
       return
     }
-    submitVisitRecord()
+    createActivity.mutate({
+      customer_id: customer.id,
+      type: activityType,
+      notes: notes.trim(),
+      check_in_lng: null,
+      check_in_lat: null,
+      check_in_address: null,
+    })
   }
 
   async function uploadAttachment(event: React.ChangeEvent<HTMLInputElement>) {
@@ -254,13 +209,13 @@ export default function CustomerDetailPage() {
             <CardHeader className="border-b border-border px-5 py-4"><div className="flex items-center justify-between gap-3"><div><CardTitle>{customer.name}</CardTitle><div className="mt-2"><Badge tone={getCustomerStatusTone(customer.status)}>{getCustomerStatusLabel(customer.status)}</Badge></div></div><Button aria-label="编辑客户" onClick={() => setEditCustomerOpen(true)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></div></CardHeader>
             <CardContent className="space-y-5 p-5 text-sm"><div><p className="mb-1.5 text-xs font-semibold text-slate-400">联系方式</p><p className="flex items-center gap-2 font-medium text-slate-700"><Phone aria-hidden="true" className="size-4 text-indigo-500" />{customer.contactPhone ?? '未填写电话'}</p></div><div><p className="mb-1.5 text-xs font-semibold text-slate-400">公司地址</p><p className="flex items-start gap-2 leading-5 text-slate-700"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-indigo-500" />{customer.address ?? '未填写地址'}</p></div><div className="border-t border-slate-100 pt-4"><p className="text-xs text-muted-foreground">归属销售</p><p className="mt-1 font-semibold text-slate-800">{customer.ownerId}</p><p className="mt-4 text-xs text-muted-foreground">创建时间</p><p className="mt-1 font-medium text-slate-700">{format(new Date(customer.createdAt), 'yyyy-MM-dd')}</p></div></CardContent>
           </Card>
-          <div className="grid gap-2"><Button disabled={!data?.deals.length} onClick={() => setVisitDialogOpen(true)} type="button"><CalendarCheck aria-hidden="true" />完整跟进记录</Button><Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="ghost"><Trash2 aria-hidden="true" />作废客户</Button></div>
+          <div className="grid gap-2"><Button onClick={() => setActivitySheetOpen(true)} type="button"><CalendarCheck aria-hidden="true" />完整跟进记录</Button><Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="ghost"><Trash2 aria-hidden="true" />作废客户</Button></div>
         </aside>
 
         <main className="min-w-0 space-y-4">
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><CardTitle>快捷写跟进</CardTitle></CardHeader>
-            <CardContent className="space-y-3 p-4"><textarea className="min-h-28 w-full resize-none rounded-md border border-slate-200 bg-slate-50 p-3 text-sm outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" onChange={(event) => setNotes(event.target.value)} placeholder="记录本次沟通重点、客户需求和下一步计划..." value={notes} /><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex gap-2"><select aria-label="关联商机" className="h-9 max-w-44 rounded-md border border-input bg-background px-2 text-xs" onChange={(event) => setSelectedDealId(event.target.value)} value={selectedDealId}>{data?.deals.map((deal) => <option key={deal.id} value={deal.id}>{dealStageLabels[deal.stage]}</option>)}</select><select aria-label="拜访方式" className="h-9 rounded-md border border-input bg-background px-2 text-xs" onChange={(event) => setActivityType(event.target.value as CreateActivityPayload['type'])} value={activityType}>{Object.entries(activityTypeLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select></div><Button disabled={createActivity.isPending || !notes.trim() || !data?.deals.length} onClick={submitQuickNote} size="sm" type="button"><Send aria-hidden="true" />{createActivity.isPending ? '正在保存' : '提交跟进'}</Button></div>{createActivity.error && <p className="text-sm text-destructive">{createActivity.error.message}</p>}</CardContent>
+            <CardContent className="space-y-3 p-4"><Textarea onChange={(event) => setNotes(event.target.value)} placeholder="记录本次沟通重点、客户需求和下一步计划..." value={notes} /><div className="flex flex-wrap items-center justify-between gap-3"><div className="w-full sm:w-44"><Select onValueChange={(value) => setActivityType(value as CreateActivityPayload['type'])} value={activityType}><SelectTrigger aria-label="跟进方式"><SelectValue placeholder="选择跟进方式" /></SelectTrigger><SelectContent>{Object.entries(activityTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><Button disabled={createActivity.isPending || !notes.trim() || !activityType} onClick={submitQuickNote} size="sm" type="button"><Send aria-hidden="true" />{createActivity.isPending ? '正在保存' : '提交跟进'}</Button></div>{createActivity.error && <p className="text-sm text-destructive">{createActivity.error.message}</p>}</CardContent>
           </Card>
           <Card className="gap-0 py-0">
            <CardHeader className="border-b border-border px-5 py-4"><CardTitle>跟进记录</CardTitle></CardHeader>
@@ -271,7 +226,7 @@ export default function CustomerDetailPage() {
                   <span className="absolute -left-[25px] top-1 size-2.5 rounded-full border-2 border-background bg-primary" />
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-medium">{activityTypeLabels[activity.type]}</span>
-                    <Badge tone={getDealStageTone(activity.dealStage)}>{dealStageLabels[activity.dealStage]}</Badge>
+                    {activity.dealStage && <Badge tone={getDealStageTone(activity.dealStage)}>{dealStageLabels[activity.dealStage]}</Badge>}
                     <time className="text-xs text-muted-foreground">{format(new Date(activity.createdAt), 'yyyy-MM-dd HH:mm')}</time>
                   </div>
                   {activity.notes && <p className="mt-1 text-sm leading-6 text-muted-foreground">{activity.notes}</p>}
@@ -288,7 +243,7 @@ export default function CustomerDetailPage() {
         <aside className="min-w-0 space-y-4">
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><CardTitle>商机与 SaaS 服务</CardTitle></CardHeader>
-            <CardContent className="space-y-3 p-4">{data?.deals.map((deal) => { const serviceStatus = deal.stage === 'Won' ? getServiceStatus(deal.expireDate) : null; return <article className="rounded-md border border-slate-200 bg-slate-50 p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div><p className="mt-2 text-sm font-bold text-indigo-700">{currency.format(deal.amount)}</p>{serviceStatus && <p className={`mt-2 text-xs font-medium ${serviceStatus.className}`}>{serviceStatus.label} · {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善服务日期'}</p>}</article> })}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</CardContent>
+            <CardContent className="space-y-3 p-4">{data?.deals.map((deal) => { const serviceStatus = deal.stage === 'Won' ? getServiceStatus(deal.expireDate) : null; return <article className="rounded-md border border-slate-200 bg-slate-50 p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</p>{serviceStatus && <p className={`mt-2 text-xs font-medium ${serviceStatus.className}`}>{serviceStatus.label} · {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善服务日期'}</p>}</article> })}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</CardContent>
           </Card>
           <Card className="gap-0 overflow-hidden py-0">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
@@ -298,53 +253,7 @@ export default function CustomerDetailPage() {
         </aside>
       </div>
 
-      <Dialog onOpenChange={setVisitDialogOpen} open={visitDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>添加跟进记录</DialogTitle>
-            <DialogDescription>提交后将保存本次沟通纪要和定位打卡信息。</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Label htmlFor="visit-notes">沟通纪要</Label>
-            <Input id="visit-notes" onChange={(event) => setNotes(event.target.value)} placeholder="请输入本次沟通纪要" value={notes} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="visit-deal">关联商机</Label>
-                <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="visit-deal" onChange={(event) => setSelectedDealId(event.target.value)} value={selectedDealId}>
-                  {data?.deals.map((deal) => <option key={deal.id} value={deal.id}>{dealStageLabels[deal.stage]} · {deal.amount}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="activity-type">拜访方式</Label>
-                <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="activity-type" onChange={(event) => setActivityType(event.target.value as CreateActivityPayload['type'])} value={activityType}>
-                  {Object.entries(activityTypeLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
-              <p className="font-medium">当前位置</p>
-              {isMapConfigLoading ? (
-                <p className="mt-1 text-muted-foreground">正在加载地图配置...</p>
-              ) : isLocating ? (
-                <p className="mt-1 text-muted-foreground">正在获取精准位置...</p>
-              ) : !isMapConfigured ? (
-                <p className="mt-1 text-destructive">系统未配置地图密钥，无法获取定位，请联系管理员在系统设置中配置。</p>
-              ) : (
-                <p className="mt-1 text-muted-foreground">{locationAddress ?? locationError ?? '尚未获取位置'}</p>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button disabled={isLocating || isMapConfigLoading || !isMapConfigured} onClick={getCurrentLocation} type="button" variant="outline">
-              <MapPin aria-hidden="true" />{isLocating ? '正在定位' : '定位打卡'}
-            </Button>
-            <Button disabled={createActivity.isPending || !data?.deals.length} onClick={submitVisitRecord} type="button">
-              {createActivity.isPending ? '正在保存' : '保存记录'}
-            </Button>
-          </DialogFooter>
-          {createActivity.error && <p className="text-sm text-destructive">{createActivity.error.message}</p>}
-        </DialogContent>
-      </Dialog>
+      <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
     </section>
   )

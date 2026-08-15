@@ -22,6 +22,8 @@ interface DealSplitPayload {
 
 interface WonDealPayload {
   product_name?: unknown
+  channel?: unknown
+  original_price?: unknown
   start_date?: unknown
   duration_years?: unknown
   gift_months?: unknown
@@ -36,6 +38,8 @@ interface WonDealPayload {
 
 interface UpdateDealPayload {
   product_name?: unknown
+  channel?: unknown
+  original_price?: unknown
   amount?: unknown
   stage?: unknown
   expected_close_date?: unknown
@@ -53,6 +57,8 @@ interface UpdateDealPayload {
 interface CreateDealPayload {
   customer_id?: unknown
   product_name?: unknown
+  channel?: unknown
+  original_price?: unknown
   amount?: unknown
   stage?: unknown
   expected_close_date?: unknown
@@ -62,12 +68,22 @@ const productNameSchema = z.string().trim().min(1, '请填写产品名称或版�
 const createDealSchema = z.object({
   customer_id: z.string().uuid('客户编号无效'),
   product_name: productNameSchema,
+  channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
+  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
   amount: z.number().int().nonnegative('预计金额不能小于 0'),
   stage: z.enum(['Leads', 'Qualified', 'Proposal', 'Lost']).optional().default('Leads'),
   expected_close_date: z.union([z.string(), z.number()]),
 })
-const updateProductSchema = z.object({ product_name: productNameSchema.optional() })
-const wonProductSchema = z.object({ product_name: productNameSchema })
+const updateProductSchema = z.object({
+  product_name: productNameSchema.optional(),
+  channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional(),
+  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
+})
+const wonProductSchema = z.object({
+  product_name: productNameSchema,
+  channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
+  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
+})
 const wonGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0) })
 const updateGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional() })
 
@@ -126,6 +142,8 @@ dealRoutes.get('/', async (c) => {
       customerId: deals.customerId,
       customerName: customers.name,
       amount: deals.amount,
+      channel: deals.channel,
+      originalPrice: deals.originalPrice,
       productName: deals.productName,
       stage: deals.stage,
       expectedCloseDate: deals.expectedCloseDate,
@@ -193,6 +211,8 @@ dealRoutes.post('/', async (c) => {
     customerId: customer.id,
     productName: parsed.data.product_name,
     amount: parsed.data.amount,
+    channel: parsed.data.channel || null,
+    originalPrice: parsed.data.original_price ?? parsed.data.amount,
     stage: parsed.data.stage,
     expectedCloseDate,
     createdAt: new Date(),
@@ -247,7 +267,7 @@ dealRoutes.post('/:id/won', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const [deal] = await db
-    .select({ id: deals.id, amount: deals.amount })
+    .select({ id: deals.id, amount: deals.amount, originalPrice: deals.originalPrice })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, dealId), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -280,6 +300,8 @@ dealRoutes.post('/:id/won', async (c) => {
     .set({
       stage: 'Won',
       productName: productNameResult.data.product_name,
+      channel: productNameResult.data.channel || null,
+      originalPrice: productNameResult.data.original_price ?? deal.originalPrice ?? deal.amount,
       startDate,
       durationYears,
       giftMonths: giftMonthsResult.data.gift_months,
@@ -339,6 +361,8 @@ dealRoutes.put('/:id', async (c) => {
   const updates = {
     ...(amount !== undefined ? { amount } : {}),
     ...(productNameResult.data.product_name !== undefined ? { productName: productNameResult.data.product_name } : {}),
+    ...(productNameResult.data.channel !== undefined ? { channel: productNameResult.data.channel || null } : {}),
+    ...(productNameResult.data.original_price !== undefined ? { originalPrice: productNameResult.data.original_price } : {}),
     ...(giftMonthsResult.data.gift_months !== undefined ? { giftMonths: giftMonthsResult.data.gift_months } : {}),
     ...(stage !== undefined ? { stage } : {}),
     ...(expectedCloseDate ? { expectedCloseDate } : {}),

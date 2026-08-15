@@ -28,6 +28,8 @@ interface SplitDraft {
 
 interface WonDealPayload {
   product_name: string
+  channel: string
+  original_price: number
   start_date: string
   duration_years: number
   gift_months: number
@@ -63,6 +65,8 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
   const { data: usersData, isLoading: isLoadingUsers } = useUsers()
   const [startDate, setStartDate] = useState(today)
   const [productName, setProductName] = useState('')
+  const [channel, setChannel] = useState('')
+  const [originalPrice, setOriginalPrice] = useState(0)
   const [durationYears, setDurationYears] = useState(1)
   const [giftMonths, setGiftMonths] = useState(0)
   const [reminderDays, setReminderDays] = useState(30)
@@ -76,6 +80,8 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
 
     setStartDate(deal.startDate ? formatDateInput(new Date(deal.startDate)) : today())
     setProductName(deal.productName)
+    setChannel(deal.channel ?? '')
+    setOriginalPrice(deal.originalPrice ?? deal.amount)
     setDurationYears(deal.durationYears ?? 1)
     setGiftMonths(deal.giftMonths ?? 0)
     setReminderDays(deal.renewalReminderDays ?? 30)
@@ -126,6 +132,8 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
 
     confirmWon.mutate({
       product_name: productName.trim(),
+      channel: channel.trim(),
+      original_price: originalPrice,
       start_date: startDate,
       duration_years: durationYears,
       gift_months: giftMonths,
@@ -149,7 +157,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
 
         <div className="space-y-6">
           <section className="space-y-3">
-            <div className="space-y-1.5"><Label htmlFor="won-product">正式购买产品 / 规格</Label><Input id="won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div>
+            <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="won-product">正式购买产品 / 规格</Label><Input id="won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div><div className="space-y-1.5"><Label htmlFor="won-channel">渠道 / 来源</Label><Input id="won-channel" list="won-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="won-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div></div>
             <h3 className="text-sm font-semibold">服务时间</h3>
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="space-y-1.5"><Label htmlFor="start-date">使用日期</Label><Input id="start-date" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} /></div>
@@ -164,6 +172,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
             <h3 className="text-sm font-semibold">财务信息</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5"><Label htmlFor="deal-amount">成交金额（分）</Label><Input disabled id="deal-amount" type="number" value={deal?.amount ?? 0} /></div>
+              <div className="space-y-1.5"><Label htmlFor="won-original-price">原价 / 刊例价（元）</Label><Input id="won-original-price" min="0" onChange={(event) => setOriginalPrice(toInteger(event.target.value))} type="number" value={originalPrice} /></div>
               <div className="space-y-1.5"><Label htmlFor="software-cost">软件成本（分）</Label><Input id="software-cost" min="0" onChange={(event) => setSoftwareCost(toInteger(event.target.value))} type="number" value={softwareCost} /></div>
               <div className="space-y-1.5"><Label htmlFor="tax-cost">开票成本（分）</Label><Input id="tax-cost" min="0" onChange={(event) => setTaxCost(toInteger(event.target.value))} type="number" value={taxCost} /></div>
               <div className="space-y-1.5"><Label htmlFor="rebate-amount">返利（分）</Label><Input id="rebate-amount" min="0" onChange={(event) => setRebateAmount(toInteger(event.target.value))} type="number" value={rebateAmount} /></div>

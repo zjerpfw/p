@@ -7,7 +7,7 @@ import { apiFetch } from '@/lib/api'
 export interface Activity {
   id: string
   dealId: string
-  dealStage: Deal['stage']
+  dealStage: Deal['stage'] | null
   type: 'Call' | 'Meeting' | 'Email'
   notes: string | null
   checkInLng: number | null

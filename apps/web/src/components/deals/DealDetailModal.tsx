@@ -29,6 +29,8 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
   const queryClient = useQueryClient()
   const [amount, setAmount] = useState(0)
   const [productName, setProductName] = useState('')
+  const [channel, setChannel] = useState('')
+  const [originalPrice, setOriginalPrice] = useState(0)
   const [stage, setStage] = useState<DealStage>('Leads')
   const [expectedCloseDate, setExpectedCloseDate] = useState('')
   const [softwareCost, setSoftwareCost] = useState(0)
@@ -44,6 +46,8 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
     if (!deal) return
     setAmount(deal.amount)
     setProductName(deal.productName)
+    setChannel(deal.channel ?? '')
+    setOriginalPrice(deal.originalPrice ?? deal.amount)
     setStage(deal.stage)
     setExpectedCloseDate(dateInput(deal.expectedCloseDate))
     setSoftwareCost(deal.softwareCost ?? 0)
@@ -68,6 +72,8 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
       body: JSON.stringify({
         amount,
         product_name: productName,
+        channel: channel.trim(),
+        original_price: originalPrice,
         stage,
         expected_close_date: expectedCloseDate,
         ...(stage === 'Won' ? {
@@ -98,7 +104,9 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="deal-edit-product">意向产品 / 版本</Label><Input id="deal-edit-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div>
+            <div className="space-y-1.5"><Label htmlFor="deal-edit-channel">渠道 / 来源</Label><Input id="deal-edit-channel" list="deal-edit-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="deal-edit-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div>
             <div className="space-y-1.5"><Label htmlFor="deal-edit-amount">预计金额（元）</Label><Input id="deal-edit-amount" min="0" onChange={(event) => setAmount(toNumber(event.target.value))} type="number" value={amount} /></div>
+            <div className="space-y-1.5"><Label htmlFor="deal-edit-original-price">原价 / 刊例价（元）</Label><Input id="deal-edit-original-price" min="0" onChange={(event) => setOriginalPrice(toNumber(event.target.value))} type="number" value={originalPrice} /></div>
             <div className="space-y-1.5"><Label htmlFor="deal-edit-stage">当前阶段</Label><select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="deal-edit-stage" onChange={(event) => setStage(event.target.value as DealStage)} value={stage}>{dealStages.filter((item) => item !== 'Won' || deal?.stage === 'Won').map((item) => <option key={item} value={item}>{dealStageLabels[item]}</option>)}</select></div>
             <div className="space-y-1.5"><Label htmlFor="deal-edit-close">预计成交日</Label><Input id="deal-edit-close" onChange={(event) => setExpectedCloseDate(event.target.value)} type="date" value={expectedCloseDate} /></div>
           </div>

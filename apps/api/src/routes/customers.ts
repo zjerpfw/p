@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
 import { activities, attachments, customers, dealSplits, deals, users } from '@crm/db/schema'
-import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
+import { and, count, desc, eq, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -39,6 +39,8 @@ interface DirectWonCustomerPayload {
   contact_phone?: unknown
   address?: unknown
   product_name?: unknown
+  channel?: unknown
+  original_price?: unknown
   amount?: unknown
   start_date?: unknown
   duration_years?: unknown
@@ -57,6 +59,8 @@ const directWonSchema = z.object({
   contact_phone: z.string().trim().max(30, '联系电话不能超过 30 个字符').optional().default(''),
   address: z.string().trim().max(500, '详细地址不能超过 500 个字符').optional().default(''),
   product_name: z.string().trim().min(1, '请填写购买产品或规格').max(200, '购买产品或规格不能超过 200 个字符'),
+  channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
+  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
   amount: z.number().int().nonnegative('成交金额不能小于 0'),
   start_date: z.union([z.string(), z.number()]),
   duration_years: z.number().int().positive('服务年限必须大于 0'),
@@ -168,6 +172,8 @@ customerRoutes.post('/direct-won', async (c) => {
     customerId,
     productName: parsed.data.product_name,
     amount: parsed.data.amount,
+    channel: parsed.data.channel || null,
+    originalPrice: parsed.data.original_price ?? parsed.data.amount,
     stage: 'Won',
     expectedCloseDate: startDate,
     startDate,
@@ -244,25 +250,23 @@ customerRoutes.get('/:id', async (c) => {
     .where(and(eq(deals.customerId, customer.id), eq(deals.isDeleted, false)))
     .orderBy(desc(deals.createdAt))
 
-  const customerActivities = customerDeals.length
-    ? await db
-        .select({
-          id: activities.id,
-          dealId: activities.dealId,
-          dealStage: deals.stage,
-          type: activities.type,
-          notes: activities.notes,
-          checkInLng: activities.checkInLng,
-          checkInLat: activities.checkInLat,
-          checkInAddress: activities.checkInAddress,
-          createdBy: activities.createdBy,
-          createdAt: activities.createdAt,
-        })
-        .from(activities)
-        .innerJoin(deals, eq(activities.dealId, deals.id))
-        .where(inArray(activities.dealId, customerDeals.map((deal) => deal.id)))
-        .orderBy(desc(activities.createdAt))
-    : []
+  const customerActivities = await db
+    .select({
+      id: activities.id,
+      dealId: activities.dealId,
+      dealStage: deals.stage,
+      type: activities.type,
+      notes: activities.notes,
+      checkInLng: activities.checkInLng,
+      checkInLat: activities.checkInLat,
+      checkInAddress: activities.checkInAddress,
+      createdBy: activities.createdBy,
+      createdAt: activities.createdAt,
+    })
+    .from(activities)
+    .leftJoin(deals, eq(activities.dealId, deals.id))
+    .where(eq(activities.customerId, customer.id))
+    .orderBy(desc(activities.createdAt))
 
   const customerAttachments = await db
     .select({

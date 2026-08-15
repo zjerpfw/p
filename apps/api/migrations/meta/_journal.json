@@ -78,6 +78,20 @@
       "when": 1786784044648,
       "tag": "0010_acoustic_venus",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1786785000000,
+      "tag": "0011_activity_customer_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1786799400000,
+      "tag": "0012_deal_channel_original_price",
+      "breakpoints": true
     }
   ]
 }

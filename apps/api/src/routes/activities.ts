@@ -8,6 +8,7 @@ import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 
 interface ActivityPayload {
+  customer_id?: unknown
   deal_id?: unknown
   type?: unknown
   notes?: unknown
@@ -39,18 +40,17 @@ activityRoutes.get('/', async (c) => {
       notes: activities.notes,
       checkInAddress: activities.checkInAddress,
       createdAt: activities.createdAt,
-      dealId: deals.id,
+      dealId: activities.dealId,
       customerId: customers.id,
       customerName: customers.name,
       productName: deals.productName,
       dealStage: deals.stage,
     })
     .from(activities)
-    .innerJoin(deals, eq(activities.dealId, deals.id))
-    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .innerJoin(customers, eq(activities.customerId, customers.id))
+    .leftJoin(deals, eq(activities.dealId, deals.id))
     .where(and(
       eq(activities.createdBy, actor.id),
-      eq(deals.isDeleted, false),
       eq(customers.isDeleted, false),
     ))
     .orderBy(desc(activities.createdAt))
@@ -69,11 +69,13 @@ activityRoutes.post('/', async (c) => {
   }
 
   if (
-    typeof body.deal_id !== 'string' ||
-    body.deal_id.trim().length === 0 ||
+    typeof body.customer_id !== 'string' ||
+    body.customer_id.trim().length === 0 ||
+    (body.deal_id !== undefined && body.deal_id !== null && (typeof body.deal_id !== 'string' || body.deal_id.trim().length === 0)) ||
     typeof body.type !== 'string' ||
     !activityTypes.includes(body.type as (typeof activityTypes)[number]) ||
-    (body.notes !== undefined && body.notes !== null && typeof body.notes !== 'string') ||
+    typeof body.notes !== 'string' ||
+    body.notes.trim().length === 0 ||
     !isNullableNumber(body.check_in_lng) ||
     !isNullableNumber(body.check_in_lat) ||
     (body.check_in_address !== undefined && body.check_in_address !== null && typeof body.check_in_address !== 'string')
@@ -85,26 +87,36 @@ activityRoutes.post('/', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
   const db = createDb(c.env.DB)
-  const [deal] = await db
-    .select({ id: deals.id })
-    .from(deals)
-    .innerJoin(customers, eq(deals.customerId, customers.id))
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
     .where(and(
-      eq(deals.id, body.deal_id),
-      eq(deals.isDeleted, false),
+      eq(customers.id, body.customer_id),
       eq(customers.isDeleted, false),
       actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
     ))
     .limit(1)
-  if (!deal) {
-    return c.json({ error: '商机不存在' }, 404)
+  if (!customer) {
+    return c.json({ error: '客户不存在或无权添加跟进记录' }, 404)
+  }
+
+  let dealId: string | null = null
+  if (typeof body.deal_id === 'string') {
+    const [deal] = await db
+      .select({ id: deals.id })
+      .from(deals)
+      .where(and(eq(deals.id, body.deal_id), eq(deals.customerId, customer.id), eq(deals.isDeleted, false)))
+      .limit(1)
+    if (!deal) return c.json({ error: '关联商机不存在或不属于当前客户' }, 400)
+    dealId = deal.id
   }
 
   const activity = {
     id: crypto.randomUUID(),
-    dealId: deal.id,
+    customerId: customer.id,
+    dealId,
     type: body.type as (typeof activityTypes)[number],
-    notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
+    notes: body.notes.trim(),
     checkInLng: body.check_in_lng ?? null,
     checkInLat: body.check_in_lat ?? null,
     checkInAddress: typeof body.check_in_address === 'string' ? body.check_in_address.trim().slice(0, 500) || null : null,
