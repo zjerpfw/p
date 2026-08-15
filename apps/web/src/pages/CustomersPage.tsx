@@ -1,5 +1,5 @@
 // apps/web/src/pages/CustomersPage.tsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronRight, MapPin, Phone, Plus, Search, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +12,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
 import { getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('')
@@ -20,9 +20,16 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [directWonDialogOpen, setDirectWonDialogOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const debouncedSearch = useDebouncedValue(search.trim())
   const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, page })
   const statuses = ['Active', 'Inactive']
+
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setCreateDialogOpen(true)
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
 
   function updateSearch(value: string) {
     setSearch(value)
@@ -63,9 +70,10 @@ export default function CustomersPage() {
         <Card className="gap-0 overflow-hidden py-0">
           <CardContent className="p-0">
             <Table>
-              <TableHeader><TableRow><TableHead>客户名称</TableHead><TableHead>联系电话</TableHead><TableHead>详细地址</TableHead><TableHead>当前状态</TableHead><TableHead>归属销售</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-10"><input aria-label="选择全部客户" className="size-4 rounded border-slate-300" type="checkbox" /></TableHead><TableHead>客户名称</TableHead><TableHead>联系电话</TableHead><TableHead>详细地址</TableHead><TableHead>当前状态</TableHead><TableHead>归属销售</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
               <TableBody>
                 {data.data.map((customer) => <TableRow key={customer.id}>
+                  <TableCell><input aria-label={`选择客户 ${customer.name}`} className="size-4 rounded border-slate-300" type="checkbox" /></TableCell>
                   <TableCell className="font-semibold text-slate-800">{customer.name}</TableCell>
                   <TableCell><span className="inline-flex items-center gap-1.5 text-slate-600"><Phone aria-hidden="true" className="size-3.5 text-slate-400" />{customer.contactPhone ?? '未填写'}</span></TableCell>
                   <TableCell className="max-w-64 truncate text-slate-600"><span className="inline-flex min-w-0 items-center gap-1.5"><MapPin aria-hidden="true" className="size-3.5 shrink-0 text-slate-400" />{customer.address ?? '未填写'}</span></TableCell>
@@ -73,7 +81,7 @@ export default function CustomersPage() {
                   <TableCell className="text-slate-600">{customer.ownerId}</TableCell>
                   <TableCell className="text-right"><Button asChild aria-label={`查看${customer.name}详情`} size="sm" type="button" variant="ghost"><Link to={`/customers/${customer.id}`}>详情<ChevronRight aria-hidden="true" /></Link></Button></TableCell>
                 </TableRow>)}
-                {data.data.length === 0 && <TableRow><TableCell className="py-12 text-center text-muted-foreground" colSpan={6}>未找到匹配的客户</TableCell></TableRow>}
+                {data.data.length === 0 && <TableRow><TableCell className="py-12 text-center text-muted-foreground" colSpan={7}>未找到匹配的客户</TableCell></TableRow>}
               </TableBody>
             </Table>
           </CardContent>

@@ -1,7 +1,7 @@
 // apps/web/src/pages/DealsPage.tsx
 import { format } from 'date-fns'
 import { CalendarDays, CircleDollarSign, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -16,6 +16,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { apiFetch } from '@/lib/api'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useSearchParams } from 'react-router-dom'
 
 const stageStyle: Record<DealStage, string> = {
   Leads: 'bg-slate-400',
@@ -40,7 +41,14 @@ export default function DealsPage() {
   const [dealToConfirm, setDealToConfirm] = useState<Deal | null>(null)
   const [dealToEdit, setDealToEdit] = useState<Deal | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    setCreateDialogOpen(true)
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const deleteDeal = useMutation({
     mutationFn: (dealId: string) => apiFetch(`/api/deals/${dealId}`, { method: 'DELETE' }),

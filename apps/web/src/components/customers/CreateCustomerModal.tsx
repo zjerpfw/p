@@ -3,14 +3,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { apiFetch } from '@/lib/api'
@@ -27,7 +20,7 @@ interface CreateCustomerPayload {
   address: string
 }
 
-export function CreateCustomerModal({ open, onOpenChange }: CreateCustomerModalProps) {
+export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalProps) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
@@ -69,40 +62,43 @@ export function CreateCustomerModal({ open, onOpenChange }: CreateCustomerModalP
   }
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>新建客户</DialogTitle>
-          <DialogDescription>客户将自动归属到当前登录的销售人员。</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="customer-name">客户名称</Label>
+    <Sheet onOpenChange={onOpenChange} open={open}>
+      <SheetContent className="w-full p-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-slate-200 px-6 py-5">
+          <SheetTitle>新建客户</SheetTitle>
+          <SheetDescription>客户将自动归属到当前登录的销售人员。</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-4 rounded-lg bg-slate-50 p-4">
+            <div className="space-y-1.5"><Label htmlFor="customer-name"><span className="text-rose-500">*</span> 客户名称</Label>
             <Input autoFocus id="customer-name" onChange={(event) => setName(event.target.value)} placeholder="请输入客户名称" value={name} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="customer-phone">联系电话</Label>
+            </div>
+            <div className="space-y-1.5">
+            <Label htmlFor="customer-phone"><span className="text-rose-500">*</span> 联系电话</Label>
             <Input id="customer-phone" inputMode="tel" onChange={(event) => setContactPhone(event.target.value)} placeholder="请输入联系电话" value={contactPhone} />
-          </div>
-          <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
             <Label htmlFor="customer-status">当前状态</Label>
             <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="customer-status" onChange={(event) => setStatus(event.target.value)} value={status}>
               <option value="Active">活跃</option>
               <option value="Inactive">沉睡</option>
             </select>
-          </div>
-          <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
             <Label htmlFor="customer-address">公司地址</Label>
             <Input id="customer-address" onChange={(event) => setAddress(event.target.value)} placeholder="请输入详细地址" value={address} />
+            </div>
           </div>
         </div>
-        <DialogFooter>
+        <SheetFooter className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button>
           <Button disabled={!name.trim() || createCustomer.isPending} onClick={submit} type="button">
             {createCustomer.isPending ? '正在创建' : '保存客户'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
+
+export { CreateCustomerSheet as CreateCustomerModal }

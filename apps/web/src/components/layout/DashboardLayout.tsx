@@ -3,6 +3,7 @@ import { BriefcaseBusiness, ChevronRight, LayoutDashboard, LogOut, Settings, Shi
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { clearAccessToken, getCurrentUserRole } from '@/lib/api'
+import { CommandPalette } from './CommandPalette'
 
 const navigation = [
   { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
@@ -70,9 +71,12 @@ export default function DashboardLayout() {
             <ChevronRight aria-hidden="true" className="hidden size-4 text-slate-300 sm:inline" />
             <span className="truncate font-semibold text-slate-800">{currentLabel}</span>
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+          <div className="flex items-center gap-2">
+            <CommandPalette onCreateCustomer={() => navigate('/customers?create=1')} onCreateDeal={() => navigate('/deals?create=1')} />
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
             <span className="grid size-7 place-items-center rounded-md bg-indigo-100 text-indigo-700"><UserRound aria-hidden="true" className="size-4" /></span>
             <div className="hidden leading-tight sm:block"><p className="text-xs font-semibold text-slate-800">当前登录用户</p><p className="mt-0.5 text-[11px] text-slate-500">{isAdmin ? '系统管理员' : '销售顾问'}</p></div>
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1440px] p-5 md:p-8">
