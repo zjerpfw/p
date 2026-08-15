@@ -57,6 +57,13 @@
       "when": 1786780400411,
       "tag": "0007_perfect_gabe_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786782486814,
+      "tag": "0008_nosy_maggott",
+      "breakpoints": true
     }
   ]
 }

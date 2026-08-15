@@ -31,6 +31,20 @@ export function clearAccessToken() {
   localStorage.removeItem(TOKEN_STORAGE_KEY)
 }
 
+export function getCurrentUserRole() {
+  const token = getAccessToken()
+  if (!token) return null
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = JSON.parse(atob(normalizedPayload)) as { role?: unknown }
+    return typeof decoded.role === 'string' ? decoded.role : null
+  } catch {
+    return null
+  }
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   const token = getAccessToken()

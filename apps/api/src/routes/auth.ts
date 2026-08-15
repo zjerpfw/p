@@ -45,7 +45,7 @@ auth.post('/login', async (c) => {
     .from(users)
     .where(
       and(
-        or(eq(users.id, username), eq(users.name, username)),
+        or(eq(users.id, username), eq(users.username, username), eq(users.name, username)),
         eq(users.pinCode, body.pin_code),
       ),
     )

@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, MapPinned, Save, ShieldCheck, UsersRound } from 'lucide-react'
+import { KeyRound, MapPinned, Save, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,8 +17,6 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { apiFetch } from '@/lib/api'
-import { type InternalUser, useUsers } from '@/hooks/useUsers'
-import { getUserRoleLabel } from '@/lib/presentation'
 
 const CONFIG_QUERY_KEY = ['system-configs'] as const
 
@@ -70,7 +68,6 @@ export default function SettingsPage() {
     queryKey: CONFIG_QUERY_KEY,
     queryFn: () => apiFetch<ConfigResponse>('/api/configs'),
   })
-  const usersQuery = useUsers()
   const loadedValues = useMemo(
     () => toFormValues(configsQuery.data?.configs ?? []),
     [configsQuery.data],
@@ -95,22 +92,6 @@ export default function SettingsPage() {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '保存系统配置失败')
-    },
-  })
-
-  const updateRoleMutation = useMutation({
-    mutationFn: ({ id, role }: { id: string; role: 'admin' | 'sales' }) =>
-      apiFetch<{ user: InternalUser }>(`/api/users/${id}/role`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      }),
-    onSuccess: async () => {
-      await usersQuery.refetch()
-      toast.success('人员权限已更新')
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : '人员权限更新失败')
     },
   })
 
@@ -187,40 +168,6 @@ export default function SettingsPage() {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-lg">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <UsersRound aria-hidden="true" className="size-5 text-primary" />
-                <div>
-                  <CardTitle>人员权限设置</CardTitle>
-                  <CardDescription className="mt-1">管理员可管理所有客户与商机，销售人员只能查看本人名下数据。</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {usersQuery.isLoading && <p className="text-sm text-muted-foreground">正在加载人员列表...</p>}
-              {usersQuery.isError && <p className="text-sm text-destructive">人员列表加载失败</p>}
-              {usersQuery.data?.users.map((user) => (
-                <div className="flex items-center justify-between gap-4 border-b border-border pb-3 last:border-b-0 last:pb-0" key={user.id}>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{user.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.id} · {getUserRoleLabel(user.role)}</p>
-                  </div>
-                  <select
-                    aria-label={`${user.name} 的权限角色`}
-                    className="h-9 shrink-0 rounded-md border border-input bg-background px-3 text-sm"
-                    disabled={updateRoleMutation.isPending}
-                    onChange={(event) => updateRoleMutation.mutate({ id: user.id, role: event.target.value as 'admin' | 'sales' })}
-                    value={user.role}
-                  >
-                    <option value="admin">管理员</option>
-                    <option value="sales">销售人员</option>
-                  </select>
-                </div>
-              ))}
             </CardContent>
           </Card>
 

@@ -6,6 +6,7 @@ import {
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 
 export const dealStages = [
@@ -18,14 +19,24 @@ export const dealStages = [
 
 export const activityTypes = ['Call', 'Meeting', 'Email'] as const
 
-export const users = sqliteTable('users', {
-  // Enterprise WeChat UserId.
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  avatarUrl: text('avatar_url'),
-  role: text('role').notNull(),
-  pinCode: text('pin_code').notNull().default('123456'),
-})
+export const users = sqliteTable(
+  'users',
+  {
+    // Internal immutable identifier. Existing Enterprise WeChat identifiers remain valid IDs.
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    username: text('username'),
+    wechatUserId: text('wechat_userid'),
+    avatarUrl: text('avatar_url'),
+    role: text('role').notNull(),
+    pinCode: text('pin_code').notNull().default('123456'),
+    createdAt: integer('created_at', { mode: 'timestamp' }),
+  },
+  (table) => [
+    uniqueIndex('users_username_unique').on(table.username),
+    uniqueIndex('users_wechat_userid_unique').on(table.wechatUserId),
+  ],
+)
 
 export const systemConfigs = sqliteTable('system_configs', {
   configKey: text('config_key').primaryKey(),

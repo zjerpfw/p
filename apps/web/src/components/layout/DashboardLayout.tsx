@@ -1,21 +1,24 @@
 // apps/web/src/components/layout/DashboardLayout.tsx
-import { BriefcaseBusiness, LayoutDashboard, LogOut, Settings, UsersRound } from 'lucide-react'
+import { BriefcaseBusiness, LayoutDashboard, LogOut, Settings, ShieldCheck, UsersRound } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { clearAccessToken } from '@/lib/api'
+import { clearAccessToken, getCurrentUserRole } from '@/lib/api'
 
 const navigation = [
   { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { to: '/customers', label: '客户池', icon: UsersRound },
   { to: '/deals', label: '商机看板', icon: LayoutDashboard },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
+  { to: '/users', label: '员工管理', icon: ShieldCheck },
   { to: '/settings', label: '系统设置', icon: Settings },
 ]
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
+  const isAdmin = getCurrentUserRole() === 'admin'
+  const visibleNavigation = navigation.filter((item) => item.to !== '/users' || isAdmin)
   return (
-    <nav className={cn(mobile ? 'col-span-5 grid grid-cols-5' : 'space-y-1')}>
-      {navigation.map(({ icon: Icon, label, to }) => (
+    <nav className={cn(mobile ? 'col-span-5 grid grid-flow-col auto-cols-[4.5rem] overflow-x-auto' : 'space-y-1')}>
+      {visibleNavigation.map(({ icon: Icon, label, to }) => (
         <NavLink
           className={({ isActive }) =>
             cn(

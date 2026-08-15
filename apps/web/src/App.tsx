@@ -1,6 +1,7 @@
 // apps/web/src/App.tsx
 import { Navigate, Route, Routes } from 'react-router-dom'
 import DashboardLayout from './components/layout/DashboardLayout'
+import AdminRoute from './components/layout/AdminRoute'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
@@ -9,6 +10,7 @@ import DealsPage from './pages/DealsPage'
 import LoginPage from './pages/LoginPage'
 import MyWorkPage from './pages/MyWorkPage'
 import SettingsPage from './pages/SettingsPage'
+import UsersPage from './pages/UsersPage'
 
 export default function App() {
   return (
@@ -23,6 +25,7 @@ export default function App() {
           <Route path="/deals" element={<DealsPage />} />
           <Route path="/my-work" element={<MyWorkPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route element={<AdminRoute />}><Route path="/users" element={<UsersPage />} /></Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
