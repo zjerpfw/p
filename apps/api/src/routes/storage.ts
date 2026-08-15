@@ -3,7 +3,8 @@ import { AwsClient } from 'aws4fetch'
 import { createDb } from '@crm/db/client'
 import { activities, attachments, customers, deals } from '@crm/db/schema'
 import { and, eq } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { Hono, type Context, type Next } from 'hono'
+import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 
@@ -74,6 +75,15 @@ function contentTypeFromFilename(filename: string) {
 }
 
 export const storage = new Hono<{ Bindings: Env }>()
+
+async function requireStorageAuth(c: Context<{ Bindings: Env }>, next: Next) {
+  const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
+  return middleware(c, next)
+}
+
+storage.use('/presign/*', requireStorageAuth)
+storage.use('/attachments', requireStorageAuth)
+storage.use('/attachments/*', requireStorageAuth)
 
 storage.post('/upload/image', async (c) => {
   let formData: FormData
@@ -178,24 +188,32 @@ storage.post('/presign/document', async (c) => {
     .limit(1)
   if (!customer) return c.json({ error: '客户不存在或无权上传附件' }, 404)
 
-  const objectKey = `documents/${crypto.randomUUID()}-${filename}`
-  const endpoint = s3ObjectUrl(c.env, objectKey)
-  endpoint.searchParams.set('X-Amz-Expires', String(PRESIGNED_UPLOAD_TTL_SECONDS))
+  try {
+    const objectKey = `documents/${crypto.randomUUID()}-${filename}`
+    const endpoint = s3ObjectUrl(c.env, objectKey)
+    endpoint.searchParams.set('X-Amz-Expires', String(PRESIGNED_UPLOAD_TTL_SECONDS))
 
-  const s3 = createS3Client(c.env)
-  const signedRequest = await s3.sign(
-    new Request(endpoint, {
-      method: 'PUT',
-      headers: { 'Content-Type': body.contentType },
-    }),
-    { aws: { signQuery: true } },
-  )
+    const signedRequest = await createS3Client(c.env).sign(
+      new Request(endpoint, {
+        method: 'PUT',
+        // The browser must send exactly this signed Content-Type when uploading.
+        headers: { 'Content-Type': body.contentType },
+      }),
+      { aws: { signQuery: true } },
+    )
 
-  return c.json({
-    uploadUrl: signedRequest.url,
-    objectKey,
-    expiresIn: PRESIGNED_UPLOAD_TTL_SECONDS,
-  })
+    return c.json({
+      uploadUrl: signedRequest.url,
+      objectKey,
+      expiresIn: PRESIGNED_UPLOAD_TTL_SECONDS,
+    })
+  } catch (error) {
+    console.error('Upload Presign Error:', error)
+    return c.json({
+      error: '生成附件上传链接失败',
+      detail: error instanceof Error ? error.message : String(error),
+    }, 502)
+  }
 })
 
 storage.post('/attachments', async (c) => {
