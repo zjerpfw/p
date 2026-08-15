@@ -1,7 +1,7 @@
 // apps/api/src/routes/dashboard.ts
 import { createDb } from '@crm/db/client'
 import { customers, deals } from '@crm/db/schema'
-import { and, eq, gte, lt, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, isNotNull, lte, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
@@ -16,6 +16,8 @@ dashboardRoutes.use('*', async (c, next) => {
 
 dashboardRoutes.get('/', async (c) => {
   const now = new Date()
+  const renewalDeadline = new Date(now)
+  renewalDeadline.setDate(renewalDeadline.getDate() + 60)
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const db = createDb(c.env.DB)
@@ -24,7 +26,7 @@ dashboardRoutes.get('/', async (c) => {
   const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], stageDistribution] = await Promise.all([
+  const [[newLead], [wonProfit], stageDistribution, renewalDeals] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -41,6 +43,23 @@ dashboardRoutes.get('/', async (c) => {
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(...activeFilters))
       .groupBy(deals.stage),
+    db
+      .select({
+        id: deals.id,
+        customerName: customers.name,
+        expireDate: deals.expireDate,
+        amount: deals.amount,
+      })
+      .from(deals)
+      .innerJoin(customers, eq(deals.customerId, customers.id))
+      .where(and(
+        eq(deals.stage, 'Won'),
+        isNotNull(deals.expireDate),
+        gt(deals.expireDate, now),
+        lte(deals.expireDate, renewalDeadline),
+        ...activeFilters,
+      ))
+      .orderBy(asc(deals.expireDate)),
   ])
 
   return c.json({
@@ -50,6 +69,10 @@ dashboardRoutes.get('/', async (c) => {
     stageDistribution: stageDistribution.map((item) => ({
       stage: item.stage,
       count: Number(item.count),
+    })),
+    renewalDeals: renewalDeals.map((deal) => ({
+      ...deal,
+      expireDate: deal.expireDate!.toISOString(),
     })),
   })
 })

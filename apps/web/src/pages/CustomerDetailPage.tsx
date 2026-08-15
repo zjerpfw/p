@@ -1,6 +1,6 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
-import { format } from 'date-fns'
-import { CalendarCheck, ChevronLeft, MapPin, Paperclip, Pencil, Phone, Trash2, Upload } from 'lucide-react'
+import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
+import { CalendarCheck, ChevronLeft, CircleAlert, CircleCheck, Clock3, MapPin, Paperclip, Pencil, Phone, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -35,6 +35,21 @@ interface CreateActivityPayload {
   check_in_lng: number | null
   check_in_lat: number | null
   check_in_address: string | null
+}
+
+const currency = new Intl.NumberFormat('zh-CN', {
+  style: 'currency',
+  currency: 'CNY',
+  maximumFractionDigits: 0,
+})
+
+function getServiceStatus(expireDate: string | null) {
+  if (!expireDate) return { label: '服务日期待完善', className: 'bg-muted text-muted-foreground', icon: Clock3 }
+
+  const remainingDays = differenceInCalendarDays(new Date(expireDate), startOfDay(new Date()))
+  if (remainingDays < 0) return { label: '已过期', className: 'bg-rose-100 text-rose-800', icon: CircleAlert }
+  if (remainingDays < 30) return { label: '即将到期', className: 'bg-amber-100 text-amber-800', icon: CircleAlert }
+  return { label: '服务中', className: 'bg-emerald-100 text-emerald-800', icon: CircleCheck }
 }
 
 export default function CustomerDetailPage() {
@@ -224,6 +239,31 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6 gap-0 rounded-lg py-0 shadow-none">
+        <CardHeader className="border-b border-border px-5 py-4"><CardTitle>已购 SaaS 服务</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 p-5 md:grid-cols-2">
+          {data?.deals.filter((deal) => deal.stage === 'Won').map((deal) => {
+            const serviceStatus = getServiceStatus(deal.expireDate)
+            const StatusIcon = serviceStatus.icon
+            return (
+              <article className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4" key={deal.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="font-semibold">SaaS 服务合同</p><p className="mt-1 text-sm text-muted-foreground">成交商机：{dealStageLabels[deal.stage]}</p></div>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${serviceStatus.className}`}><StatusIcon aria-hidden="true" className="size-3.5" />{serviceStatus.label}</span>
+                </div>
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <div><dt className="text-muted-foreground">服务期限</dt><dd className="mt-1 font-medium">{deal.startDate ? format(new Date(deal.startDate), 'yyyy-MM-dd') : '待完善'} 至 {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善'}</dd></div>
+                  <div><dt className="text-muted-foreground">成交金额</dt><dd className="mt-1 font-medium">{currency.format(deal.amount)}</dd></div>
+                  <div><dt className="text-muted-foreground">实际利润</dt><dd className="mt-1 font-medium text-emerald-700">{currency.format((deal.netProfit ?? 0) / 100)}</dd></div>
+                  <div><dt className="text-muted-foreground">续费提醒</dt><dd className="mt-1 font-medium">提前 {deal.renewalReminderDays} 天</dd></div>
+                </dl>
+              </article>
+            )
+          })}
+          {data?.deals.filter((deal) => deal.stage === 'Won').length === 0 && <p className="text-sm text-muted-foreground">该客户暂无已购 SaaS 服务。</p>}
+        </CardContent>
+      </Card>
 
       <Dialog onOpenChange={setVisitDialogOpen} open={visitDialogOpen}>
         <DialogContent>

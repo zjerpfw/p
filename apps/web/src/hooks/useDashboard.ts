@@ -8,6 +8,12 @@ export interface DashboardData {
   newLeads: number
   wonNetProfit: number
   stageDistribution: Array<{ stage: DealStage; count: number }>
+  renewalDeals: Array<{
+    id: string
+    customerName: string
+    expireDate: string
+    amount: number
+  }>
 }
 
 export function useDashboard() {

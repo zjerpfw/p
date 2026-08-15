@@ -109,6 +109,12 @@ export default function DealsPage() {
                             <CalendarDays aria-hidden="true" className="size-4" />
                             预计成交日：{format(new Date(deal.expectedCloseDate), 'yyyy-MM-dd')}
                           </div>
+                          {deal.stage === 'Won' && deal.expireDate && (
+                            <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                              <CalendarDays aria-hidden="true" className="size-3.5" />
+                              到期日：{format(new Date(deal.expireDate), 'yyyy-MM-dd')}
+                            </div>
+                          )}
                           {deal.stage !== 'Won' && deal.stage !== 'Lost' && (
                             <Button className="w-full" onClick={() => setDealToConfirm(deal)} size="sm" type="button" variant="outline">
                               <Trophy aria-hidden="true" />确认赢单

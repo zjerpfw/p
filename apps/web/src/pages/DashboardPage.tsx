@@ -1,6 +1,8 @@
 // apps/web/src/pages/DashboardPage.tsx
-import { BarChart3, CircleDollarSign, Lightbulb, Target } from 'lucide-react'
+import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
+import { BarChart3, CircleAlert, CircleDollarSign, Lightbulb, Target } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useDashboard } from '@/hooks/useDashboard'
 import { dealStages } from '@/hooks/useDeals'
 import { dealStageLabels } from '@/lib/presentation'
@@ -68,6 +70,39 @@ export default function DashboardPage() {
               </div>
             )
           })}
+        </CardContent>
+      </Card>
+
+      <Card className="gap-0 rounded-lg py-0 shadow-none">
+        <CardHeader className="flex flex-row items-center gap-2 border-b border-border px-5 py-4">
+          <CircleAlert aria-hidden="true" className="size-5 text-rose-600" />
+          <CardTitle>近期待续费 SaaS 订单（60天内）</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>客户名称</TableHead>
+                <TableHead>到期时间</TableHead>
+                <TableHead>剩余天数</TableHead>
+                <TableHead className="text-right">历史成交金额</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data?.renewalDeals.map((deal) => {
+                const remainingDays = differenceInCalendarDays(new Date(deal.expireDate), startOfDay(new Date()))
+                return (
+                  <TableRow key={deal.id}>
+                    <TableCell className="font-medium">{deal.customerName}</TableCell>
+                    <TableCell>{format(new Date(deal.expireDate), 'yyyy-MM-dd')}</TableCell>
+                    <TableCell><span className={remainingDays < 15 ? 'font-semibold text-destructive' : 'font-medium text-amber-700'}>{remainingDays} 天</span></TableCell>
+                    <TableCell className="text-right">{currency.format(deal.amount)}</TableCell>
+                  </TableRow>
+                )
+              })}
+              {data?.renewalDeals.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={4}>60 天内暂无待续费 SaaS 订单</TableCell></TableRow>}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </section>
