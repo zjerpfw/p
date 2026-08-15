@@ -8,6 +8,7 @@ import { activityRoutes } from './routes/activities'
 import { auth } from './routes/auth'
 import { configRoutes } from './routes/configs'
 import { customerRoutes } from './routes/customers'
+import { dashboardRoutes } from './routes/dashboard'
 import { dealRoutes } from './routes/deals'
 import { storage } from './routes/storage'
 import { userRoutes } from './routes/users'
@@ -58,6 +59,7 @@ app.get('/:verificationFile{WW_verify_[A-Za-z0-9_-]+\\.txt}', async (c) => {
 
 app.route('/api/auth', auth)
 app.route('/api/configs', configRoutes)
+app.route('/api/dashboard', dashboardRoutes)
 app.route('/api/customers', customerRoutes)
 app.route('/api/deals', dealRoutes)
 app.route('/api/activities', activityRoutes)

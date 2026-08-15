@@ -2,6 +2,7 @@
 import { sql } from 'drizzle-orm'
 import {
   integer,
+  index,
   real,
   sqliteTable,
   text,
@@ -34,39 +35,53 @@ export const systemConfigs = sqliteTable('system_configs', {
     .default(sql`(unixepoch())`),
 })
 
-export const customers = sqliteTable('customers', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  contactPhone: text('contact_phone'),
-  status: text('status').notNull(),
-  lng: real('lng'),
-  lat: real('lat'),
-  address: text('address'),
-  ownerId: text('owner_id')
-    .notNull()
-    .references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-})
+export const customers = sqliteTable(
+  'customers',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    contactPhone: text('contact_phone'),
+    status: text('status').notNull(),
+    lng: real('lng'),
+    lat: real('lat'),
+    address: text('address'),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    index('customers_name_idx').on(table.name),
+    index('customers_owner_id_idx').on(table.ownerId),
+  ],
+)
 
-export const deals = sqliteTable('deals', {
-  id: text('id').primaryKey(),
-  customerId: text('customer_id')
-    .notNull()
-    .references(() => customers.id),
-  amount: integer('amount').notNull(),
-  stage: text('stage', { enum: dealStages }).notNull(),
-  expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
-  startDate: integer('start_date', { mode: 'timestamp' }),
-  durationYears: integer('duration_years'),
-  expireDate: integer('expire_date', { mode: 'timestamp' }),
-  renewalReminderDays: integer('renewal_reminder_days').notNull().default(30),
-  softwareCost: integer('software_cost'),
-  taxCost: integer('tax_cost'),
-  rebateAmount: integer('rebate_amount'),
-  netProfit: integer('net_profit'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-})
+export const deals = sqliteTable(
+  'deals',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    amount: integer('amount').notNull(),
+    stage: text('stage', { enum: dealStages }).notNull(),
+    expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
+    startDate: integer('start_date', { mode: 'timestamp' }),
+    durationYears: integer('duration_years'),
+    expireDate: integer('expire_date', { mode: 'timestamp' }),
+    renewalReminderDays: integer('renewal_reminder_days').notNull().default(30),
+    softwareCost: integer('software_cost'),
+    taxCost: integer('tax_cost'),
+    rebateAmount: integer('rebate_amount'),
+    netProfit: integer('net_profit'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    index('deals_customer_id_idx').on(table.customerId),
+    index('deals_stage_idx').on(table.stage),
+  ],
+)
 
 export const dealSplits = sqliteTable('deal_splits', {
   id: text('id').primaryKey(),

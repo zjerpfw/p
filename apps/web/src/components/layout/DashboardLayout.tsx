@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 
 const navigation = [
+  { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { to: '/customers', label: '客户池', icon: UsersRound },
   { to: '/deals', label: '商机看板', icon: LayoutDashboard },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
@@ -12,7 +13,7 @@ const navigation = [
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   return (
-    <nav className={cn(mobile ? 'grid grid-cols-4' : 'space-y-1')}>
+    <nav className={cn(mobile ? 'grid grid-cols-5' : 'space-y-1')}>
       {navigation.map(({ icon: Icon, label, to }) => (
         <NavLink
           className={({ isActive }) =>

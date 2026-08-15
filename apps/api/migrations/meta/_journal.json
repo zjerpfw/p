@@ -36,6 +36,13 @@
       "when": 1786714898828,
       "tag": "0004_fixed_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786773279890,
+      "tag": "0005_loud_joystick",
+      "breakpoints": true
     }
   ]
 }

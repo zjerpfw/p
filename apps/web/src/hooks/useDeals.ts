@@ -1,5 +1,6 @@
 // apps/web/src/hooks/useDeals.ts
 import { useQuery } from '@tanstack/react-query'
+import type { PaginatedResponse } from './useCustomers'
 import { apiFetch } from '@/lib/api'
 
 export const dealStages = ['Leads', 'Qualified', 'Proposal', 'Won', 'Lost'] as const
@@ -24,13 +25,23 @@ export interface Deal {
   createdAt: string
 }
 
-interface DealsResponse {
-  deals: Deal[]
+export interface DealFilters {
+  search?: string
+  status?: DealStage
+  page?: number
+  limit?: number
 }
 
-export function useDeals() {
+export function useDeals(filters: DealFilters = {}) {
+  const params = new URLSearchParams()
+  if (filters.search) params.set('search', filters.search)
+  if (filters.status) params.set('status', filters.status)
+  params.set('page', String(filters.page ?? 1))
+  params.set('limit', String(filters.limit ?? 10))
+  const query = params.toString()
+
   return useQuery({
-    queryKey: ['deals'],
-    queryFn: () => apiFetch<DealsResponse>('/api/deals'),
+    queryKey: ['deals', filters],
+    queryFn: () => apiFetch<PaginatedResponse<Deal>>(`/api/deals?${query}`),
   })
 }

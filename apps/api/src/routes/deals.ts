@@ -1,12 +1,18 @@
 // apps/api/src/routes/deals.ts
 import { createDb } from '@crm/db/client'
-import { customers, dealSplits, deals, users } from '@crm/db/schema'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { customers, dealSplits, deals, dealStages, users } from '@crm/db/schema'
+import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
+import { getAuthenticatedActor } from '../lib/auth'
 
 export const dealRoutes = new Hono<{ Bindings: Env }>()
+
+dealRoutes.use('*', async (c, next) => {
+  const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
+  return middleware(c, next)
+})
 
 interface DealSplitPayload {
   user_id?: unknown
@@ -44,9 +50,28 @@ function parseDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function parsePagination(value: string | undefined, fallback: number, max: number) {
+  const parsed = Number.parseInt(value ?? '', 10)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback
+}
+
 dealRoutes.get('/', async (c) => {
   const db = createDb(c.env.DB)
-  const dealList = await db
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const status = c.req.query('status')?.trim().slice(0, 50)
+  const stage = status && dealStages.includes(status as (typeof dealStages)[number]) ? status : undefined
+  const page = parsePagination(c.req.query('page'), 1, 1_000_000)
+  const limit = parsePagination(c.req.query('limit'), 10, 100)
+  const filters = [
+    search ? like(customers.name, `%${search}%`) : undefined,
+    stage ? eq(deals.stage, stage as (typeof dealStages)[number]) : undefined,
+    actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+  ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
+  const where = filters.length ? and(...filters) : undefined
+  const dealQuery = db
     .select({
       id: deals.id,
       customerId: deals.customerId,
@@ -66,14 +91,23 @@ dealRoutes.get('/', async (c) => {
     })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(where)
     .orderBy(desc(deals.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit)
+  const totalQuery = db
+    .select({ total: count() })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(where)
+  const [dealList, [{ total }]] = await Promise.all([dealQuery, totalQuery])
 
-  return c.json({ deals: dealList })
-})
-
-dealRoutes.use('/:id/won', async (c, next) => {
-  const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
-  return middleware(c, next)
+  return c.json({
+    data: dealList,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  })
 })
 
 dealRoutes.post('/:id/won', async (c) => {
@@ -110,7 +144,14 @@ dealRoutes.post('/:id/won', async (c) => {
 
   const dealId = c.req.param('id')
   const db = createDb(c.env.DB)
-  const [deal] = await db.select({ id: deals.id, amount: deals.amount }).from(deals).where(eq(deals.id, dealId)).limit(1)
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const [deal] = await db
+    .select({ id: deals.id, amount: deals.amount })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(eq(deals.id, dealId), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
   if (!deal) {
     return c.json({ error: '商机不存在' }, 404)
   }
