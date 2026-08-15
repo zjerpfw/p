@@ -1,10 +1,11 @@
 // apps/api/src/routes/activities.ts
 import { createDb } from '@crm/db/client'
-import { activities, activityTypes, deals } from '@crm/db/schema'
-import { eq } from 'drizzle-orm'
+import { activities, activityTypes, customers, deals } from '@crm/db/schema'
+import { and, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
+import { getAuthenticatedActor } from '../lib/auth'
 
 interface ActivityPayload {
   deal_id?: unknown
@@ -24,6 +25,38 @@ export const activityRoutes = new Hono<{ Bindings: Env }>()
 activityRoutes.use('*', async (c, next) => {
   const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
   return middleware(c, next)
+})
+
+activityRoutes.get('/', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const db = createDb(c.env.DB)
+  const activityList = await db
+    .select({
+      id: activities.id,
+      type: activities.type,
+      notes: activities.notes,
+      checkInAddress: activities.checkInAddress,
+      createdAt: activities.createdAt,
+      dealId: deals.id,
+      customerId: customers.id,
+      customerName: customers.name,
+      productName: deals.productName,
+      dealStage: deals.stage,
+    })
+    .from(activities)
+    .innerJoin(deals, eq(activities.dealId, deals.id))
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(
+      eq(activities.createdBy, actor.id),
+      eq(deals.isDeleted, false),
+      eq(customers.isDeleted, false),
+    ))
+    .orderBy(desc(activities.createdAt))
+    .limit(30)
+
+  return c.json({ activities: activityList })
 })
 
 activityRoutes.post('/', async (c) => {
@@ -48,13 +81,21 @@ activityRoutes.post('/', async (c) => {
     return c.json({ error: '跟进记录参数无效' }, 400)
   }
 
-  const payload = c.get('jwtPayload') as { sub?: unknown }
-  if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
-    return c.json({ error: '登录凭证无效' }, 401)
-  }
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
   const db = createDb(c.env.DB)
-  const [deal] = await db.select({ id: deals.id }).from(deals).where(eq(deals.id, body.deal_id)).limit(1)
+  const [deal] = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(
+      eq(deals.id, body.deal_id),
+      eq(deals.isDeleted, false),
+      eq(customers.isDeleted, false),
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .limit(1)
   if (!deal) {
     return c.json({ error: '商机不存在' }, 404)
   }
@@ -67,7 +108,7 @@ activityRoutes.post('/', async (c) => {
     checkInLng: body.check_in_lng ?? null,
     checkInLat: body.check_in_lat ?? null,
     checkInAddress: typeof body.check_in_address === 'string' ? body.check_in_address.trim().slice(0, 500) || null : null,
-    createdBy: payload.sub,
+    createdBy: actor.id,
     createdAt: new Date(),
   }
 

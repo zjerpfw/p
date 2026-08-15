@@ -1,7 +1,8 @@
 // apps/web/src/components/layout/DashboardLayout.tsx
-import { BriefcaseBusiness, LayoutDashboard, Settings, UsersRound } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { BriefcaseBusiness, LayoutDashboard, LogOut, Settings, UsersRound } from 'lucide-react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { clearAccessToken } from '@/lib/api'
 
 const navigation = [
   { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
@@ -13,7 +14,7 @@ const navigation = [
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   return (
-    <nav className={cn(mobile ? 'grid grid-cols-5' : 'space-y-1')}>
+    <nav className={cn(mobile ? 'col-span-5 grid grid-cols-5' : 'space-y-1')}>
       {navigation.map(({ icon: Icon, label, to }) => (
         <NavLink
           className={({ isActive }) =>
@@ -37,6 +38,13 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
 }
 
 export default function DashboardLayout() {
+  const navigate = useNavigate()
+
+  function logout() {
+    clearAccessToken()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="min-h-screen bg-stone-100 text-foreground md:grid md:grid-cols-[224px_minmax(0,1fr)]">
       <aside className="hidden border-r border-border bg-background p-4 md:block">
@@ -45,6 +53,7 @@ export default function DashboardLayout() {
           客户关系管理工作台
         </div>
         <Navigation />
+        <button className="mt-6 flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={logout} type="button"><LogOut aria-hidden="true" className="size-5" />退出登录</button>
       </aside>
 
       <div className="min-w-0 pb-16 md:pb-0">
@@ -57,7 +66,7 @@ export default function DashboardLayout() {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background md:hidden">
-        <Navigation mobile />
+        <div className="grid grid-cols-6"><Navigation mobile /><button className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-medium text-muted-foreground" onClick={logout} type="button"><LogOut aria-hidden="true" className="size-5" /><span>退出登录</span></button></div>
       </div>
     </div>
   )

@@ -84,7 +84,10 @@ export default function CustomerDetailPage() {
         body: JSON.stringify(payload),
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
+        queryClient.invalidateQueries({ queryKey: ['activities'] }),
+      ])
       setVisitDialogOpen(false)
       setNotes('')
       setCoordinates(null)
