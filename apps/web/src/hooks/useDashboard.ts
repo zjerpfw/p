@@ -12,6 +12,7 @@ export interface DashboardData {
     id: string
     customerName: string
     productName: string
+    giftMonths: number
     expireDate: string
     amount: number
   }>

@@ -24,6 +24,7 @@ interface WonDealPayload {
   product_name?: unknown
   start_date?: unknown
   duration_years?: unknown
+  gift_months?: unknown
   expire_date?: unknown
   renewal_reminder_days?: unknown
   software_cost?: unknown
@@ -40,6 +41,7 @@ interface UpdateDealPayload {
   expected_close_date?: unknown
   start_date?: unknown
   duration_years?: unknown
+  gift_months?: unknown
   expire_date?: unknown
   renewal_reminder_days?: unknown
   software_cost?: unknown
@@ -66,6 +68,8 @@ const createDealSchema = z.object({
 })
 const updateProductSchema = z.object({ product_name: productNameSchema.optional() })
 const wonProductSchema = z.object({ product_name: productNameSchema })
+const wonGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0) })
+const updateGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional() })
 
 const financialFields = [
   'duration_years',
@@ -84,6 +88,13 @@ function parseDate(value: unknown): Date | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function calculateExpireDate(startDate: Date, durationYears: number, giftMonths: number) {
+  const date = new Date(startDate)
+  date.setFullYear(date.getFullYear() + durationYears)
+  date.setMonth(date.getMonth() + giftMonths)
+  return date
 }
 
 function parsePagination(value: string | undefined, fallback: number, max: number) {
@@ -120,6 +131,7 @@ dealRoutes.get('/', async (c) => {
       expectedCloseDate: deals.expectedCloseDate,
       startDate: deals.startDate,
       durationYears: deals.durationYears,
+      giftMonths: deals.giftMonths,
       expireDate: deals.expireDate,
       renewalReminderDays: deals.renewalReminderDays,
       softwareCost: deals.softwareCost,
@@ -201,13 +213,16 @@ dealRoutes.post('/:id/won', async (c) => {
   const startDate = parseDate(body.start_date)
   const expireDate = parseDate(body.expire_date)
   const productNameResult = wonProductSchema.safeParse(body)
+  const giftMonthsResult = wonGiftMonthsSchema.safeParse(body)
+  const durationYears = body.duration_years
   if (
     !productNameResult.success ||
+    !giftMonthsResult.success ||
     !startDate ||
     !expireDate ||
-    expireDate <= startDate ||
+    !isInteger(durationYears) ||
+    durationYears <= 0 ||
     financialFields.some((field) => !isInteger(body[field])) ||
-    (body.duration_years as number) <= 0 ||
     (body.renewal_reminder_days as number) < 0 ||
     !Array.isArray(body.splits) ||
     !body.splits.every(
@@ -221,6 +236,10 @@ dealRoutes.post('/:id/won', async (c) => {
     )
   ) {
     return c.json({ error: '成交参数无效，请检查日期、财务字段和分成明细' }, 400)
+  }
+  const calculatedExpireDate = calculateExpireDate(startDate, durationYears, giftMonthsResult.data.gift_months)
+  if (expireDate.getTime() !== calculatedExpireDate.getTime()) {
+    return c.json({ error: '到期时间与服务年限、赠送时长不一致' }, 400)
   }
 
   const dealId = c.req.param('id')
@@ -262,7 +281,8 @@ dealRoutes.post('/:id/won', async (c) => {
       stage: 'Won',
       productName: productNameResult.data.product_name,
       startDate,
-      durationYears: body.duration_years as number,
+      durationYears,
+      giftMonths: giftMonthsResult.data.gift_months,
       expireDate,
       renewalReminderDays: body.renewal_reminder_days as number,
       softwareCost: body.software_cost as number,
@@ -299,6 +319,7 @@ dealRoutes.put('/:id', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const amount = body.amount === undefined ? undefined : isInteger(body.amount) && body.amount >= 0 ? body.amount : null
   const productNameResult = updateProductSchema.safeParse(body)
+  const giftMonthsResult = updateGiftMonthsSchema.safeParse(body)
   const stage = body.stage === undefined ? undefined : typeof body.stage === 'string' && dealStages.includes(body.stage as (typeof dealStages)[number]) ? body.stage as (typeof dealStages)[number] : null
   const expectedCloseDate = body.expected_close_date === undefined ? undefined : parseDate(body.expected_close_date)
   const startDate = body.start_date === undefined ? undefined : parseDate(body.start_date)
@@ -311,13 +332,14 @@ dealRoutes.put('/:id', async (c) => {
     ['rebateAmount', body.rebate_amount],
     ['netProfit', body.net_profit],
   ] as const
-  if (!productNameResult.success || amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (body.start_date !== undefined && !startDate) || (body.expire_date !== undefined && !expireDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
+  if (!productNameResult.success || !giftMonthsResult.success || amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (body.start_date !== undefined && !startDate) || (body.expire_date !== undefined && !expireDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
     return c.json({ error: '商机资料格式无效' }, 400)
   }
 
   const updates = {
     ...(amount !== undefined ? { amount } : {}),
     ...(productNameResult.data.product_name !== undefined ? { productName: productNameResult.data.product_name } : {}),
+    ...(giftMonthsResult.data.gift_months !== undefined ? { giftMonths: giftMonthsResult.data.gift_months } : {}),
     ...(stage !== undefined ? { stage } : {}),
     ...(expectedCloseDate ? { expectedCloseDate } : {}),
     ...(startDate ? { startDate } : {}),
@@ -329,7 +351,7 @@ dealRoutes.put('/:id', async (c) => {
   }
   const db = createDb(c.env.DB)
   const [authorizedDeal] = await db
-    .select({ id: deals.id, stage: deals.stage })
+    .select({ id: deals.id, stage: deals.stage, startDate: deals.startDate, durationYears: deals.durationYears, giftMonths: deals.giftMonths })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, c.req.param('id')), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -337,6 +359,19 @@ dealRoutes.put('/:id', async (c) => {
   if (!authorizedDeal) return c.json({ error: '商机不存在或无权编辑' }, 404)
   if (stage === 'Won' && authorizedDeal.stage !== 'Won') {
     return c.json({ error: '请使用确认赢单流程完成服务期限、财务和分成信息' }, 400)
+  }
+
+  if (authorizedDeal.stage === 'Won' && (startDate || body.duration_years !== undefined || giftMonthsResult.data.gift_months !== undefined)) {
+    const effectiveStartDate = startDate ?? authorizedDeal.startDate
+    const effectiveDurationYears = body.duration_years ?? authorizedDeal.durationYears
+    const effectiveGiftMonths = giftMonthsResult.data.gift_months ?? authorizedDeal.giftMonths
+    if (!effectiveStartDate || !effectiveDurationYears || effectiveGiftMonths === null || effectiveGiftMonths === undefined) {
+      return c.json({ error: '赢单商机缺少完整的服务期限信息' }, 400)
+    }
+    const calculatedExpireDate = calculateExpireDate(effectiveStartDate, effectiveDurationYears, effectiveGiftMonths)
+    if (!expireDate || expireDate.getTime() !== calculatedExpireDate.getTime()) {
+      return c.json({ error: '到期时间与服务年限、赠送时长不一致' }, 400)
+    }
   }
 
   if (authorizedDeal.stage === 'Won' && body.net_profit !== undefined) {

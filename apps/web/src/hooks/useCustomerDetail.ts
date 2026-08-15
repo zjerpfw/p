@@ -17,10 +17,20 @@ export interface Activity {
   createdAt: string
 }
 
+export interface Attachment {
+  id: string
+  activityId: string | null
+  fileName: string
+  contentType: string
+  uploadedBy: string
+  createdAt: string
+}
+
 interface CustomerDetailResponse {
   customer: Customer
   deals: Omit<Deal, 'customerName'>[]
   activities: Activity[]
+  attachments: Attachment[]
 }
 
 export function customerDetailQueryKey(id: string) {

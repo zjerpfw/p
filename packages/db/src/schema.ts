@@ -82,6 +82,7 @@ export const deals = sqliteTable(
     expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
     startDate: integer('start_date', { mode: 'timestamp' }),
     durationYears: integer('duration_years'),
+    giftMonths: integer('gift_months').notNull().default(0),
     expireDate: integer('expire_date', { mode: 'timestamp' }),
     renewalReminderDays: integer('renewal_reminder_days').notNull().default(30),
     softwareCost: integer('software_cost'),
@@ -123,3 +124,27 @@ export const activities = sqliteTable('activities', {
     .references(() => users.id),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 })
+
+export const attachments = sqliteTable(
+  'attachments',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    activityId: text('activity_id')
+      .references(() => activities.id),
+    fileKey: text('file_key').notNull(),
+    fileName: text('file_name').notNull(),
+    contentType: text('content_type').notNull(),
+    uploadedBy: text('uploaded_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('attachments_file_key_unique').on(table.fileKey),
+    index('attachments_customer_id_idx').on(table.customerId),
+    index('attachments_activity_id_idx').on(table.activityId),
+  ],
+)

@@ -95,7 +95,7 @@ export default function DashboardPage() {
                 return (
                   <TableRow key={deal.id}>
                     <TableCell className="font-medium">{deal.customerName}</TableCell>
-                    <TableCell>{deal.productName}</TableCell>
+                    <TableCell>{deal.productName}{deal.giftMonths > 0 && <span className="ml-1 text-xs font-medium text-amber-700">（含赠送 {deal.giftMonths} 个月）</span>}</TableCell>
                     <TableCell>{format(new Date(deal.expireDate), 'yyyy-MM-dd')}</TableCell>
                     <TableCell><span className={remainingDays < 15 ? 'font-semibold text-destructive' : 'font-medium text-amber-700'}>{remainingDays} 天</span></TableCell>
                     <TableCell className="text-right">{currency.format(deal.amount)}</TableCell>

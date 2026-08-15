@@ -1,6 +1,6 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
-import { activities, customers, dealSplits, deals, users } from '@crm/db/schema'
+import { activities, attachments, customers, dealSplits, deals, users } from '@crm/db/schema'
 import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -42,6 +42,7 @@ interface DirectWonCustomerPayload {
   amount?: unknown
   start_date?: unknown
   duration_years?: unknown
+  gift_months?: unknown
   expire_date?: unknown
   renewal_reminder_days?: unknown
   software_cost?: unknown
@@ -59,6 +60,7 @@ const directWonSchema = z.object({
   amount: z.number().int().nonnegative('成交金额不能小于 0'),
   start_date: z.union([z.string(), z.number()]),
   duration_years: z.number().int().positive('服务年限必须大于 0'),
+  gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0),
   expire_date: z.union([z.string(), z.number()]),
   renewal_reminder_days: z.number().int().nonnegative('提前提醒天数不能小于 0').default(30),
   software_cost: z.number().int().nonnegative('软件成本不能小于 0'),
@@ -126,7 +128,10 @@ customerRoutes.post('/direct-won', async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '成交客户资料格式无效' }, 400)
   const startDate = new Date(parsed.data.start_date)
   const expireDate = new Date(parsed.data.expire_date)
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(expireDate.getTime()) || expireDate <= startDate) {
+  const calculatedExpireDate = new Date(startDate)
+  calculatedExpireDate.setFullYear(calculatedExpireDate.getFullYear() + parsed.data.duration_years)
+  calculatedExpireDate.setMonth(calculatedExpireDate.getMonth() + parsed.data.gift_months)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(expireDate.getTime()) || expireDate.getTime() !== calculatedExpireDate.getTime()) {
     return c.json({ error: '服务日期无效，到期时间必须晚于使用日期' }, 400)
   }
 
@@ -167,6 +172,7 @@ customerRoutes.post('/direct-won', async (c) => {
     expectedCloseDate: startDate,
     startDate,
     durationYears: parsed.data.duration_years,
+    giftMonths: parsed.data.gift_months,
     expireDate,
     renewalReminderDays: parsed.data.renewal_reminder_days,
     softwareCost: parsed.data.software_cost,
@@ -258,10 +264,24 @@ customerRoutes.get('/:id', async (c) => {
         .orderBy(desc(activities.createdAt))
     : []
 
+  const customerAttachments = await db
+    .select({
+      id: attachments.id,
+      activityId: attachments.activityId,
+      fileName: attachments.fileName,
+      contentType: attachments.contentType,
+      uploadedBy: attachments.uploadedBy,
+      createdAt: attachments.createdAt,
+    })
+    .from(attachments)
+    .where(eq(attachments.customerId, customer.id))
+    .orderBy(desc(attachments.createdAt))
+
   return c.json({
     customer,
     deals: customerDeals,
     activities: customerActivities,
+    attachments: customerAttachments,
   })
 })
 

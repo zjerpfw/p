@@ -1,0 +1,1 @@
+ALTER TABLE `deals` ADD `gift_months` integer DEFAULT 0 NOT NULL;

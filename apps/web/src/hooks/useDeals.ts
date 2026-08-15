@@ -17,6 +17,7 @@ export interface Deal {
   expectedCloseDate: string
   startDate: string | null
   durationYears: number | null
+  giftMonths: number
   expireDate: string | null
   renewalReminderDays: number
   softwareCost: number | null

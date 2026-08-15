@@ -1,6 +1,6 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
-import { CalendarCheck, ChevronLeft, CircleAlert, CircleCheck, Clock3, MapPin, Paperclip, Pencil, Phone, Trash2, Upload } from 'lucide-react'
+import { CalendarCheck, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, Paperclip, Pencil, Phone, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -26,6 +26,10 @@ import { toast } from 'sonner'
 interface PresignResponse {
   uploadUrl: string
   objectKey: string
+}
+
+interface PreviewResponse {
+  viewUrl: string
 }
 
 interface CreateActivityPayload {
@@ -105,6 +109,15 @@ export default function CustomerDetailPage() {
     onError: (deleteError) => toast.error(deleteError instanceof Error ? deleteError.message : '客户作废失败'),
   })
 
+  const deleteAttachment = useMutation({
+    mutationFn: (attachmentId: string) => apiFetch(`/api/storage/attachments/${attachmentId}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') })
+      toast.success('附件已永久删除')
+    },
+    onError: (deleteError) => toast.error(deleteError instanceof Error ? deleteError.message : '附件删除失败'),
+  })
+
   function confirmDeleteCustomer() {
     if (!customer || !window.confirm(`确认作废客户“${customer.name}”吗？此操作不会物理删除数据。`)) return
     deleteCustomer.mutate()
@@ -147,7 +160,7 @@ export default function CustomerDetailPage() {
       const { uploadUrl, objectKey } = await apiFetch<PresignResponse>('/api/storage/presign/document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream' }),
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream', customer_id: customer?.id }),
       })
       const response = await fetch(uploadUrl, {
         method: 'PUT',
@@ -156,12 +169,37 @@ export default function CustomerDetailPage() {
       })
 
       if (!response.ok) throw new Error('附件上传失败')
+      await apiFetch('/api/storage/attachments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customer?.id,
+          file_key: objectKey,
+          file_name: file.name,
+          content_type: file.type || 'application/octet-stream',
+        }),
+      })
       setUploadMessage(`已上传：${objectKey}`)
+      await queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') })
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : '附件上传失败')
     } finally {
       setIsUploading(false)
     }
+  }
+
+  async function previewAttachment(attachmentId: string) {
+    try {
+      const { viewUrl } = await apiFetch<PreviewResponse>(`/api/storage/presign/view?attachment_id=${encodeURIComponent(attachmentId)}`)
+      window.open(viewUrl, '_blank', 'noopener,noreferrer')
+    } catch (previewError) {
+      toast.error(previewError instanceof Error ? previewError.message : '附件预览失败')
+    }
+  }
+
+  function confirmDeleteAttachment(attachmentId: string) {
+    if (!window.confirm('确定要永久删除该附件吗？此操作无法恢复。')) return
+    deleteAttachment.mutate(attachmentId)
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">正在加载客户信息...</p>
@@ -238,10 +276,18 @@ export default function CustomerDetailPage() {
           <CardContent className="space-y-4 p-5 text-sm">
             <div><p className="text-muted-foreground">归属销售</p><p className="mt-1 font-medium">{customer.ownerId}</p></div>
             <div><p className="text-muted-foreground">创建时间</p><p className="mt-1 font-medium">{format(new Date(customer.createdAt), 'yyyy-MM-dd')}</p></div>
-            <div><p className="text-muted-foreground">附件</p><p className="mt-1 flex items-center gap-1 font-medium"><Paperclip aria-hidden="true" className="size-4" />通过上传按钮添加</p></div>
+            <div><p className="text-muted-foreground">附件</p><p className="mt-1 flex items-center gap-1 font-medium"><Paperclip aria-hidden="true" className="size-4" />{data?.attachments.length ?? 0} 个附件</p></div>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6 gap-0 rounded-lg py-0 shadow-none">
+        <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
+        <CardContent className="divide-y divide-border p-0">
+          {data?.attachments.map((attachment) => <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3" key={attachment.id}><div className="min-w-0"><p className="truncate text-sm font-medium">{attachment.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{format(new Date(attachment.createdAt), 'yyyy-MM-dd HH:mm')} · {attachment.contentType}</p></div><div className="flex shrink-0 gap-1"><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="sm" type="button" variant="outline"><Eye aria-hidden="true" />在线预览</Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>)}
+          {data?.attachments.length === 0 && <p className="px-5 py-8 text-sm text-muted-foreground">暂无附件，可通过上方“上传附件”添加合同或材料。</p>}
+        </CardContent>
+      </Card>
 
       <Card className="mt-6 gap-0 rounded-lg py-0 shadow-none">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>已购 SaaS 服务</CardTitle></CardHeader>
@@ -256,7 +302,7 @@ export default function CustomerDetailPage() {
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${serviceStatus.className}`}><StatusIcon aria-hidden="true" className="size-3.5" />{serviceStatus.label}</span>
                 </div>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <div><dt className="text-muted-foreground">服务期限</dt><dd className="mt-1 font-medium">{deal.startDate ? format(new Date(deal.startDate), 'yyyy-MM-dd') : '待完善'} 至 {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善'}</dd></div>
+                  <div><dt className="text-muted-foreground">服务期限</dt><dd className="mt-1 flex flex-wrap items-center gap-2 font-medium">{deal.startDate ? format(new Date(deal.startDate), 'yyyy-MM-dd') : '待完善'} 至 {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善'}{deal.giftMonths > 0 && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">服务年限：{deal.durationYears ?? 0} 年 🎁赠送 {deal.giftMonths} 个月</span>}</dd></div>
                   <div><dt className="text-muted-foreground">成交金额</dt><dd className="mt-1 font-medium">{currency.format(deal.amount)}</dd></div>
                   <div><dt className="text-muted-foreground">实际利润</dt><dd className="mt-1 font-medium text-emerald-700">{currency.format((deal.netProfit ?? 0) / 100)}</dd></div>
                   <div><dt className="text-muted-foreground">续费提醒</dt><dd className="mt-1 font-medium">提前 {deal.renewalReminderDays} 天</dd></div>

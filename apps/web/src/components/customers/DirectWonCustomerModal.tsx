@@ -1,5 +1,5 @@
 // apps/web/src/components/customers/DirectWonCustomerModal.tsx
-import { addYears, format } from 'date-fns'
+import { addMonths, addYears, format } from 'date-fns'
 import { Minus, Plus, WalletCards } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -42,6 +42,7 @@ export function DirectWonCustomerModal({ open, onOpenChange }: DirectWonCustomer
   const [amount, setAmount] = useState(0)
   const [startDate, setStartDate] = useState(today)
   const [durationYears, setDurationYears] = useState(1)
+  const [giftMonths, setGiftMonths] = useState(0)
   const [reminderDays, setReminderDays] = useState(30)
   const [softwareCost, setSoftwareCost] = useState(0)
   const [taxCost, setTaxCost] = useState(0)
@@ -55,8 +56,8 @@ export function DirectWonCustomerModal({ open, onOpenChange }: DirectWonCustomer
 
   const expireDate = useMemo(() => {
     const parsed = new Date(`${startDate}T00:00:00`)
-    return Number.isNaN(parsed.getTime()) ? '' : format(addYears(parsed, durationYears), 'yyyy-MM-dd')
-  }, [durationYears, startDate])
+    return Number.isNaN(parsed.getTime()) ? '' : format(addMonths(addYears(parsed, durationYears), giftMonths), 'yyyy-MM-dd')
+  }, [durationYears, giftMonths, startDate])
   const netProfit = amount - softwareCost - taxCost - rebateAmount
   const totalSplitAmount = splits.reduce((total, split) => total + split.amount, 0)
   const isSplitValid = netProfit >= 0 && totalSplitAmount <= netProfit && splits.every((split) => split.userId)
@@ -73,6 +74,7 @@ export function DirectWonCustomerModal({ open, onOpenChange }: DirectWonCustomer
         amount,
         start_date: startDate,
         duration_years: durationYears,
+        gift_months: giftMonths,
         expire_date: expireDate,
         renewal_reminder_days: reminderDays,
         software_cost: softwareCost,
@@ -94,6 +96,7 @@ export function DirectWonCustomerModal({ open, onOpenChange }: DirectWonCustomer
       setProductName('')
       setAmount(0)
       setDurationYears(1)
+      setGiftMonths(0)
       setReminderDays(30)
       setSoftwareCost(0)
       setTaxCost(0)
@@ -140,7 +143,7 @@ export function DirectWonCustomerModal({ open, onOpenChange }: DirectWonCustomer
 
           <section className="space-y-3 border-t border-border pt-5">
             <h3 className="text-sm font-semibold">服务期限</h3>
-            <div className="grid gap-3 sm:grid-cols-3"><div className="space-y-1.5"><Label htmlFor="direct-won-start">使用日期</Label><Input id="direct-won-start" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-duration">服务年限</Label><Input id="direct-won-duration" min="1" onChange={(event) => setDurationYears(Math.max(1, toInteger(event.target.value)))} type="number" value={durationYears} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-expire">到期时间</Label><Input id="direct-won-expire" readOnly type="date" value={expireDate} /></div></div>
+            <div className="grid gap-3 sm:grid-cols-4"><div className="space-y-1.5"><Label htmlFor="direct-won-start">使用日期</Label><Input id="direct-won-start" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-duration">服务年限</Label><Input id="direct-won-duration" min="1" onChange={(event) => setDurationYears(Math.max(1, toInteger(event.target.value)))} type="number" value={durationYears} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-gift-months">赠送时长（月）</Label><Input id="direct-won-gift-months" min="0" onChange={(event) => setGiftMonths(toInteger(event.target.value))} type="number" value={giftMonths} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-expire">到期时间</Label><Input id="direct-won-expire" readOnly type="date" value={expireDate} /></div></div>
             <div className="max-w-48 space-y-1.5"><Label htmlFor="direct-won-reminder">提前提醒天数</Label><Input id="direct-won-reminder" min="0" onChange={(event) => setReminderDays(toInteger(event.target.value))} type="number" value={reminderDays} /></div>
           </section>
 
