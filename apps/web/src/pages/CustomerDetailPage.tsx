@@ -69,6 +69,7 @@ export default function CustomerDetailPage() {
   const [notes, setNotes] = useState('')
   const [activityType, setActivityType] = useState<CreateActivityPayload['type']>('Meeting')
   const [selectedDealId, setSelectedDealId] = useState('')
+  const [selectedAttachmentActivityId, setSelectedAttachmentActivityId] = useState('')
   const [coordinates, setCoordinates] = useState<{ lng: number; lat: number } | null>(null)
   const {
     getLocation,
@@ -160,7 +161,7 @@ export default function CustomerDetailPage() {
       const { uploadUrl, objectKey } = await apiFetch<PresignResponse>('/api/storage/presign/document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream', customer_id: customer?.id }),
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream', customer_id: customer?.id, activity_id: selectedAttachmentActivityId || undefined }),
       })
       const response = await fetch(uploadUrl, {
         method: 'PUT',
@@ -174,12 +175,14 @@ export default function CustomerDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id: customer?.id,
+          activity_id: selectedAttachmentActivityId || undefined,
           file_key: objectKey,
           file_name: file.name,
           content_type: file.type || 'application/octet-stream',
         }),
       })
       setUploadMessage(`已上传：${objectKey}`)
+      setSelectedAttachmentActivityId('')
       await queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') })
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : '附件上传失败')
@@ -242,6 +245,10 @@ export default function CustomerDetailPage() {
           <Button disabled={isUploading} onClick={() => fileInputRef.current?.click()} variant="outline">
             <Upload aria-hidden="true" />{isUploading ? '正在上传' : '上传附件'}
           </Button>
+          <select aria-label="附件关联跟进记录" className="h-9 max-w-48 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => setSelectedAttachmentActivityId(event.target.value)} value={selectedAttachmentActivityId}>
+            <option value="">客户级附件</option>
+            {data?.activities.map((activity) => <option key={activity.id} value={activity.id}>{format(new Date(activity.createdAt), 'MM-dd')} · {activityTypeLabels[activity.type]}</option>)}
+          </select>
           <Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="outline"><Trash2 aria-hidden="true" />作废客户</Button>
           <input className="sr-only" onChange={uploadAttachment} ref={fileInputRef} type="file" />
         </div>
@@ -264,6 +271,7 @@ export default function CustomerDetailPage() {
                   </div>
                   {activity.notes && <p className="mt-1 text-sm leading-6 text-muted-foreground">{activity.notes}</p>}
                   {activity.checkInAddress && <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><MapPin aria-hidden="true" className="size-3" />{activity.checkInAddress}</p>}
+                  {data?.attachments.filter((attachment) => attachment.activityId === activity.id).map((attachment) => <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs" key={attachment.id}><Paperclip aria-hidden="true" className="size-3.5 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{attachment.fileName}</span><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="xs" type="button" variant="ghost"><Eye aria-hidden="true" />预览</Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div>)}
                 </li>
               ))}
               {data?.activities.length === 0 && <li className="text-sm text-muted-foreground">暂无跟进记录</li>}
@@ -284,8 +292,8 @@ export default function CustomerDetailPage() {
       <Card className="mt-6 gap-0 rounded-lg py-0 shadow-none">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
         <CardContent className="divide-y divide-border p-0">
-          {data?.attachments.map((attachment) => <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3" key={attachment.id}><div className="min-w-0"><p className="truncate text-sm font-medium">{attachment.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{format(new Date(attachment.createdAt), 'yyyy-MM-dd HH:mm')} · {attachment.contentType}</p></div><div className="flex shrink-0 gap-1"><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="sm" type="button" variant="outline"><Eye aria-hidden="true" />在线预览</Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>)}
-          {data?.attachments.length === 0 && <p className="px-5 py-8 text-sm text-muted-foreground">暂无附件，可通过上方“上传附件”添加合同或材料。</p>}
+          {data?.attachments.filter((attachment) => !attachment.activityId).map((attachment) => <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3" key={attachment.id}><div className="min-w-0"><p className="truncate text-sm font-medium">{attachment.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{format(new Date(attachment.createdAt), 'yyyy-MM-dd HH:mm')} · {attachment.contentType}</p></div><div className="flex shrink-0 gap-1"><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="sm" type="button" variant="outline"><Eye aria-hidden="true" />在线预览</Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>)}
+          {data?.attachments.filter((attachment) => !attachment.activityId).length === 0 && <p className="px-5 py-8 text-sm text-muted-foreground">暂无客户级附件，可通过上方“上传附件”添加合同或材料。</p>}
         </CardContent>
       </Card>
 

@@ -1,7 +1,7 @@
 // apps/api/src/routes/storage.ts
 import { AwsClient } from 'aws4fetch'
 import { createDb } from '@crm/db/client'
-import { attachments, customers } from '@crm/db/schema'
+import { activities, attachments, customers, deals } from '@crm/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import type { Env } from '../env'
@@ -217,6 +217,15 @@ storage.post('/attachments', async (c) => {
     .where(and(eq(customers.id, body.customer_id), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)
   if (!customer) return c.json({ error: '客户不存在或无权登记附件' }, 404)
+  if (typeof body.activity_id === 'string' && body.activity_id.length > 0) {
+    const [activity] = await db
+      .select({ id: activities.id })
+      .from(activities)
+      .innerJoin(deals, eq(activities.dealId, deals.id))
+      .where(and(eq(activities.id, body.activity_id), eq(deals.customerId, customer.id), eq(deals.isDeleted, false)))
+      .limit(1)
+    if (!activity) return c.json({ error: '关联跟进记录不存在或不属于当前客户' }, 400)
+  }
   const attachment = {
     id: crypto.randomUUID(),
     customerId: customer.id,
