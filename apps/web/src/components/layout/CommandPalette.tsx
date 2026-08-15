@@ -14,7 +14,7 @@ export function CommandPalette({ onCreateCustomer, onCreateDeal }: CommandPalett
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
-  const customersQuery = useCustomers({ search: search.trim(), limit: 8 })
+  const customersQuery = useCustomers({ search: search.trim(), limit: 8, enabled: open && Boolean(search.trim()) })
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

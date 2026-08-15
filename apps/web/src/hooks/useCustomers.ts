@@ -27,6 +27,7 @@ export interface CustomerFilters {
   status?: string
   page?: number
   limit?: number
+  enabled?: boolean
 }
 
 export function useCustomers(filters: CustomerFilters = {}) {
@@ -40,5 +41,6 @@ export function useCustomers(filters: CustomerFilters = {}) {
   return useQuery({
     queryKey: ['customers', filters],
     queryFn: () => apiFetch<PaginatedResponse<Customer>>(`/api/customers?${query}`),
+    enabled: filters.enabled ?? true,
   })
 }

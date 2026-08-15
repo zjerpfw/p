@@ -1,7 +1,7 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
 import { CalendarCheck, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, Paperclip, Pencil, Phone, Send, Trash2, Upload } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -82,6 +82,12 @@ export default function CustomerDetailPage() {
 
   const customer = data?.customer
 
+  useEffect(() => {
+    if (!selectedDealId && data?.deals[0]?.id) {
+      setSelectedDealId(data.deals[0].id)
+    }
+  }, [data?.deals, selectedDealId])
+
   const createActivity = useMutation({
     mutationFn: (payload: CreateActivityPayload) =>
       apiFetch('/api/activities', {
@@ -98,7 +104,9 @@ export default function CustomerDetailPage() {
       setNotes('')
       setCoordinates(null)
       setLocationAddress(null)
+      toast.success('跟进记录已保存')
     },
+    onError: (activityError) => toast.error(activityError instanceof Error ? activityError.message : '跟进记录保存失败'),
   })
 
   const deleteCustomer = useMutation({
@@ -137,12 +145,15 @@ export default function CustomerDetailPage() {
 
   function submitVisitRecord() {
     const dealId = selectedDealId || data?.deals[0]?.id
-    if (!dealId) return
+    if (!dealId) {
+      toast.error('请先关联一条商机后再提交跟进记录')
+      return
+    }
 
     createActivity.mutate({
       deal_id: dealId,
       type: activityType,
-      notes,
+      notes: notes.trim(),
       check_in_lng: coordinates?.lng ?? null,
       check_in_lat: coordinates?.lat ?? null,
       check_in_address: locationAddress,
@@ -150,7 +161,10 @@ export default function CustomerDetailPage() {
   }
 
   function submitQuickNote() {
-    if (!notes.trim()) return
+    if (!notes.trim()) {
+      toast.error('请先填写沟通纪要')
+      return
+    }
     submitVisitRecord()
   }
 

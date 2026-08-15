@@ -3,6 +3,7 @@ import { addMonths, addYears, format } from 'date-fns'
 import { Minus, Plus, WalletCards } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -100,9 +101,15 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
       body: JSON.stringify(payload),
     }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['deals'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['deals'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        deal ? queryClient.invalidateQueries({ queryKey: ['customers', deal.customerId] }) : Promise.resolve(),
+      ])
       onOpenChange(false)
+      toast.success('商机已确认赢单')
     },
+    onError: (error) => toast.error(error instanceof Error ? error.message : '确认赢单失败'),
   })
 
   function updateSplit(key: string, patch: Partial<SplitDraft>) {

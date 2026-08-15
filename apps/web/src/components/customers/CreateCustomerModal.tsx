@@ -68,13 +68,13 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
           <SheetTitle>新建客户</SheetTitle>
           <SheetDescription>客户将自动归属到当前登录的销售人员。</SheetDescription>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto p-6">
+        <form className="flex-1 overflow-y-auto p-6" onSubmit={(event) => { event.preventDefault(); submit() }}>
           <div className="space-y-4 rounded-lg bg-slate-50 p-4">
             <div className="space-y-1.5"><Label htmlFor="customer-name"><span className="text-rose-500">*</span> 客户名称</Label>
             <Input autoFocus id="customer-name" onChange={(event) => setName(event.target.value)} placeholder="请输入客户名称" value={name} />
             </div>
             <div className="space-y-1.5">
-            <Label htmlFor="customer-phone"><span className="text-rose-500">*</span> 联系电话</Label>
+            <Label htmlFor="customer-phone">联系电话</Label>
             <Input id="customer-phone" inputMode="tel" onChange={(event) => setContactPhone(event.target.value)} placeholder="请输入联系电话" value={contactPhone} />
             </div>
             <div className="space-y-1.5">
@@ -89,7 +89,7 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
             <Input id="customer-address" onChange={(event) => setAddress(event.target.value)} placeholder="请输入详细地址" value={address} />
             </div>
           </div>
-        </div>
+        </form>
         <SheetFooter className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button>
           <Button disabled={!name.trim() || createCustomer.isPending} onClick={submit} type="button">

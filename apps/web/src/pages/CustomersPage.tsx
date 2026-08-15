@@ -28,7 +28,9 @@ export default function CustomersPage() {
   useEffect(() => {
     if (searchParams.get('create') !== '1') return
     setCreateDialogOpen(true)
-    setSearchParams({}, { replace: true })
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('create')
+    setSearchParams(nextParams, { replace: true })
   }, [searchParams, setSearchParams])
 
   function updateSearch(value: string) {
