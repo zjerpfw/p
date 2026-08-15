@@ -19,6 +19,56 @@ function parsePagination(value: string | undefined, fallback: number, max: numbe
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback
 }
 
+interface CreateCustomerPayload {
+  name?: unknown
+  contact_phone?: unknown
+  status?: unknown
+  address?: unknown
+}
+
+function optionalText(value: unknown, maxLength: number) {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string') return undefined
+  return value.trim().slice(0, maxLength) || null
+}
+
+customerRoutes.post('/', async (c) => {
+  let body: CreateCustomerPayload
+
+  try {
+    body = await c.req.json<CreateCustomerPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const name = optionalText(body.name, 100)
+  const contactPhone = optionalText(body.contact_phone, 30)
+  const status = optionalText(body.status, 50) ?? 'Active'
+  const address = optionalText(body.address, 500)
+  if (!name || contactPhone === undefined || address === undefined) {
+    return c.json({ error: '客户名称、联系电话或详细地址格式无效' }, 400)
+  }
+
+  const now = new Date()
+  const customer = {
+    id: crypto.randomUUID(),
+    name,
+    contactPhone,
+    status,
+    address,
+    ownerId: actor.id,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const db = createDb(c.env.DB)
+  await db.insert(customers).values(customer)
+
+  return c.json({ customer }, 201)
+})
+
 customerRoutes.get('/', async (c) => {
   const db = createDb(c.env.DB)
   const actor = getAuthenticatedActor(c)

@@ -1,8 +1,9 @@
 // apps/web/src/pages/CustomersPage.tsx
 import { useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PaginationControls } from '@/components/PaginationControls'
+import { CreateCustomerModal } from '@/components/customers/CreateCustomerModal'
 import { Input } from '@/components/ui/input'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -14,6 +15,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const debouncedSearch = useDebouncedValue(search.trim())
   const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, page })
   const statuses = ['Active', 'Inactive']
@@ -30,8 +32,13 @@ export default function CustomersPage() {
 
   return (
     <section>
-      <h1 className="text-xl font-semibold">客户池</h1>
-      <p className="mt-1 text-sm text-muted-foreground">集中管理客户资料与跟进状态。</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">客户池</h1>
+          <p className="mt-1 text-sm text-muted-foreground">集中管理客户资料与跟进状态。</p>
+        </div>
+        <Button onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button>
+      </div>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
@@ -64,6 +71,7 @@ export default function CustomersPage() {
           <PaginationControls onPageChange={setPage} page={data.page} total={data.total} totalPages={data.totalPages} />
         </div>
       )}
+      <CreateCustomerModal onOpenChange={setCreateDialogOpen} open={createDialogOpen} />
     </section>
   )
 }
