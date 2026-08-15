@@ -1,15 +1,19 @@
 // apps/web/src/pages/DealsPage.tsx
 import { format } from 'date-fns'
-import { CalendarDays, CircleDollarSign, Search, Trophy, X } from 'lucide-react'
+import { CalendarDays, CircleDollarSign, Pencil, Search, Trash2, Trophy, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PaginationControls } from '@/components/PaginationControls'
 import SaaSDealWonModal from '@/components/deals/SaaSDealWonModal'
+import { DealDetailModal } from '@/components/deals/DealDetailModal'
 import { dealStages, type Deal, type DealStage, useDeals } from '@/hooks/useDeals'
 import { dealStageLabels } from '@/lib/presentation'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { apiFetch } from '@/lib/api'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 const stageStyle: Record<DealStage, string> = {
   Leads: 'border-slate-300',
@@ -32,6 +36,22 @@ export default function DealsPage() {
   const debouncedSearch = useDebouncedValue(search.trim())
   const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: status || undefined, page })
   const [dealToConfirm, setDealToConfirm] = useState<Deal | null>(null)
+  const [dealToEdit, setDealToEdit] = useState<Deal | null>(null)
+  const queryClient = useQueryClient()
+
+  const deleteDeal = useMutation({
+    mutationFn: (dealId: string) => apiFetch(`/api/deals/${dealId}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['deals'] }), queryClient.invalidateQueries({ queryKey: ['dashboard'] })])
+      toast.success('商机已作废')
+    },
+    onError: (deleteError) => toast.error(deleteError instanceof Error ? deleteError.message : '商机作废失败'),
+  })
+
+  function confirmDeleteDeal(deal: Deal) {
+    if (!window.confirm(`确认作废“${deal.customerName}”的商机吗？此操作不会物理删除数据。`)) return
+    deleteDeal.mutate(deal.id)
+  }
 
   function updateSearch(value: string) {
     setSearch(value)
@@ -76,7 +96,11 @@ export default function DealsPage() {
                     {stageDeals.map((deal) => (
                       <Card className="gap-0 rounded-lg py-0 shadow-none" key={deal.id}>
                         <CardContent className="space-y-3 p-4">
-                          <p className="font-medium">{deal.customerName}</p>
+                      <p className="font-medium">{deal.customerName}</p>
+                      <div className="flex justify-end gap-1">
+                        <Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button>
+                        <Button aria-label={`作废${deal.customerName}的商机`} disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button>
+                      </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <CircleDollarSign aria-hidden="true" className="size-4" />
                             预计金额：{currency.format(deal.amount)}
@@ -104,6 +128,7 @@ export default function DealsPage() {
         </div>
       )}
       <SaaSDealWonModal deal={dealToConfirm} onOpenChange={(open) => !open && setDealToConfirm(null)} />
+      <DealDetailModal deal={dealToEdit} onOpenChange={(open) => !open && setDealToEdit(null)} />
     </section>
   )
 }

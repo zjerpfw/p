@@ -43,6 +43,13 @@
       "when": 1786773279890,
       "tag": "0005_loud_joystick",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786775970900,
+      "tag": "0006_bright_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

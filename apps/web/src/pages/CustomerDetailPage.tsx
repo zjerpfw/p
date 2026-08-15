@@ -1,10 +1,11 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { format } from 'date-fns'
-import { CalendarCheck, ChevronLeft, MapPin, Paperclip, Phone, Upload } from 'lucide-react'
+import { CalendarCheck, ChevronLeft, MapPin, Paperclip, Pencil, Phone, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
+import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -20,6 +21,7 @@ import { customerDetailQueryKey, useCustomerDetail } from '@/hooks/useCustomerDe
 import { useAMapLocation } from '@/hooks/useAMapLocation'
 import { apiFetch } from '@/lib/api'
 import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel } from '@/lib/presentation'
+import { toast } from 'sonner'
 
 interface PresignResponse {
   uploadUrl: string
@@ -41,6 +43,7 @@ export default function CustomerDetailPage() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [visitDialogOpen, setVisitDialogOpen] = useState(false)
+  const [editCustomerOpen, setEditCustomerOpen] = useState(false)
   const [locationAddress, setLocationAddress] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadMessage, setUploadMessage] = useState<string | null>(null)
@@ -73,6 +76,21 @@ export default function CustomerDetailPage() {
       setLocationAddress(null)
     },
   })
+
+  const deleteCustomer = useMutation({
+    mutationFn: () => apiFetch(`/api/customers/${customer?.id}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['customers'] }), queryClient.invalidateQueries({ queryKey: ['dashboard'] })])
+      toast.success('客户已作废')
+      window.location.assign('/customers')
+    },
+    onError: (deleteError) => toast.error(deleteError instanceof Error ? deleteError.message : '客户作废失败'),
+  })
+
+  function confirmDeleteCustomer() {
+    if (!customer || !window.confirm(`确认作废客户“${customer.name}”吗？此操作不会物理删除数据。`)) return
+    deleteCustomer.mutate()
+  }
 
   async function getCurrentLocation() {
     try {
@@ -163,10 +181,12 @@ export default function CustomerDetailPage() {
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          <Button onClick={() => setEditCustomerOpen(true)} type="button" variant="outline"><Pencil aria-hidden="true" />编辑客户</Button>
           <Button disabled={!data?.deals.length} onClick={() => setVisitDialogOpen(true)}><CalendarCheck aria-hidden="true" />添加跟进记录</Button>
           <Button disabled={isUploading} onClick={() => fileInputRef.current?.click()} variant="outline">
             <Upload aria-hidden="true" />{isUploading ? '正在上传' : '上传附件'}
           </Button>
+          <Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="outline"><Trash2 aria-hidden="true" />作废客户</Button>
           <input className="sr-only" onChange={uploadAttachment} ref={fileInputRef} type="file" />
         </div>
       </header>
@@ -252,6 +272,7 @@ export default function CustomerDetailPage() {
           {createActivity.error && <p className="text-sm text-destructive">{createActivity.error.message}</p>}
         </DialogContent>
       </Dialog>
+      <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
     </section>
   )
 }

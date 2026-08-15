@@ -26,6 +26,13 @@ interface CreateCustomerPayload {
   address?: unknown
 }
 
+interface UpdateCustomerPayload {
+  name?: unknown
+  contact_phone?: unknown
+  status?: unknown
+  address?: unknown
+}
+
 function optionalText(value: unknown, maxLength: number) {
   if (value === undefined || value === null) return null
   if (typeof value !== 'string') return undefined
@@ -79,6 +86,7 @@ customerRoutes.get('/', async (c) => {
   const page = parsePagination(c.req.query('page'), 1, 1_000_000)
   const limit = parsePagination(c.req.query('limit'), 10, 100)
   const filters = [
+    eq(customers.isDeleted, false),
     search ? like(customers.name, `%${search}%`) : undefined,
     status ? eq(customers.status, status) : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
@@ -106,7 +114,7 @@ customerRoutes.get('/:id', async (c) => {
   const [customer] = await db
     .select()
     .from(customers)
-    .where(and(eq(customers.id, customerId), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .where(and(eq(customers.id, customerId), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)
 
   if (!customer) {
@@ -116,7 +124,7 @@ customerRoutes.get('/:id', async (c) => {
   const customerDeals = await db
     .select()
     .from(deals)
-    .where(eq(deals.customerId, customer.id))
+    .where(and(eq(deals.customerId, customer.id), eq(deals.isDeleted, false)))
     .orderBy(desc(deals.createdAt))
 
   const customerActivities = customerDeals.length
@@ -144,4 +152,63 @@ customerRoutes.get('/:id', async (c) => {
     deals: customerDeals,
     activities: customerActivities,
   })
+})
+
+customerRoutes.put('/:id', async (c) => {
+  let body: UpdateCustomerPayload
+  try {
+    body = await c.req.json<UpdateCustomerPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const name = body.name === undefined ? undefined : optionalText(body.name, 100)
+  const contactPhone = body.contact_phone === undefined ? undefined : optionalText(body.contact_phone, 30)
+  const status = body.status === undefined ? undefined : optionalText(body.status, 50)
+  const address = body.address === undefined ? undefined : optionalText(body.address, 500)
+  if (name === undefined || name === null || contactPhone === undefined || status === undefined || address === undefined) {
+    return c.json({ error: '客户资料格式无效' }, 400)
+  }
+
+  const updates = {
+    ...(name !== undefined ? { name } : {}),
+    ...(contactPhone !== undefined ? { contactPhone } : {}),
+    ...(status !== undefined ? { status: status ?? 'Active' } : {}),
+    ...(address !== undefined ? { address } : {}),
+    updatedAt: new Date(),
+  }
+  const db = createDb(c.env.DB)
+  const [customer] = await db
+    .update(customers)
+    .set(updates)
+    .where(and(eq(customers.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .returning()
+  if (!customer) return c.json({ error: '客户不存在或无权编辑' }, 404)
+
+  return c.json({ customer })
+})
+
+customerRoutes.delete('/:id', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const customerId = c.req.param('id')
+  const db = createDb(c.env.DB)
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(eq(customers.id, customerId), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!customer) return c.json({ error: '客户不存在或无权作废' }, 404)
+
+  const [wonDeal] = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .where(and(eq(deals.customerId, customer.id), eq(deals.stage, 'Won'), eq(deals.isDeleted, false)))
+    .limit(1)
+  if (wonDeal) return c.json({ error: '客户存在已赢单商机，不能作废' }, 409)
+
+  await db.update(customers).set({ isDeleted: true, updatedAt: new Date() }).where(eq(customers.id, customer.id))
+  return c.json({ id: customer.id, isDeleted: true })
 })

@@ -31,6 +31,20 @@ interface WonDealPayload {
   splits?: unknown
 }
 
+interface UpdateDealPayload {
+  amount?: unknown
+  stage?: unknown
+  expected_close_date?: unknown
+  start_date?: unknown
+  duration_years?: unknown
+  expire_date?: unknown
+  renewal_reminder_days?: unknown
+  software_cost?: unknown
+  tax_cost?: unknown
+  rebate_amount?: unknown
+  net_profit?: unknown
+}
+
 const financialFields = [
   'duration_years',
   'renewal_reminder_days',
@@ -66,6 +80,8 @@ dealRoutes.get('/', async (c) => {
   const page = parsePagination(c.req.query('page'), 1, 1_000_000)
   const limit = parsePagination(c.req.query('limit'), 10, 100)
   const filters = [
+    eq(deals.isDeleted, false),
+    eq(customers.isDeleted, false),
     search ? like(customers.name, `%${search}%`) : undefined,
     stage ? eq(deals.stage, stage as (typeof dealStages)[number]) : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
@@ -150,7 +166,7 @@ dealRoutes.post('/:id/won', async (c) => {
     .select({ id: deals.id, amount: deals.amount })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
-    .where(and(eq(deals.id, dealId), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .where(and(eq(deals.id, dealId), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)
   if (!deal) {
     return c.json({ error: '商机不存在' }, 404)
@@ -203,4 +219,97 @@ dealRoutes.post('/:id/won', async (c) => {
   await db.batch([updateDeal, ...splitInserts])
 
   return c.json({ id: dealId, stage: 'Won', splitCount: splits.length })
+})
+
+dealRoutes.put('/:id', async (c) => {
+  let body: UpdateDealPayload
+  try {
+    body = await c.req.json<UpdateDealPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const amount = body.amount === undefined ? undefined : isInteger(body.amount) && body.amount >= 0 ? body.amount : null
+  const stage = body.stage === undefined ? undefined : typeof body.stage === 'string' && dealStages.includes(body.stage as (typeof dealStages)[number]) ? body.stage as (typeof dealStages)[number] : null
+  const expectedCloseDate = body.expected_close_date === undefined ? undefined : parseDate(body.expected_close_date)
+  const startDate = body.start_date === undefined ? undefined : parseDate(body.start_date)
+  const expireDate = body.expire_date === undefined ? undefined : parseDate(body.expire_date)
+  const integerFields = [
+    ['durationYears', body.duration_years],
+    ['renewalReminderDays', body.renewal_reminder_days],
+    ['softwareCost', body.software_cost],
+    ['taxCost', body.tax_cost],
+    ['rebateAmount', body.rebate_amount],
+    ['netProfit', body.net_profit],
+  ] as const
+  if (amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (body.start_date !== undefined && !startDate) || (body.expire_date !== undefined && !expireDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
+    return c.json({ error: '商机资料格式无效' }, 400)
+  }
+
+  const updates = {
+    ...(amount !== undefined ? { amount } : {}),
+    ...(stage !== undefined ? { stage } : {}),
+    ...(expectedCloseDate ? { expectedCloseDate } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(expireDate ? { expireDate } : {}),
+    ...Object.fromEntries(integerFields.filter(([, value]) => value !== undefined).map(([key, value]) => [key, value])),
+  }
+  if (Object.keys(updates).length === 0) {
+    return c.json({ error: '请至少提供一个需要更新的字段' }, 400)
+  }
+  const db = createDb(c.env.DB)
+  const [authorizedDeal] = await db
+    .select({ id: deals.id, stage: deals.stage })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(eq(deals.id, c.req.param('id')), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!authorizedDeal) return c.json({ error: '商机不存在或无权编辑' }, 404)
+  if (stage === 'Won' && authorizedDeal.stage !== 'Won') {
+    return c.json({ error: '请使用确认赢单流程完成服务期限、财务和分成信息' }, 400)
+  }
+
+  if (authorizedDeal.stage === 'Won' && body.net_profit !== undefined) {
+    const splitRows = await db
+      .select({ splitAmount: dealSplits.splitAmount })
+      .from(dealSplits)
+      .where(eq(dealSplits.dealId, authorizedDeal.id))
+    const assignedAmount = splitRows.reduce((total, split) => total + split.splitAmount, 0)
+    if (assignedAmount > body.net_profit) {
+      return c.json({ error: '实际利润不能低于已分配的订单分成金额' }, 400)
+    }
+  }
+
+  const [deal] = await db
+    .update(deals)
+    .set(updates)
+    .where(eq(deals.id, authorizedDeal.id))
+    .returning()
+  if (!deal) return c.json({ error: '商机更新失败' }, 500)
+
+  return c.json({ deal })
+})
+
+dealRoutes.delete('/:id', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [authorizedDeal] = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(eq(deals.id, c.req.param('id')), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!authorizedDeal) return c.json({ error: '商机不存在或无权作废' }, 404)
+
+  const [deal] = await db
+    .update(deals)
+    .set({ isDeleted: true })
+    .where(eq(deals.id, authorizedDeal.id))
+    .returning({ id: deals.id })
+  if (!deal) return c.json({ error: '商机作废失败' }, 500)
+
+  return c.json({ id: deal.id, isDeleted: true })
 })

@@ -48,6 +48,7 @@ export const customers = sqliteTable(
     ownerId: text('owner_id')
       .notNull()
       .references(() => users.id),
+    isDeleted: integer('is_deleted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   },
@@ -75,6 +76,7 @@ export const deals = sqliteTable(
     taxCost: integer('tax_cost'),
     rebateAmount: integer('rebate_amount'),
     netProfit: integer('net_profit'),
+    isDeleted: integer('is_deleted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
   (table) => [

@@ -22,23 +22,24 @@ dashboardRoutes.get('/', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
+  const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
   const [[newLead], [wonProfit], stageDistribution] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
-      .where(and(eq(deals.stage, 'Leads'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ownerFilter)),
+      .where(and(eq(deals.stage, 'Leads'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
     db
       .select({ total: sql<number>`coalesce(sum(${deals.netProfit}), 0)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
-      .where(and(eq(deals.stage, 'Won'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ownerFilter)),
+      .where(and(eq(deals.stage, 'Won'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
     db
       .select({ stage: deals.stage, count: sql<number>`count(*)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
-      .where(ownerFilter)
+      .where(and(...activeFilters))
       .groupBy(deals.stage),
   ])
 
