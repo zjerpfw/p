@@ -1,5 +1,6 @@
 // apps/web/src/pages/CustomersPage.tsx
 import { useCustomers } from '@/hooks/useCustomers'
+import { getCustomerStatusLabel } from '@/lib/presentation'
 import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -22,7 +23,7 @@ export default function CustomersPage() {
             >
               <span className="font-medium">{customer.name}</span>
               <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                {customer.status}
+                {getCustomerStatusLabel(customer.status)}
                 <ChevronRight aria-hidden="true" className="size-4" />
               </span>
             </Link>

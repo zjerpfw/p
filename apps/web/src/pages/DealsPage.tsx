@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import SaaSDealWonModal from '@/components/deals/SaaSDealWonModal'
 import { dealStages, type Deal, type DealStage, useDeals } from '@/hooks/useDeals'
+import { dealStageLabels } from '@/lib/presentation'
 
 const stageStyle: Record<DealStage, string> = {
   Leads: 'border-slate-300',
@@ -39,7 +40,7 @@ export default function DealsPage() {
           return (
             <section className="w-72 shrink-0" key={stage}>
               <header className={`border-l-4 ${stageStyle[stage]} mb-3 flex items-center justify-between bg-muted px-3 py-2`}>
-                <h2 className="text-sm font-semibold">{stage}</h2>
+                <h2 className="text-sm font-semibold">{dealStageLabels[stage]}</h2>
                 <span className="text-xs text-muted-foreground">{stageDeals.length}</span>
               </header>
               <div className="space-y-3">
@@ -49,11 +50,11 @@ export default function DealsPage() {
                       <p className="font-medium">{deal.customerName}</p>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <CircleDollarSign aria-hidden="true" className="size-4" />
-                        {currency.format(deal.amount)}
+                        预计金额：{currency.format(deal.amount)}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <CalendarDays aria-hidden="true" className="size-4" />
-                        预计 {format(new Date(deal.expectedCloseDate), 'yyyy-MM-dd')}
+                        预计成交日：{format(new Date(deal.expectedCloseDate), 'yyyy-MM-dd')}
                       </div>
                       {deal.stage !== 'Won' && deal.stage !== 'Lost' && (
                         <Button className="w-full" onClick={() => setDealToConfirm(deal)} size="sm" type="button" variant="outline">

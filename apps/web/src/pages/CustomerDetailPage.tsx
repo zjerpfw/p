@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { customerDetailQueryKey, useCustomerDetail } from '@/hooks/useCustomerDetail'
 import { useAMapLocation } from '@/hooks/useAMapLocation'
 import { apiFetch } from '@/lib/api'
+import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel } from '@/lib/presentation'
 
 interface PresignResponse {
   uploadUrl: string
@@ -33,8 +34,6 @@ interface CreateActivityPayload {
   check_in_lat: number | null
   check_in_address: string | null
 }
-
-const activityTypeLabels = { Call: '电话', Meeting: '会议', Email: '邮件' } as const
 
 export default function CustomerDetailPage() {
   const { id } = useParams()
@@ -156,7 +155,7 @@ export default function CustomerDetailPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold">{customer.name}</h1>
-            <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">{customer.status}</span>
+            <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">{getCustomerStatusLabel(customer.status)}</span>
           </div>
           <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:gap-5">
             <span className="flex items-center gap-2"><Phone aria-hidden="true" className="size-4" />{customer.contactPhone ?? '未填写电话'}</span>
@@ -164,7 +163,7 @@ export default function CustomerDetailPage() {
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Button disabled={!data?.deals.length} onClick={() => setVisitDialogOpen(true)}><CalendarCheck aria-hidden="true" />添加拜访记录</Button>
+          <Button disabled={!data?.deals.length} onClick={() => setVisitDialogOpen(true)}><CalendarCheck aria-hidden="true" />添加跟进记录</Button>
           <Button disabled={isUploading} onClick={() => fileInputRef.current?.click()} variant="outline">
             <Upload aria-hidden="true" />{isUploading ? '正在上传' : '上传附件'}
           </Button>
@@ -184,7 +183,7 @@ export default function CustomerDetailPage() {
                   <span className="absolute -left-[25px] top-1 size-2.5 rounded-full border-2 border-background bg-primary" />
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-medium">{activityTypeLabels[activity.type]}</span>
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{activity.dealStage}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{dealStageLabels[activity.dealStage]}</span>
                     <time className="text-xs text-muted-foreground">{format(new Date(activity.createdAt), 'yyyy-MM-dd HH:mm')}</time>
                   </div>
                   {activity.notes && <p className="mt-1 text-sm leading-6 text-muted-foreground">{activity.notes}</p>}
@@ -199,7 +198,7 @@ export default function CustomerDetailPage() {
         <Card className="h-fit gap-0 rounded-lg py-0 shadow-none">
           <CardHeader className="border-b border-border px-5 py-4"><CardTitle>客户信息</CardTitle></CardHeader>
           <CardContent className="space-y-4 p-5 text-sm">
-            <div><p className="text-muted-foreground">负责人</p><p className="mt-1 font-medium">{customer.ownerId}</p></div>
+            <div><p className="text-muted-foreground">归属销售</p><p className="mt-1 font-medium">{customer.ownerId}</p></div>
             <div><p className="text-muted-foreground">创建时间</p><p className="mt-1 font-medium">{format(new Date(customer.createdAt), 'yyyy-MM-dd')}</p></div>
             <div><p className="text-muted-foreground">附件</p><p className="mt-1 flex items-center gap-1 font-medium"><Paperclip aria-hidden="true" className="size-4" />通过上传按钮添加</p></div>
           </CardContent>
@@ -209,21 +208,21 @@ export default function CustomerDetailPage() {
       <Dialog onOpenChange={setVisitDialogOpen} open={visitDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>添加拜访记录</DialogTitle>
-            <DialogDescription>提交后将保存本次拜访的记录和打卡位置。</DialogDescription>
+            <DialogTitle>添加跟进记录</DialogTitle>
+            <DialogDescription>提交后将保存本次沟通纪要和定位打卡信息。</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Label htmlFor="visit-notes">拜访摘要</Label>
-            <Input id="visit-notes" onChange={(event) => setNotes(event.target.value)} placeholder="记录本次沟通内容" value={notes} />
+            <Label htmlFor="visit-notes">沟通纪要</Label>
+            <Input id="visit-notes" onChange={(event) => setNotes(event.target.value)} placeholder="请输入本次沟通纪要" value={notes} />
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="visit-deal">关联商机</Label>
                 <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="visit-deal" onChange={(event) => setSelectedDealId(event.target.value)} value={selectedDealId}>
-                  {data?.deals.map((deal) => <option key={deal.id} value={deal.id}>{deal.stage} · {deal.amount}</option>)}
+                  {data?.deals.map((deal) => <option key={deal.id} value={deal.id}>{dealStageLabels[deal.stage]} · {deal.amount}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="activity-type">记录类型</Label>
+                <Label htmlFor="activity-type">拜访方式</Label>
                 <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="activity-type" onChange={(event) => setActivityType(event.target.value as CreateActivityPayload['type'])} value={activityType}>
                   {Object.entries(activityTypeLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
                 </select>
@@ -244,7 +243,7 @@ export default function CustomerDetailPage() {
           </div>
           <DialogFooter>
             <Button disabled={isLocating || isMapConfigLoading || !isMapConfigured} onClick={getCurrentLocation} type="button" variant="outline">
-              <MapPin aria-hidden="true" />{isLocating ? '正在定位' : '获取当前位置'}
+              <MapPin aria-hidden="true" />{isLocating ? '正在定位' : '定位打卡'}
             </Button>
             <Button disabled={createActivity.isPending || !data?.deals.length} onClick={submitVisitRecord} type="button">
               {createActivity.isPending ? '正在保存' : '保存记录'}

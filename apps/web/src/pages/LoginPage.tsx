@@ -50,8 +50,8 @@ export default function LoginPage() {
           <div className="grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
             <LockKeyhole aria-hidden="true" className="size-6" />
           </div>
-          <CardTitle className="mt-4 text-xl">CRM 工作台</CardTitle>
-          <CardDescription>使用内部用户名和 PIN 码登录</CardDescription>
+          <CardTitle className="mt-4 text-xl">客户关系管理工作台</CardTitle>
+          <CardDescription>使用内部用户名和登录口令进入系统</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -63,7 +63,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="pin-code">PIN 码</Label>
+              <Label htmlFor="pin-code">登录口令</Label>
               <Input autoComplete="current-password" id="pin-code" inputMode="numeric" onChange={(event) => setPinCode(event.target.value)} required type="password" value={pinCode} />
             </div>
             {error && <p aria-live="polite" className="text-sm text-destructive">{error}</p>}

@@ -41,14 +41,14 @@ export default function DashboardLayout() {
       <aside className="hidden border-r border-border bg-background p-4 md:block">
         <div className="mb-8 flex items-center gap-2 px-2 text-base font-semibold">
           <span className="grid size-7 place-items-center rounded-md bg-primary text-xs text-primary-foreground">C</span>
-          CRM 工作台
+          客户关系管理工作台
         </div>
         <Navigation />
       </aside>
 
       <div className="min-w-0 pb-16 md:pb-0">
         <header className="flex h-14 items-center border-b border-border bg-background px-5 md:hidden">
-          <span className="text-sm font-semibold">CRM 工作台</span>
+          <span className="text-sm font-semibold">客户关系管理工作台</span>
         </header>
         <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
           <Outlet />

@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import type { Deal } from '@/hooks/useDeals'
 import { useUsers } from '@/hooks/useUsers'
 import { apiFetch } from '@/lib/api'
+import { getUserRoleLabel } from '@/lib/presentation'
 
 interface SplitDraft {
   key: string
@@ -127,7 +128,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
     <Dialog onOpenChange={onOpenChange} open={Boolean(deal)}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>确认 SaaS 赢单</DialogTitle>
+          <DialogTitle>确认软件服务赢单成交</DialogTitle>
           <DialogDescription>{deal?.customerName} 的成交信息、服务期限和内部订单分成将在确认后生效。</DialogDescription>
         </DialogHeader>
 
@@ -162,7 +163,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
               <div className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2" key={split.key}>
                 <select aria-label={`分成人员 ${index + 1}`} className="h-9 min-w-0 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}>
                   <option value="">选择内部人员</option>
-                  {usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {user.role}</option>)}
+                  {usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}
                 </select>
                 <Input aria-label={`分成金额 ${index + 1}`} min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} />
                 <Button aria-label={`移除分成 ${index + 1}`} onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button>

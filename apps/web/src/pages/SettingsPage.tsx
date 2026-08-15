@@ -150,8 +150,8 @@ export default function SettingsPage() {
                 name="amap_key"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>高德地图 Web Key</FormLabel>
-                    <FormControl><Input autoComplete="off" placeholder="请输入 Web Key" {...field} /></FormControl>
+                    <FormLabel>高德地图浏览器端密钥</FormLabel>
+                    <FormControl><Input autoComplete="off" placeholder="请输入浏览器端密钥" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -186,8 +186,8 @@ export default function SettingsPage() {
                 name="wechat_corp_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Corp ID</FormLabel>
-                    <FormControl><Input autoComplete="off" placeholder="请输入企业 ID" {...field} /></FormControl>
+                    <FormLabel>企业标识</FormLabel>
+                    <FormControl><Input autoComplete="off" placeholder="请输入企业标识" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -197,9 +197,9 @@ export default function SettingsPage() {
                 name="wechat_corp_secret"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Corp Secret</FormLabel>
-                    <FormControl><Input autoComplete="new-password" placeholder="请输入应用 Secret" type="password" {...field} /></FormControl>
-                    <FormDescription>已保存的 Secret 会以掩码显示，留原值不会覆盖。</FormDescription>
+                    <FormLabel>企业微信应用密钥</FormLabel>
+                    <FormControl><Input autoComplete="new-password" placeholder="请输入应用密钥" type="password" {...field} /></FormControl>
+                    <FormDescription>已保存的应用密钥会以掩码显示，保留原值不会覆盖。</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
