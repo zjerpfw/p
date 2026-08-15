@@ -83,6 +83,7 @@ export default function DashboardPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>客户名称</TableHead>
+                <TableHead>产品版本</TableHead>
                 <TableHead>到期时间</TableHead>
                 <TableHead>剩余天数</TableHead>
                 <TableHead className="text-right">历史成交金额</TableHead>
@@ -94,13 +95,14 @@ export default function DashboardPage() {
                 return (
                   <TableRow key={deal.id}>
                     <TableCell className="font-medium">{deal.customerName}</TableCell>
+                    <TableCell>{deal.productName}</TableCell>
                     <TableCell>{format(new Date(deal.expireDate), 'yyyy-MM-dd')}</TableCell>
                     <TableCell><span className={remainingDays < 15 ? 'font-semibold text-destructive' : 'font-medium text-amber-700'}>{remainingDays} 天</span></TableCell>
                     <TableCell className="text-right">{currency.format(deal.amount)}</TableCell>
                   </TableRow>
                 )
               })}
-              {data?.renewalDeals.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={4}>60 天内暂无待续费 SaaS 订单</TableCell></TableRow>}
+              {data?.renewalDeals.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>60 天内暂无待续费 SaaS 订单</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>

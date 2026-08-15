@@ -1,0 +1,1 @@
+ALTER TABLE `deals` ADD `product_name` text DEFAULT '未填写产品' NOT NULL;

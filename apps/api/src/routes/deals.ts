@@ -4,6 +4,7 @@ import { customers, dealSplits, deals, dealStages, users } from '@crm/db/schema'
 import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
+import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 
@@ -20,6 +21,7 @@ interface DealSplitPayload {
 }
 
 interface WonDealPayload {
+  product_name?: unknown
   start_date?: unknown
   duration_years?: unknown
   expire_date?: unknown
@@ -32,6 +34,7 @@ interface WonDealPayload {
 }
 
 interface UpdateDealPayload {
+  product_name?: unknown
   amount?: unknown
   stage?: unknown
   expected_close_date?: unknown
@@ -44,6 +47,25 @@ interface UpdateDealPayload {
   rebate_amount?: unknown
   net_profit?: unknown
 }
+
+interface CreateDealPayload {
+  customer_id?: unknown
+  product_name?: unknown
+  amount?: unknown
+  stage?: unknown
+  expected_close_date?: unknown
+}
+
+const productNameSchema = z.string().trim().min(1, '请填写产品名称或版本').max(200, '产品名称或版本不能超过 200 个字符')
+const createDealSchema = z.object({
+  customer_id: z.string().uuid('客户编号无效'),
+  product_name: productNameSchema,
+  amount: z.number().int().nonnegative('预计金额不能小于 0'),
+  stage: z.enum(['Leads', 'Qualified', 'Proposal', 'Lost']).optional().default('Leads'),
+  expected_close_date: z.union([z.string(), z.number()]),
+})
+const updateProductSchema = z.object({ product_name: productNameSchema.optional() })
+const wonProductSchema = z.object({ product_name: productNameSchema })
 
 const financialFields = [
   'duration_years',
@@ -93,6 +115,7 @@ dealRoutes.get('/', async (c) => {
       customerId: deals.customerId,
       customerName: customers.name,
       amount: deals.amount,
+      productName: deals.productName,
       stage: deals.stage,
       expectedCloseDate: deals.expectedCloseDate,
       startDate: deals.startDate,
@@ -126,6 +149,46 @@ dealRoutes.get('/', async (c) => {
   })
 })
 
+dealRoutes.post('/', async (c) => {
+  let body: CreateDealPayload
+  try {
+    body = await c.req.json<CreateDealPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const parsed = createDealSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '商机资料格式无效' }, 400)
+  const expectedCloseDate = parseDate(parsed.data.expected_close_date)
+  if (!expectedCloseDate) return c.json({ error: '预计成交日无效' }, 400)
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(
+      eq(customers.id, parsed.data.customer_id),
+      eq(customers.isDeleted, false),
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .limit(1)
+  if (!customer) return c.json({ error: '客户不存在或无权新建商机' }, 404)
+
+  const deal = {
+    id: crypto.randomUUID(),
+    customerId: customer.id,
+    productName: parsed.data.product_name,
+    amount: parsed.data.amount,
+    stage: parsed.data.stage,
+    expectedCloseDate,
+    createdAt: new Date(),
+  }
+  await db.insert(deals).values(deal)
+  return c.json({ deal }, 201)
+})
+
 dealRoutes.post('/:id/won', async (c) => {
   let body: WonDealPayload
 
@@ -137,7 +200,9 @@ dealRoutes.post('/:id/won', async (c) => {
 
   const startDate = parseDate(body.start_date)
   const expireDate = parseDate(body.expire_date)
+  const productNameResult = wonProductSchema.safeParse(body)
   if (
+    !productNameResult.success ||
     !startDate ||
     !expireDate ||
     expireDate <= startDate ||
@@ -195,6 +260,7 @@ dealRoutes.post('/:id/won', async (c) => {
     .update(deals)
     .set({
       stage: 'Won',
+      productName: productNameResult.data.product_name,
       startDate,
       durationYears: body.duration_years as number,
       expireDate,
@@ -232,6 +298,7 @@ dealRoutes.put('/:id', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const amount = body.amount === undefined ? undefined : isInteger(body.amount) && body.amount >= 0 ? body.amount : null
+  const productNameResult = updateProductSchema.safeParse(body)
   const stage = body.stage === undefined ? undefined : typeof body.stage === 'string' && dealStages.includes(body.stage as (typeof dealStages)[number]) ? body.stage as (typeof dealStages)[number] : null
   const expectedCloseDate = body.expected_close_date === undefined ? undefined : parseDate(body.expected_close_date)
   const startDate = body.start_date === undefined ? undefined : parseDate(body.start_date)
@@ -244,12 +311,13 @@ dealRoutes.put('/:id', async (c) => {
     ['rebateAmount', body.rebate_amount],
     ['netProfit', body.net_profit],
   ] as const
-  if (amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (body.start_date !== undefined && !startDate) || (body.expire_date !== undefined && !expireDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
+  if (!productNameResult.success || amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (body.start_date !== undefined && !startDate) || (body.expire_date !== undefined && !expireDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
     return c.json({ error: '商机资料格式无效' }, 400)
   }
 
   const updates = {
     ...(amount !== undefined ? { amount } : {}),
+    ...(productNameResult.data.product_name !== undefined ? { productName: productNameResult.data.product_name } : {}),
     ...(stage !== undefined ? { stage } : {}),
     ...(expectedCloseDate ? { expectedCloseDate } : {}),
     ...(startDate ? { startDate } : {}),
@@ -272,12 +340,16 @@ dealRoutes.put('/:id', async (c) => {
   }
 
   if (authorizedDeal.stage === 'Won' && body.net_profit !== undefined) {
+    const netProfit = body.net_profit
+    if (!isInteger(netProfit) || netProfit < 0) {
+      return c.json({ error: '商机资料格式无效' }, 400)
+    }
     const splitRows = await db
       .select({ splitAmount: dealSplits.splitAmount })
       .from(dealSplits)
       .where(eq(dealSplits.dealId, authorizedDeal.id))
     const assignedAmount = splitRows.reduce((total, split) => total + split.splitAmount, 0)
-    if (assignedAmount > body.net_profit) {
+    if (assignedAmount > netProfit) {
       return c.json({ error: '实际利润不能低于已分配的订单分成金额' }, 400)
     }
   }

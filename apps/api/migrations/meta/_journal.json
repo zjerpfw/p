@@ -50,6 +50,13 @@
       "when": 1786775970900,
       "tag": "0006_bright_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786780400411,
+      "tag": "0007_perfect_gabe_jones",
+      "breakpoints": true
     }
   ]
 }

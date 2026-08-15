@@ -47,6 +47,7 @@ dashboardRoutes.get('/', async (c) => {
       .select({
         id: deals.id,
         customerName: customers.name,
+        productName: deals.productName,
         expireDate: deals.expireDate,
         amount: deals.amount,
       })

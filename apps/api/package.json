@@ -14,7 +14,8 @@
     "@crm/db": "workspace:*",
     "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.44.4",
-    "hono": "^4.8.4"
+    "hono": "^4.8.4",
+    "zod": "^3.22.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20250816.0",

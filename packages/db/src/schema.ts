@@ -66,6 +66,7 @@ export const deals = sqliteTable(
       .notNull()
       .references(() => customers.id),
     amount: integer('amount').notNull(),
+    productName: text('product_name').notNull().default('未填写产品'),
     stage: text('stage', { enum: dealStages }).notNull(),
     expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
     startDate: integer('start_date', { mode: 'timestamp' }),

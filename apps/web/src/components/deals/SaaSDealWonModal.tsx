@@ -26,6 +26,7 @@ interface SplitDraft {
 }
 
 interface WonDealPayload {
+  product_name: string
   start_date: string
   duration_years: number
   expire_date: string
@@ -59,6 +60,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
   const queryClient = useQueryClient()
   const { data: usersData, isLoading: isLoadingUsers } = useUsers()
   const [startDate, setStartDate] = useState(today)
+  const [productName, setProductName] = useState('')
   const [durationYears, setDurationYears] = useState(1)
   const [reminderDays, setReminderDays] = useState(30)
   const [softwareCost, setSoftwareCost] = useState(0)
@@ -70,6 +72,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
     if (!deal) return
 
     setStartDate(deal.startDate ? formatDateInput(new Date(deal.startDate)) : today())
+    setProductName(deal.productName)
     setDurationYears(deal.durationYears ?? 1)
     setReminderDays(deal.renewalReminderDays ?? 30)
     setSoftwareCost(deal.softwareCost ?? 0)
@@ -109,9 +112,10 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
   }
 
   function submit() {
-    if (!deal || !expireDate || !isSplitValid) return
+    if (!deal || !productName.trim() || !expireDate || !isSplitValid) return
 
     confirmWon.mutate({
+      product_name: productName.trim(),
       start_date: startDate,
       duration_years: durationYears,
       expire_date: expireDate,
@@ -134,6 +138,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
 
         <div className="space-y-6">
           <section className="space-y-3">
+            <div className="space-y-1.5"><Label htmlFor="won-product">正式购买产品 / 规格</Label><Input id="won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div>
             <h3 className="text-sm font-semibold">服务时间</h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5"><Label htmlFor="start-date">使用日期</Label><Input id="start-date" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} /></div>
@@ -176,7 +181,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
 
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button>
-          <Button disabled={!deal || !expireDate || !isSplitValid || confirmWon.isPending} onClick={submit} type="button">{confirmWon.isPending ? '正在确认' : '确认赢单'}</Button>
+          <Button disabled={!deal || !productName.trim() || !expireDate || !isSplitValid || confirmWon.isPending} onClick={submit} type="button">{confirmWon.isPending ? '正在确认' : '确认赢单'}</Button>
         </DialogFooter>
         {confirmWon.error && <p className="text-sm text-destructive">{confirmWon.error.message}</p>}
       </DialogContent>

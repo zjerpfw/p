@@ -1,6 +1,6 @@
 // apps/web/src/pages/DealsPage.tsx
 import { format } from 'date-fns'
-import { CalendarDays, CircleDollarSign, Pencil, Search, Trash2, Trophy, X } from 'lucide-react'
+import { CalendarDays, CircleDollarSign, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { PaginationControls } from '@/components/PaginationControls'
 import SaaSDealWonModal from '@/components/deals/SaaSDealWonModal'
 import { DealDetailModal } from '@/components/deals/DealDetailModal'
+import { CreateDealModal } from '@/components/deals/CreateDealModal'
 import { dealStages, type Deal, type DealStage, useDeals } from '@/hooks/useDeals'
 import { dealStageLabels } from '@/lib/presentation'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -37,6 +38,7 @@ export default function DealsPage() {
   const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: status || undefined, page })
   const [dealToConfirm, setDealToConfirm] = useState<Deal | null>(null)
   const [dealToEdit, setDealToEdit] = useState<Deal | null>(null)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
   const deleteDeal = useMutation({
@@ -65,8 +67,10 @@ export default function DealsPage() {
 
   return (
     <section>
-      <h1 className="text-xl font-semibold">商机看板</h1>
-      <p className="mt-1 text-sm text-muted-foreground">按销售阶段跟踪每个商机的推进情况。</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h1 className="text-xl font-semibold">商机看板</h1><p className="mt-1 text-sm text-muted-foreground">按销售阶段跟踪每个商机的推进情况。</p></div>
+        <Button onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建商机</Button>
+      </div>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
@@ -97,6 +101,7 @@ export default function DealsPage() {
                       <Card className="gap-0 rounded-lg py-0 shadow-none" key={deal.id}>
                         <CardContent className="space-y-3 p-4">
                       <p className="font-medium">{deal.customerName}</p>
+                      <p className="text-xs text-muted-foreground">产品：{deal.productName}</p>
                       <div className="flex justify-end gap-1">
                         <Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button>
                         <Button aria-label={`作废${deal.customerName}的商机`} disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button>
@@ -135,6 +140,7 @@ export default function DealsPage() {
       )}
       <SaaSDealWonModal deal={dealToConfirm} onOpenChange={(open) => !open && setDealToConfirm(null)} />
       <DealDetailModal deal={dealToEdit} onOpenChange={(open) => !open && setDealToEdit(null)} />
+      <CreateDealModal onOpenChange={setCreateDialogOpen} open={createDialogOpen} />
     </section>
   )
 }

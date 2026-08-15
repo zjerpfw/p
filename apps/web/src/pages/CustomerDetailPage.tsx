@@ -249,7 +249,7 @@ export default function CustomerDetailPage() {
             return (
               <article className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4" key={deal.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <div><p className="font-semibold">SaaS 服务合同</p><p className="mt-1 text-sm text-muted-foreground">成交商机：{dealStageLabels[deal.stage]}</p></div>
+                  <div><p className="font-semibold">购买产品：{deal.productName}</p><p className="mt-1 text-sm text-muted-foreground">成交商机：{dealStageLabels[deal.stage]}</p></div>
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${serviceStatus.className}`}><StatusIcon aria-hidden="true" className="size-3.5" />{serviceStatus.label}</span>
                 </div>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">

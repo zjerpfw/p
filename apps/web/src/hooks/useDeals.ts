@@ -12,6 +12,7 @@ export interface Deal {
   customerId: string
   customerName: string
   amount: number
+  productName: string
   stage: DealStage
   expectedCloseDate: string
   startDate: string | null

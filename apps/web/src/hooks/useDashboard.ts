@@ -11,6 +11,7 @@ export interface DashboardData {
   renewalDeals: Array<{
     id: string
     customerName: string
+    productName: string
     expireDate: string
     amount: number
   }>
