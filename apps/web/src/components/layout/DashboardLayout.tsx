@@ -10,12 +10,12 @@ const navigation = [
   { to: '/deals', label: '商机看板', icon: LayoutDashboard },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
   { to: '/users', label: '员工管理', icon: ShieldCheck },
-  { to: '/settings', label: '系统设置', icon: Settings },
+  { to: '/settings', label: '系统设置', icon: Settings, adminOnly: true },
 ]
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
   const isAdmin = getCurrentUserRole() === 'admin'
-  const visibleNavigation = navigation.filter((item) => item.to !== '/users' || isAdmin)
+  const visibleNavigation = navigation.filter((item) => !item.adminOnly || isAdmin)
   return (
     <nav className={cn(mobile ? 'col-span-5 grid grid-flow-col auto-cols-[4.5rem] overflow-x-auto' : 'space-y-1')}>
       {visibleNavigation.map(({ icon: Icon, label, to }) => (

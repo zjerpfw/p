@@ -24,8 +24,7 @@ export default function App() {
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/deals" element={<DealsPage />} />
           <Route path="/my-work" element={<MyWorkPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route element={<AdminRoute />}><Route path="/users" element={<UsersPage />} /></Route>
+          <Route element={<AdminRoute />}><Route path="/settings" element={<SettingsPage />} /><Route path="/users" element={<UsersPage />} /></Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
