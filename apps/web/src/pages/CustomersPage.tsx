@@ -1,9 +1,10 @@
 // apps/web/src/pages/CustomersPage.tsx
 import { useState } from 'react'
-import { Plus, Search, X } from 'lucide-react'
+import { Plus, Search, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PaginationControls } from '@/components/PaginationControls'
 import { CreateCustomerModal } from '@/components/customers/CreateCustomerModal'
+import { DirectWonCustomerModal } from '@/components/customers/DirectWonCustomerModal'
 import { Input } from '@/components/ui/input'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -16,6 +17,7 @@ export default function CustomersPage() {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [directWonDialogOpen, setDirectWonDialogOpen] = useState(false)
   const debouncedSearch = useDebouncedValue(search.trim())
   const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, page })
   const statuses = ['Active', 'Inactive']
@@ -37,7 +39,7 @@ export default function CustomersPage() {
           <h1 className="text-xl font-semibold">客户池</h1>
           <p className="mt-1 text-sm text-muted-foreground">集中管理客户资料与跟进状态。</p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button>
+        <div className="flex flex-wrap gap-2"><Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setDirectWonDialogOpen(true)} type="button"><Zap aria-hidden="true" />直接录入成交客户</Button><Button onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button></div>
       </div>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
@@ -72,6 +74,7 @@ export default function CustomersPage() {
         </div>
       )}
       <CreateCustomerModal onOpenChange={setCreateDialogOpen} open={createDialogOpen} />
+      <DirectWonCustomerModal onOpenChange={setDirectWonDialogOpen} open={directWonDialogOpen} />
     </section>
   )
 }

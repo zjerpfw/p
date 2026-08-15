@@ -1,9 +1,10 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
-import { activities, customers, deals } from '@crm/db/schema'
+import { activities, customers, dealSplits, deals, users } from '@crm/db/schema'
 import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
+import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 
@@ -32,6 +33,43 @@ interface UpdateCustomerPayload {
   status?: unknown
   address?: unknown
 }
+
+interface DirectWonCustomerPayload {
+  name?: unknown
+  contact_phone?: unknown
+  address?: unknown
+  product_name?: unknown
+  amount?: unknown
+  start_date?: unknown
+  duration_years?: unknown
+  expire_date?: unknown
+  renewal_reminder_days?: unknown
+  software_cost?: unknown
+  tax_cost?: unknown
+  rebate_amount?: unknown
+  net_profit?: unknown
+  splits?: unknown
+}
+
+const directWonSchema = z.object({
+  name: z.string().trim().min(1, '请填写客户名称').max(100, '客户名称不能超过 100 个字符'),
+  contact_phone: z.string().trim().max(30, '联系电话不能超过 30 个字符').optional().default(''),
+  address: z.string().trim().max(500, '详细地址不能超过 500 个字符').optional().default(''),
+  product_name: z.string().trim().min(1, '请填写购买产品或规格').max(200, '购买产品或规格不能超过 200 个字符'),
+  amount: z.number().int().nonnegative('成交金额不能小于 0'),
+  start_date: z.union([z.string(), z.number()]),
+  duration_years: z.number().int().positive('服务年限必须大于 0'),
+  expire_date: z.union([z.string(), z.number()]),
+  renewal_reminder_days: z.number().int().nonnegative('提前提醒天数不能小于 0').default(30),
+  software_cost: z.number().int().nonnegative('软件成本不能小于 0'),
+  tax_cost: z.number().int().nonnegative('开票成本不能小于 0'),
+  rebate_amount: z.number().int().nonnegative('返利不能小于 0'),
+  net_profit: z.number().int().nonnegative('实际利润不能小于 0'),
+  splits: z.array(z.object({
+    user_id: z.string().trim().min(1, '请选择分成人员'),
+    split_amount: z.number().int().nonnegative('分成金额不能小于 0'),
+  })),
+})
 
 function optionalText(value: unknown, maxLength: number) {
   if (value === undefined || value === null) return null
@@ -74,6 +112,79 @@ customerRoutes.post('/', async (c) => {
   await db.insert(customers).values(customer)
 
   return c.json({ customer }, 201)
+})
+
+customerRoutes.post('/direct-won', async (c) => {
+  let body: DirectWonCustomerPayload
+  try {
+    body = await c.req.json<DirectWonCustomerPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const parsed = directWonSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '成交客户资料格式无效' }, 400)
+  const startDate = new Date(parsed.data.start_date)
+  const expireDate = new Date(parsed.data.expire_date)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(expireDate.getTime()) || expireDate <= startDate) {
+    return c.json({ error: '服务日期无效，到期时间必须晚于使用日期' }, 400)
+  }
+
+  const calculatedNetProfit = parsed.data.amount - parsed.data.software_cost - parsed.data.tax_cost - parsed.data.rebate_amount
+  const totalSplitAmount = parsed.data.splits.reduce((total, split) => total + split.split_amount, 0)
+  if (parsed.data.net_profit !== calculatedNetProfit || totalSplitAmount > calculatedNetProfit) {
+    return c.json({ error: '实际利润或分成金额不合法' }, 400)
+  }
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const splitUserIds = [...new Set(parsed.data.splits.map((split) => split.user_id))]
+  if (splitUserIds.length > 0) {
+    const splitUsers = await db.select({ id: users.id }).from(users).where(inArray(users.id, splitUserIds))
+    if (splitUsers.length !== splitUserIds.length) return c.json({ error: '存在无效的分成人员' }, 400)
+  }
+
+  const now = new Date()
+  const customerId = crypto.randomUUID()
+  const dealId = crypto.randomUUID()
+  const customerInsert = db.insert(customers).values({
+    id: customerId,
+    name: parsed.data.name,
+    contactPhone: parsed.data.contact_phone || null,
+    status: 'Active',
+    address: parsed.data.address || null,
+    ownerId: actor.id,
+    createdAt: now,
+    updatedAt: now,
+  })
+  const dealInsert = db.insert(deals).values({
+    id: dealId,
+    customerId,
+    productName: parsed.data.product_name,
+    amount: parsed.data.amount,
+    stage: 'Won',
+    expectedCloseDate: startDate,
+    startDate,
+    durationYears: parsed.data.duration_years,
+    expireDate,
+    renewalReminderDays: parsed.data.renewal_reminder_days,
+    softwareCost: parsed.data.software_cost,
+    taxCost: parsed.data.tax_cost,
+    rebateAmount: parsed.data.rebate_amount,
+    netProfit: parsed.data.net_profit,
+    createdAt: now,
+  })
+  const splitInserts = parsed.data.splits.map((split) => db.insert(dealSplits).values({
+    id: crypto.randomUUID(),
+    dealId,
+    userId: split.user_id,
+    splitAmount: split.split_amount,
+  }))
+
+  // D1 batch commits all customer, deal, and split records atomically.
+  await db.batch([customerInsert, dealInsert, ...splitInserts])
+  return c.json({ customerId, dealId, stage: 'Won' }, 201)
 })
 
 customerRoutes.get('/', async (c) => {
