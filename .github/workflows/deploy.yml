@@ -28,6 +28,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Apply D1 migrations
+        run: pnpm --filter @crm/api exec wrangler d1 migrations apply crm_db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
       - name: Deploy API Worker
         uses: cloudflare/wrangler-action@v3
         with:
