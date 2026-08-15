@@ -44,10 +44,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-stone-100 p-5 text-foreground">
-      <Card className="w-full max-w-sm border-border shadow-sm">
+    <main className="grid min-h-screen place-items-center bg-slate-100 p-5 text-foreground">
+      <Card className="w-full max-w-sm border-slate-200 shadow-xl shadow-slate-300/40">
         <CardHeader className="items-center pb-3 text-center">
-          <div className="grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <div className="grid size-12 place-items-center rounded-lg bg-indigo-600 text-primary-foreground shadow-lg shadow-indigo-500/30">
             <LockKeyhole aria-hidden="true" className="size-6" />
           </div>
           <CardTitle className="mt-4 text-xl">客户关系管理工作台</CardTitle>

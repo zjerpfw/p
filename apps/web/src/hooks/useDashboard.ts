@@ -8,6 +8,7 @@ export interface DashboardData {
   newLeads: number
   wonNetProfit: number
   stageDistribution: Array<{ stage: DealStage; count: number }>
+  funnelDistribution: Array<{ name: string; value: number; stage: DealStage }>
   renewalDeals: Array<{
     id: string
     customerName: string

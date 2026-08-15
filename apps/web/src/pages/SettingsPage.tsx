@@ -129,7 +129,7 @@ export default function SettingsPage() {
   return (
     <section className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">系统设置</h1>
+        <p className="text-xs font-semibold text-indigo-600">平台配置</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">系统设置</h1>
         <p className="mt-1 text-sm text-muted-foreground">管理地图和企业微信服务配置</p>
       </div>
 

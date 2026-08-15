@@ -17,6 +17,7 @@ export const activityTypeLabels = {
 
 const customerStatusLabels: Record<string, string> = {
   Active: '活跃',
+  Following: '跟进中',
   Inactive: '沉睡',
 }
 
@@ -27,6 +28,20 @@ const userRoleLabels: Record<string, string> = {
 
 export function getCustomerStatusLabel(status: string) {
   return customerStatusLabels[status] ?? status
+}
+
+export function getCustomerStatusTone(status: string) {
+  if (status === 'Active') return 'success' as const
+  if (status === 'Inactive') return 'danger' as const
+  return 'warning' as const
+}
+
+export function getDealStageTone(stage: DealStage) {
+  if (stage === 'Won') return 'success' as const
+  if (stage === 'Lost') return 'danger' as const
+  if (stage === 'Proposal') return 'warning' as const
+  if (stage === 'Qualified') return 'info' as const
+  return 'neutral' as const
 }
 
 export function getUserRoleLabel(role: string) {

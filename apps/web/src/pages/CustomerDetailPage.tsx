@@ -5,6 +5,7 @@ import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -20,7 +21,7 @@ import { Label } from '@/components/ui/label'
 import { customerDetailQueryKey, useCustomerDetail } from '@/hooks/useCustomerDetail'
 import { useAMapLocation } from '@/hooks/useAMapLocation'
 import { apiFetch } from '@/lib/api'
-import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel } from '@/lib/presentation'
+import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel, getCustomerStatusTone, getDealStageTone } from '@/lib/presentation'
 import { toast } from 'sonner'
 
 interface PresignResponse {
@@ -222,17 +223,17 @@ export default function CustomerDetailPage() {
   }
 
   return (
-    <section>
+    <section className="space-y-6">
       <Link className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground" to="/customers">
         <ChevronLeft aria-hidden="true" className="size-4" />
         返回客户池
       </Link>
 
-      <header className="mt-5 flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-start lg:justify-between">
+      <header className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">{customer.name}</h1>
-            <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">{getCustomerStatusLabel(customer.status)}</span>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{customer.name}</h1>
+            <Badge tone={getCustomerStatusTone(customer.status)}>{getCustomerStatusLabel(customer.status)}</Badge>
           </div>
           <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:gap-5">
             <span className="flex items-center gap-2"><Phone aria-hidden="true" className="size-4" />{customer.contactPhone ?? '未填写电话'}</span>
@@ -257,7 +258,7 @@ export default function CustomerDetailPage() {
       {uploadMessage && <p className="mt-3 text-sm text-muted-foreground">{uploadMessage}</p>}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <Card className="gap-0 rounded-lg py-0 shadow-none">
+        <Card className="gap-0 py-0">
           <CardHeader className="border-b border-border px-5 py-4"><CardTitle>跟进记录</CardTitle></CardHeader>
           <CardContent className="p-5">
             <ol className="relative space-y-6 border-l border-border pl-5">
@@ -266,7 +267,7 @@ export default function CustomerDetailPage() {
                   <span className="absolute -left-[25px] top-1 size-2.5 rounded-full border-2 border-background bg-primary" />
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-medium">{activityTypeLabels[activity.type]}</span>
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{dealStageLabels[activity.dealStage]}</span>
+                    <Badge tone={getDealStageTone(activity.dealStage)}>{dealStageLabels[activity.dealStage]}</Badge>
                     <time className="text-xs text-muted-foreground">{format(new Date(activity.createdAt), 'yyyy-MM-dd HH:mm')}</time>
                   </div>
                   {activity.notes && <p className="mt-1 text-sm leading-6 text-muted-foreground">{activity.notes}</p>}
@@ -279,7 +280,7 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
 
-        <Card className="h-fit gap-0 rounded-lg py-0 shadow-none">
+        <Card className="h-fit gap-0 py-0">
           <CardHeader className="border-b border-border px-5 py-4"><CardTitle>客户信息</CardTitle></CardHeader>
           <CardContent className="space-y-4 p-5 text-sm">
             <div><p className="text-muted-foreground">归属销售</p><p className="mt-1 font-medium">{customer.ownerId}</p></div>
@@ -289,7 +290,7 @@ export default function CustomerDetailPage() {
         </Card>
       </div>
 
-      <Card className="mt-6 gap-0 rounded-lg py-0 shadow-none">
+      <Card className="gap-0 overflow-hidden py-0">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
         <CardContent className="divide-y divide-border p-0">
           {data?.attachments.filter((attachment) => !attachment.activityId).map((attachment) => <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3" key={attachment.id}><div className="min-w-0"><p className="truncate text-sm font-medium">{attachment.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{format(new Date(attachment.createdAt), 'yyyy-MM-dd HH:mm')} · {attachment.contentType}</p></div><div className="flex shrink-0 gap-1"><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="sm" type="button" variant="outline"><Eye aria-hidden="true" />在线预览</Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>)}
@@ -297,7 +298,7 @@ export default function CustomerDetailPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-6 gap-0 rounded-lg py-0 shadow-none">
+      <Card className="gap-0 py-0">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>已购 SaaS 服务</CardTitle></CardHeader>
         <CardContent className="grid gap-4 p-5 md:grid-cols-2">
           {data?.deals.filter((deal) => deal.stage === 'Won').map((deal) => {
@@ -307,7 +308,7 @@ export default function CustomerDetailPage() {
               <article className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4" key={deal.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div><p className="font-semibold">购买产品：{deal.productName}</p><p className="mt-1 text-sm text-muted-foreground">成交商机：{dealStageLabels[deal.stage]}</p></div>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${serviceStatus.className}`}><StatusIcon aria-hidden="true" className="size-3.5" />{serviceStatus.label}</span>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${serviceStatus.className}`}><StatusIcon aria-hidden="true" className="size-3.5" />{serviceStatus.label}</span>
                 </div>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                   <div><dt className="text-muted-foreground">服务期限</dt><dd className="mt-1 flex flex-wrap items-center gap-2 font-medium">{deal.startDate ? format(new Date(deal.startDate), 'yyyy-MM-dd') : '待完善'} 至 {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善'}{deal.giftMonths > 0 && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">服务年限：{deal.durationYears ?? 0} 年 🎁赠送 {deal.giftMonths} 个月</span>}</dd></div>

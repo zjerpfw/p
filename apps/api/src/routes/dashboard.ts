@@ -9,6 +9,14 @@ import { getAuthenticatedActor } from '../lib/auth'
 
 export const dashboardRoutes = new Hono<{ Bindings: Env }>()
 
+const stageLabels: Record<string, string> = {
+  Leads: '初步线索',
+  Qualified: '需求确认',
+  Proposal: '方案报价',
+  Won: '赢单成交',
+  Lost: '遗憾输单',
+}
+
 dashboardRoutes.use('*', async (c, next) => {
   const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
   return middleware(c, next)
@@ -64,13 +72,20 @@ dashboardRoutes.get('/', async (c) => {
       .orderBy(asc(deals.expireDate)),
   ])
 
+  const normalizedStageDistribution = stageDistribution.map((item) => ({
+    stage: item.stage,
+    count: Number(item.count),
+  }))
+
   return c.json({
     month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     newLeads: Number(newLead?.count ?? 0),
     wonNetProfit: Number(wonProfit?.total ?? 0),
-    stageDistribution: stageDistribution.map((item) => ({
+    stageDistribution: normalizedStageDistribution,
+    funnelDistribution: normalizedStageDistribution.map((item) => ({
+      name: stageLabels[item.stage] ?? item.stage,
+      value: item.count,
       stage: item.stage,
-      count: Number(item.count),
     })),
     renewalDeals: renewalDeals.map((deal) => ({
       ...deal,
