@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useUsers } from '@/hooks/useUsers'
 import { apiFetch } from '@/lib/api'
+import { formatCents, yuanToCents } from '@/lib/money'
 import { getUserRoleLabel } from '@/lib/presentation'
 
 interface DirectWonCustomerModalProps {
@@ -20,7 +21,7 @@ interface DirectWonCustomerModalProps {
 interface SplitDraft {
   key: string
   userId: string
-  amount: number
+  amount: string
 }
 
 function today() {
@@ -40,15 +41,15 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
   const [address, setAddress] = useState('')
   const [productName, setProductName] = useState('')
   const [channel, setChannel] = useState('')
-  const [originalPrice, setOriginalPrice] = useState(0)
-  const [amount, setAmount] = useState(0)
+  const [originalPrice, setOriginalPrice] = useState('')
+  const [amount, setAmount] = useState('')
   const [startDate, setStartDate] = useState(today)
   const [durationYears, setDurationYears] = useState(1)
   const [giftMonths, setGiftMonths] = useState(0)
   const [reminderDays, setReminderDays] = useState(30)
-  const [softwareCost, setSoftwareCost] = useState(0)
-  const [taxCost, setTaxCost] = useState(0)
-  const [rebateAmount, setRebateAmount] = useState(0)
+  const [softwareCost, setSoftwareCost] = useState('0')
+  const [taxCost, setTaxCost] = useState('0')
+  const [rebateAmount, setRebateAmount] = useState('0')
   const [splits, setSplits] = useState<SplitDraft[]>([])
 
   useEffect(() => {
@@ -60,9 +61,18 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
     const parsed = new Date(`${startDate}T00:00:00`)
     return Number.isNaN(parsed.getTime()) ? '' : format(addMonths(addYears(parsed, durationYears), giftMonths), 'yyyy-MM-dd')
   }, [durationYears, giftMonths, startDate])
-  const netProfit = amount - softwareCost - taxCost - rebateAmount
-  const totalSplitAmount = splits.reduce((total, split) => total + split.amount, 0)
-  const isSplitValid = netProfit >= 0 && totalSplitAmount <= netProfit && splits.every((split) => split.userId)
+  const amountCents = yuanToCents(amount)
+  const originalPriceCents = originalPrice ? yuanToCents(originalPrice) : amountCents
+  const softwareCostCents = yuanToCents(softwareCost)
+  const taxCostCents = yuanToCents(taxCost)
+  const rebateAmountCents = yuanToCents(rebateAmount)
+  const splitAmountsCents = splits.map((split) => yuanToCents(split.amount))
+  const moneyInputsValid = [amountCents, originalPriceCents, softwareCostCents, taxCostCents, rebateAmountCents, ...splitAmountsCents].every((value) => value !== null)
+  const netProfitCents = amountCents !== null && softwareCostCents !== null && taxCostCents !== null && rebateAmountCents !== null
+    ? amountCents - softwareCostCents - taxCostCents - rebateAmountCents
+    : -1
+  const totalSplitAmountCents = splitAmountsCents.reduce<number>((total, value) => total + (value ?? 0), 0)
+  const isSplitValid = moneyInputsValid && netProfitCents >= 0 && totalSplitAmountCents <= netProfitCents && splits.every((split) => split.userId)
 
   const directWon = useMutation({
     mutationFn: () => apiFetch('/api/customers/direct-won', {
@@ -73,19 +83,19 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
         contact_phone: contactPhone.trim(),
         address: address.trim(),
         product_name: productName.trim(),
-        amount,
+        amount_cents: amountCents,
         channel: channel.trim(),
-        original_price: originalPrice || amount,
+        original_price_cents: originalPriceCents,
         start_date: startDate,
         duration_years: durationYears,
         gift_months: giftMonths,
         expire_date: expireDate,
         renewal_reminder_days: reminderDays,
-        software_cost: softwareCost,
-        tax_cost: taxCost,
-        rebate_amount: rebateAmount,
-        net_profit: netProfit,
-        splits: splits.map((split) => ({ user_id: split.userId, split_amount: split.amount })),
+        software_cost_cents: softwareCostCents,
+        tax_cost_cents: taxCostCents,
+        rebate_amount_cents: rebateAmountCents,
+        net_profit_cents: netProfitCents,
+        splits: splits.map((split, index) => ({ user_id: split.userId, split_amount_cents: splitAmountsCents[index] })),
       }),
     }),
     onSuccess: async () => {
@@ -99,14 +109,14 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
       setAddress('')
       setProductName('')
       setChannel('')
-      setOriginalPrice(0)
-      setAmount(0)
+      setOriginalPrice('')
+      setAmount('')
       setDurationYears(1)
       setGiftMonths(0)
       setReminderDays(30)
-      setSoftwareCost(0)
-      setTaxCost(0)
-      setRebateAmount(0)
+      setSoftwareCost('0')
+      setTaxCost('0')
+      setRebateAmount('0')
       setSplits([])
       onOpenChange(false)
       toast.success('成交客户与 SaaS 订单已录入')
@@ -120,10 +130,10 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
 
   function addSplit() {
     const firstAvailable = usersData?.users.find((user) => !splits.some((split) => split.userId === user.id))
-    setSplits((current) => [...current, { key: crypto.randomUUID(), userId: firstAvailable?.id ?? '', amount: 0 }])
+    setSplits((current) => [...current, { key: crypto.randomUUID(), userId: firstAvailable?.id ?? '', amount: '0' }])
   }
 
-  const canSubmit = name.trim() && productName.trim() && expireDate && netProfit >= 0 && isSplitValid
+  const canSubmit = name.trim() && productName.trim() && expireDate && netProfitCents >= 0 && isSplitValid
 
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
@@ -144,7 +154,7 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <h3 className="text-sm font-semibold">购买服务</h3>
-            <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="direct-won-product">产品 / 版本</Label><Input id="direct-won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-channel">渠道 / 来源</Label><Input id="direct-won-channel" list="direct-won-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="direct-won-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div><div className="space-y-1.5"><Label htmlFor="direct-won-amount">成交金额（元）</Label><Input id="direct-won-amount" min="0" onChange={(event) => setAmount(toInteger(event.target.value))} type="number" value={amount} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-original-price">原价 / 刊例价（元）</Label><Input id="direct-won-original-price" min="0" onChange={(event) => setOriginalPrice(toInteger(event.target.value))} placeholder="默认与成交金额一致" type="number" value={originalPrice} /></div></div>
+            <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="direct-won-product">产品 / 版本</Label><Input id="direct-won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-channel">渠道 / 来源</Label><Input id="direct-won-channel" list="direct-won-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="direct-won-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div><div className="space-y-1.5"><Label htmlFor="direct-won-amount">成交金额（元）</Label><Input id="direct-won-amount" min="0" onChange={(event) => setAmount(event.target.value)} step="0.01" type="number" value={amount} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-original-price">原价 / 刊例价（元）</Label><Input id="direct-won-original-price" min="0" onChange={(event) => setOriginalPrice(event.target.value)} placeholder="默认与成交金额一致" step="0.01" type="number" value={originalPrice} /></div></div>
           </section>
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
@@ -155,15 +165,15 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <h3 className="text-sm font-semibold">利润核算</h3>
-            <div className="grid gap-3 sm:grid-cols-3"><div className="space-y-1.5"><Label htmlFor="direct-won-software">软件成本（分）</Label><Input id="direct-won-software" min="0" onChange={(event) => setSoftwareCost(toInteger(event.target.value))} type="number" value={softwareCost} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-tax">开票成本（分）</Label><Input id="direct-won-tax" min="0" onChange={(event) => setTaxCost(toInteger(event.target.value))} type="number" value={taxCost} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-rebate">返利（分）</Label><Input id="direct-won-rebate" min="0" onChange={(event) => setRebateAmount(toInteger(event.target.value))} type="number" value={rebateAmount} /></div></div>
-            <div className={netProfit >= 0 ? 'flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950' : 'flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive'}><span className="flex items-center gap-2 text-sm font-medium"><WalletCards aria-hidden="true" className="size-4" />实际利润</span><strong>{netProfit.toLocaleString('zh-CN')} 分</strong></div>
+            <div className="grid gap-3 sm:grid-cols-3"><div className="space-y-1.5"><Label htmlFor="direct-won-software">软件成本（元）</Label><Input id="direct-won-software" min="0" onChange={(event) => setSoftwareCost(event.target.value)} step="0.01" type="number" value={softwareCost} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-tax">开票成本（元）</Label><Input id="direct-won-tax" min="0" onChange={(event) => setTaxCost(event.target.value)} step="0.01" type="number" value={taxCost} /></div><div className="space-y-1.5"><Label htmlFor="direct-won-rebate">返利（元）</Label><Input id="direct-won-rebate" min="0" onChange={(event) => setRebateAmount(event.target.value)} step="0.01" type="number" value={rebateAmount} /></div></div>
+            <div className={netProfitCents >= 0 ? 'flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950' : 'flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive'}><span className="flex items-center gap-2 text-sm font-medium"><WalletCards aria-hidden="true" className="size-4" />实际利润</span><strong>{formatCents(netProfitCents)}</strong></div>
           </section>
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">业绩分成</h3><Button disabled={isLoadingUsers} onClick={addSplit} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />添加人员</Button></div>
-            {splits.map((split, index) => <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]" key={split.key}><select aria-label={`分成人员 ${index + 1}`} className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-sm md:h-9" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}><option value="">选择内部人员</option>{usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}</select><Input aria-label={`分成金额 ${index + 1}`} className="col-span-1 row-start-2 sm:col-auto sm:row-auto" min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} /><Button aria-label={`移除分成 ${index + 1}`} className="col-start-2 row-span-2 row-start-1 sm:col-auto sm:row-auto" onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button></div>)}
+            {splits.map((split, index) => <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]" key={split.key}><select aria-label={`分成人员 ${index + 1}`} className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-sm md:h-9" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}><option value="">选择内部人员</option>{usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}</select><Input aria-label={`分成金额（元）${index + 1}`} className="col-span-1 row-start-2 sm:col-auto sm:row-auto" min="0" onChange={(event) => updateSplit(split.key, { amount: event.target.value })} step="0.01" type="number" value={split.amount} /><Button aria-label={`移除分成 ${index + 1}`} className="col-start-2 row-span-2 row-start-1 sm:col-auto sm:row-auto" onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button></div>)}
             {splits.length === 0 && <p className="text-sm text-muted-foreground">尚未配置内部人员分成。</p>}
-            <p className={isSplitValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>已分成 {totalSplitAmount.toLocaleString('zh-CN')} 分，实际利润 {netProfit.toLocaleString('zh-CN')} 分。</p>
+            <p className={isSplitValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>已分成 {formatCents(totalSplitAmountCents)}，实际利润 {formatCents(netProfitCents)}。</p>
           </section>
         </div>
         <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!canSubmit || directWon.isPending} onClick={() => directWon.mutate()} type="button">{directWon.isPending ? '正在录入' : '确认录入成交客户'}</Button></SheetFooter>

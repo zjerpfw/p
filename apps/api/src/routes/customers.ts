@@ -2,11 +2,12 @@
 import { createDb } from '@crm/db/client'
 import { activities, attachments, customers, dealSplits, deals, users } from '@crm/db/schema'
 import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { addShanghaiCalendarYears, startOfShanghaiDay, todayInShanghai } from '../lib/shanghai-date'
 
 export const customerRoutes = new Hono<{ Bindings: Env }>()
 
@@ -40,17 +41,17 @@ interface DirectWonCustomerPayload {
   address?: unknown
   product_name?: unknown
   channel?: unknown
-  original_price?: unknown
-  amount?: unknown
+  original_price_cents?: unknown
+  amount_cents?: unknown
   start_date?: unknown
   duration_years?: unknown
   gift_months?: unknown
   expire_date?: unknown
   renewal_reminder_days?: unknown
-  software_cost?: unknown
-  tax_cost?: unknown
-  rebate_amount?: unknown
-  net_profit?: unknown
+  software_cost_cents?: unknown
+  tax_cost_cents?: unknown
+  rebate_amount_cents?: unknown
+  net_profit_cents?: unknown
   splits?: unknown
 }
 
@@ -60,39 +61,33 @@ const directWonSchema = z.object({
   address: z.string().trim().max(500, '详细地址不能超过 500 个字符').optional().default(''),
   product_name: z.string().trim().min(1, '请填写购买产品或规格').max(200, '购买产品或规格不能超过 200 个字符'),
   channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
-  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
-  amount: z.number().int().nonnegative('成交金额不能小于 0'),
+  original_price_cents: z.number().int().nonnegative('原价不能小于 0').optional(),
+  amount_cents: z.number().int().nonnegative('成交金额不能小于 0'),
   start_date: z.union([z.string(), z.number()]),
   duration_years: z.number().int().positive('服务年限必须大于 0'),
   gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0),
   expire_date: z.union([z.string(), z.number()]),
   renewal_reminder_days: z.number().int().nonnegative('提前提醒天数不能小于 0').default(30),
-  software_cost: z.number().int().nonnegative('软件成本不能小于 0'),
-  tax_cost: z.number().int().nonnegative('开票成本不能小于 0'),
-  rebate_amount: z.number().int().nonnegative('返利不能小于 0'),
-  net_profit: z.number().int().nonnegative('实际利润不能小于 0'),
+  software_cost_cents: z.number().int().nonnegative('软件成本不能小于 0'),
+  tax_cost_cents: z.number().int().nonnegative('开票成本不能小于 0'),
+  rebate_amount_cents: z.number().int().nonnegative('返利不能小于 0'),
+  net_profit_cents: z.number().int().nonnegative('实际利润不能小于 0'),
   splits: z.array(z.object({
     user_id: z.string().trim().min(1, '请选择分成人员'),
-    split_amount: z.number().int().nonnegative('分成金额不能小于 0'),
+    split_amount_cents: z.number().int().nonnegative('分成金额不能小于 0'),
   })),
 })
 
 const renewCustomerSchema = z.object({
-  amount: z.number().int().positive('续费金额必须大于 0'),
+  amount_cents: z.number().int().positive('续费金额必须大于 0'),
   years: z.number().int().min(1, '续费年限至少为 1 年').max(20, '续费年限不能超过 20 年').optional().default(1),
   product: z.string().trim().min(1, '请选择续费产品').max(200, '续费产品不能超过 200 个字符'),
   channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
 })
 
-function startOfUtcDay(date: Date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-}
-
-function addCalendarYears(date: Date, years: number) {
-  const year = date.getUTCFullYear() + years
-  const month = date.getUTCMonth()
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  return new Date(Date.UTC(year, month, Math.min(date.getUTCDate(), lastDay)))
+function getIdempotencyKey(c: Context) {
+  const value = c.req.header('x-idempotency-key')?.trim()
+  return value && z.string().uuid().safeParse(value).success ? value : null
 }
 
 function optionalText(value: unknown, maxLength: number) {
@@ -157,9 +152,9 @@ customerRoutes.post('/direct-won', async (c) => {
     return c.json({ error: '服务日期无效，到期时间必须晚于使用日期' }, 400)
   }
 
-  const calculatedNetProfit = parsed.data.amount - parsed.data.software_cost - parsed.data.tax_cost - parsed.data.rebate_amount
-  const totalSplitAmount = parsed.data.splits.reduce((total, split) => total + split.split_amount, 0)
-  if (parsed.data.net_profit !== calculatedNetProfit || totalSplitAmount > calculatedNetProfit) {
+  const calculatedNetProfitCents = parsed.data.amount_cents - parsed.data.software_cost_cents - parsed.data.tax_cost_cents - parsed.data.rebate_amount_cents
+  const totalSplitAmountCents = parsed.data.splits.reduce((total, split) => total + split.split_amount_cents, 0)
+  if (parsed.data.net_profit_cents !== calculatedNetProfitCents || totalSplitAmountCents > calculatedNetProfitCents) {
     return c.json({ error: '实际利润或分成金额不合法' }, 400)
   }
 
@@ -190,9 +185,9 @@ customerRoutes.post('/direct-won', async (c) => {
     id: dealId,
     customerId,
     productName: parsed.data.product_name,
-    amount: parsed.data.amount,
+    amountCents: parsed.data.amount_cents,
     channel: parsed.data.channel || null,
-    originalPrice: parsed.data.original_price ?? parsed.data.amount,
+    originalPriceCents: parsed.data.original_price_cents ?? parsed.data.amount_cents,
     stage: 'Won',
     expectedCloseDate: startDate,
     startDate,
@@ -200,17 +195,17 @@ customerRoutes.post('/direct-won', async (c) => {
     giftMonths: parsed.data.gift_months,
     expireDate,
     renewalReminderDays: parsed.data.renewal_reminder_days,
-    softwareCost: parsed.data.software_cost,
-    taxCost: parsed.data.tax_cost,
-    rebateAmount: parsed.data.rebate_amount,
-    netProfit: parsed.data.net_profit,
+    softwareCostCents: parsed.data.software_cost_cents,
+    taxCostCents: parsed.data.tax_cost_cents,
+    rebateAmountCents: parsed.data.rebate_amount_cents,
+    netProfitCents: parsed.data.net_profit_cents,
     createdAt: now,
   })
   const splitInserts = parsed.data.splits.map((split) => db.insert(dealSplits).values({
     id: crypto.randomUUID(),
     dealId,
     userId: split.user_id,
-    splitAmount: split.split_amount,
+    splitAmountCents: split.split_amount_cents,
   }))
 
   // D1 batch commits all customer, deal, and split records atomically.
@@ -228,10 +223,23 @@ customerRoutes.post('/:id/renew', async (c) => {
 
   const parsed = renewCustomerSchema.safeParse(body)
   if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '续费资料格式无效' }, 400)
+  const idempotencyKey = getIdempotencyKey(c)
+  if (!idempotencyKey) return c.json({ error: 'x-idempotency-key 必须为 UUID' }, 400)
 
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
+  const [existingRequest] = await db
+    .select({ id: deals.id, customerId: deals.customerId, dealType: deals.dealType })
+    .from(deals)
+    .where(eq(deals.idempotencyKey, idempotencyKey))
+    .limit(1)
+  if (existingRequest) {
+    if (existingRequest.customerId === c.req.param('id') && existingRequest.dealType === 'Renewal') {
+      return c.json({ customerId: existingRequest.customerId, dealId: existingRequest.id, dealType: 'Renewal', idempotent: true })
+    }
+    return c.json({ error: '幂等请求键已被其他业务请求使用' }, 409)
+  }
   const [customer] = await db
     .select({ id: customers.id, saasExpireDate: customers.saasExpireDate })
     .from(customers)
@@ -251,18 +259,18 @@ customerRoutes.post('/:id/renew', async (c) => {
     .limit(1)
 
   const now = new Date()
-  const today = startOfUtcDay(now)
+  const today = todayInShanghai(now)
   const recordedExpireDate = customer.saasExpireDate
-  const normalizedExpireDate = recordedExpireDate ? startOfUtcDay(recordedExpireDate) : null
+  const normalizedExpireDate = recordedExpireDate ? startOfShanghaiDay(recordedExpireDate) : null
   const renewalStartDate = normalizedExpireDate && normalizedExpireDate.getTime() >= today.getTime() ? normalizedExpireDate : today
-  const newExpireDate = addCalendarYears(renewalStartDate, parsed.data.years)
+  const newExpireDate = addShanghaiCalendarYears(renewalStartDate, parsed.data.years)
   const dealId = crypto.randomUUID()
   const insertRenewalDeal = db.insert(deals).values({
     id: dealId,
     customerId: customer.id,
-    amount: parsed.data.amount,
+    amountCents: parsed.data.amount_cents,
     channel: parsed.data.channel || null,
-    originalPrice: parsed.data.amount,
+    originalPriceCents: parsed.data.amount_cents,
     dealType: 'Renewal',
     productName: parsed.data.product,
     stage: 'Won',
@@ -270,7 +278,9 @@ customerRoutes.post('/:id/renew', async (c) => {
     startDate: renewalStartDate,
     durationYears: parsed.data.years,
     giftMonths: 0,
+    expireDate: newExpireDate,
     renewalReminderDays: latestWonDeal?.reminderDays ?? 30,
+    idempotencyKey,
     createdAt: now,
   })
   const updateCustomerExpireDate = db
@@ -278,7 +288,20 @@ customerRoutes.post('/:id/renew', async (c) => {
     .set({ saasExpireDate: newExpireDate, status: 'Active', updatedAt: now })
     .where(eq(customers.id, customer.id))
 
-  await db.batch([insertRenewalDeal, updateCustomerExpireDate])
+  try {
+    await db.batch([insertRenewalDeal, updateCustomerExpireDate])
+  } catch (error) {
+    if (!(error instanceof Error) || !/unique/i.test(error.message)) throw error
+    const [existingDeal] = await db
+      .select({ id: deals.id, customerId: deals.customerId, dealType: deals.dealType })
+      .from(deals)
+      .where(eq(deals.idempotencyKey, idempotencyKey))
+      .limit(1)
+    if (existingDeal?.customerId === customer.id && existingDeal.dealType === 'Renewal') {
+      return c.json({ customerId: customer.id, dealId: existingDeal.id, dealType: 'Renewal', idempotent: true })
+    }
+    return c.json({ error: '续费请求已被并发处理，请刷新后确认结果' }, 409)
+  }
   return c.json({
     customerId: customer.id,
     dealId,

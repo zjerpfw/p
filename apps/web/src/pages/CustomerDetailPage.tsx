@@ -7,13 +7,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CreateActivitySheet } from '@/components/activities/CreateActivitySheet'
+import { CreateContractSheet } from '@/components/customers/CreateContractSheet'
+import { CreateInvoiceSheet } from '@/components/customers/CreateInvoiceSheet'
+import { CreatePaymentSheet } from '@/components/customers/CreatePaymentSheet'
+import { CustomerFinancePanel } from '@/components/customers/CustomerFinancePanel'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { customerDetailQueryKey, useCustomerDetail } from '@/hooks/useCustomerDetail'
-import { apiFetch } from '@/lib/api'
+import { useContracts, useInvoices } from '@/hooks/useAssets'
+import { apiFetch, getCurrentUserId, getCurrentUserRole } from '@/lib/api'
+import { formatCents } from '@/lib/money'
 import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel, getCustomerStatusTone, getDealStageTone } from '@/lib/presentation'
 import { toast } from 'sonner'
 
@@ -35,12 +41,6 @@ interface CreateActivityPayload {
   check_in_lat: number | null
   check_in_address: string | null
 }
-
-const currency = new Intl.NumberFormat('zh-CN', {
-  style: 'currency',
-  currency: 'CNY',
-  maximumFractionDigits: 0,
-})
 
 function getServiceStatus(expireDate: string | null) {
   if (!expireDate) return { label: '服务日期待完善', className: 'bg-muted text-muted-foreground', icon: Clock3 }
@@ -64,6 +64,9 @@ export default function CustomerDetailPage() {
   const [activityType, setActivityType] = useState<CreateActivityPayload['type']>('Meeting')
   const [selectedAttachmentActivityId, setSelectedAttachmentActivityId] = useState('')
   const [renewTarget, setRenewTarget] = useState<RenewCustomerTarget | null>(null)
+  const [contractSheetOpen, setContractSheetOpen] = useState(false)
+  const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false)
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false)
 
   const customer = data?.customer
 
@@ -201,6 +204,9 @@ export default function CustomerDetailPage() {
   const currentServiceStatus = getServiceStatus(customer.saasExpireDate)
   const CurrentServiceIcon = currentServiceStatus.icon
   const latestWonDeal = data?.deals.find((deal) => deal.stage === 'Won')
+  const canManageFinance = getCurrentUserRole() === 'admin' || getCurrentUserId() === customer.ownerId
+  const customerContracts = useContracts({ customer_id: customer.id, limit: 100 })
+  const customerInvoices = useInvoices({ customer_id: customer.id, limit: 100 })
 
   return (
     <section className="space-y-6">
@@ -255,9 +261,16 @@ export default function CustomerDetailPage() {
                 <p className="mt-3 text-lg font-bold text-slate-900">{customer.saasExpireDate ? format(new Date(customer.saasExpireDate), 'yyyy-MM-dd') : '尚未开通'}</p>
                 {customer.saasExpireDate && latestWonDeal && <Button className="mt-3 w-full text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => setRenewTarget({ customerId: customer.id, customerName: customer.name, currentExpireDate: customer.saasExpireDate!, productName: latestWonDeal.productName, channel: latestWonDeal.channel })} size="sm" type="button" variant="outline"><CalendarSync aria-hidden="true" />续费</Button>}
               </div>
-              <div><p className="mb-2 text-xs font-semibold text-slate-500">历史成交与商机记录</p><div className="space-y-3">{data?.deals.map((deal) => <article className="rounded-md border border-slate-200 bg-white p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</p><p className="mt-2 text-xs text-muted-foreground">{deal.dealType === 'Renewal' ? '续费成交' : '新购商机'} · {format(new Date(deal.createdAt), 'yyyy-MM-dd')}</p></article>)}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</div></div>
+              <div><p className="mb-2 text-xs font-semibold text-slate-500">历史成交与商机记录</p><div className="space-y-3">{data?.deals.map((deal) => <article className="rounded-md border border-slate-200 bg-white p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}</p><p className="mt-2 text-xs text-muted-foreground">{deal.dealType === 'Renewal' ? '续费成交' : '新购商机'} · {format(new Date(deal.createdAt), 'yyyy-MM-dd')}</p></article>)}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</div></div>
             </CardContent>
           </Card>
+          <CustomerFinancePanel
+            canManage={canManageFinance}
+            customerId={customer.id}
+            onCreateContract={() => setContractSheetOpen(true)}
+            onCreateInvoice={() => setInvoiceSheetOpen(true)}
+            onCreatePayment={() => setPaymentSheetOpen(true)}
+          />
           <Card className="gap-0 overflow-hidden py-0">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
             <CardContent className="divide-y divide-border p-0">{data?.attachments.filter((attachment) => !attachment.activityId).map((attachment) => <div className="flex items-center justify-between gap-2 px-4 py-3" key={attachment.id}><div className="min-w-0"><p className="truncate text-sm font-medium">{attachment.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{format(new Date(attachment.createdAt), 'MM-dd HH:mm')}</p></div><div className="flex shrink-0"><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost"><Eye aria-hidden="true" /></Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>)}{data?.attachments.filter((attachment) => !attachment.activityId).length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">暂无附件</p>}</CardContent>
@@ -269,6 +282,28 @@ export default function CustomerDetailPage() {
       <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
       <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
+      <CreateContractSheet
+        customerId={customer.id}
+        customerName={customer.name}
+        deals={data?.deals.map((deal) => ({ id: deal.id, productName: deal.productName, amountCents: deal.amountCents })) ?? []}
+        onOpenChange={setContractSheetOpen}
+        open={contractSheetOpen}
+      />
+      <CreateInvoiceSheet
+        contracts={customerContracts.data?.data ?? []}
+        customerId={customer.id}
+        customerName={customer.name}
+        onOpenChange={setInvoiceSheetOpen}
+        open={invoiceSheetOpen}
+      />
+      <CreatePaymentSheet
+        contracts={customerContracts.data?.data ?? []}
+        customerId={customer.id}
+        customerName={customer.name}
+        invoices={customerInvoices.data?.data ?? []}
+        onOpenChange={setPaymentSheetOpen}
+        open={paymentSheetOpen}
+      />
     </section>
   )
 }

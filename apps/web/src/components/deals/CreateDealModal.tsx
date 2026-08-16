@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCustomers } from '@/hooks/useCustomers'
 import { apiFetch } from '@/lib/api'
+import { yuanToCents } from '@/lib/money'
 
 interface CreateDealModalProps {
   open: boolean
@@ -31,9 +32,9 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
       body: JSON.stringify({
         customer_id: customerId,
         product_name: productName.trim(),
-        amount: Number(amount),
+        amount_cents: yuanToCents(amount),
         channel: channel.trim(),
-        original_price: originalPrice ? Number(originalPrice) : Number(amount),
+        original_price_cents: yuanToCents(originalPrice || amount),
         expected_close_date: expectedCloseDate,
       }),
     }),
@@ -54,7 +55,8 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
     onError: (error) => toast.error(error instanceof Error ? error.message : '商机新建失败'),
   })
 
-  const isValidAmount = Number.isSafeInteger(Number(amount)) && Number(amount) >= 0
+  const isValidAmount = yuanToCents(amount) !== null
+  const isValidOriginalPrice = !originalPrice || yuanToCents(originalPrice) !== null
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -74,14 +76,14 @@ export function CreateDealModal({ open, onOpenChange }: CreateDealModalProps) {
           <div className="space-y-1.5"><Label htmlFor="create-deal-product">意向产品 / 版本</Label><Input id="create-deal-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div>
           <div className="space-y-1.5"><Label htmlFor="create-deal-channel">渠道 / 来源</Label><Input id="create-deal-channel" list="deal-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="deal-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label htmlFor="create-deal-amount">预计金额（元）</Label><Input id="create-deal-amount" min="0" onChange={(event) => setAmount(event.target.value)} placeholder="0" type="number" value={amount} /></div>
-            <div className="space-y-1.5"><Label htmlFor="create-deal-original-price">原价 / 刊例价（元）</Label><Input id="create-deal-original-price" min="0" onChange={(event) => setOriginalPrice(event.target.value)} placeholder="默认与预计金额一致" type="number" value={originalPrice} /></div>
+            <div className="space-y-1.5"><Label htmlFor="create-deal-amount">预计金额（元）</Label><Input id="create-deal-amount" min="0" onChange={(event) => setAmount(event.target.value)} placeholder="0.00" step="0.01" type="number" value={amount} /></div>
+            <div className="space-y-1.5"><Label htmlFor="create-deal-original-price">原价 / 刊例价（元）</Label><Input id="create-deal-original-price" min="0" onChange={(event) => setOriginalPrice(event.target.value)} placeholder="默认与预计金额一致" step="0.01" type="number" value={originalPrice} /></div>
             <div className="space-y-1.5"><Label htmlFor="create-deal-close-date">预计成交日</Label><Input id="create-deal-close-date" onChange={(event) => setExpectedCloseDate(event.target.value)} type="date" value={expectedCloseDate} /></div>
           </div>
         </div>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button>
-          <Button disabled={!customerId || !productName.trim() || !isValidAmount || !expectedCloseDate || createDeal.isPending} onClick={() => createDeal.mutate()} type="button">{createDeal.isPending ? '正在新建' : '新建商机'}</Button>
+          <Button disabled={!customerId || !productName.trim() || !isValidAmount || !isValidOriginalPrice || !expectedCloseDate || createDeal.isPending} onClick={() => createDeal.mutate()} type="button">{createDeal.isPending ? '正在新建' : '新建商机'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

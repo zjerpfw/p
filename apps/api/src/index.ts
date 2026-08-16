@@ -7,9 +7,12 @@ import { eq } from 'drizzle-orm'
 import { activityRoutes } from './routes/activities'
 import { auth } from './routes/auth'
 import { configRoutes } from './routes/configs'
+import { contractRoutes } from './routes/contracts'
 import { customerRoutes } from './routes/customers'
 import { dashboardRoutes } from './routes/dashboard'
 import { dealRoutes } from './routes/deals'
+import { invoiceRoutes } from './routes/invoices'
+import { paymentRoutes } from './routes/payments'
 import { storage } from './routes/storage'
 import { userRoutes } from './routes/users'
 import type { Env } from './env'
@@ -19,12 +22,32 @@ export type { Env } from './env'
 
 const app = new Hono<{ Bindings: Env }>()
 
+const LOCAL_DEVELOPMENT_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+])
+
+function getAllowedOrigins(env: Env) {
+  const configuredOrigins = env.FRONTEND_URL
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => {
+      try {
+        const parsed = new URL(origin)
+        return parsed.protocol === 'https:' || LOCAL_DEVELOPMENT_ORIGINS.has(origin)
+      } catch {
+        return false
+      }
+    })
+  return new Set([...LOCAL_DEVELOPMENT_ORIGINS, ...configuredOrigins])
+}
+
 app.get('/', (c) => c.text('CRM API is running normally! 🚀'))
 
 app.use(
   '/api/*',
   cors({
-    origin: (origin) => origin,
+    origin: (origin, c) => getAllowedOrigins(c.env).has(origin) ? origin : '',
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
@@ -60,6 +83,9 @@ app.get('/:verificationFile{WW_verify_[A-Za-z0-9_-]+\\.txt}', async (c) => {
 
 app.route('/api/auth', auth)
 app.route('/api/configs', configRoutes)
+app.route('/api/contracts', contractRoutes)
+app.route('/api/invoices', invoiceRoutes)
+app.route('/api/payments', paymentRoutes)
 app.route('/api/dashboard', dashboardRoutes)
 app.route('/api/customers', customerRoutes)
 app.route('/api/deals', dealRoutes)

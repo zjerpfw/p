@@ -11,9 +11,9 @@ export interface Deal {
   id: string
   customerId: string
   customerName: string
-  amount: number
+  amountCents: number
   channel: string | null
-  originalPrice: number | null
+  originalPriceCents: number | null
   dealType: string
   productName: string
   stage: DealStage
@@ -23,10 +23,10 @@ export interface Deal {
   giftMonths: number
   expireDate: string | null
   renewalReminderDays: number
-  softwareCost: number | null
-  taxCost: number | null
-  rebateAmount: number | null
-  netProfit: number | null
+  softwareCostCents: number | null
+  taxCostCents: number | null
+  rebateAmountCents: number | null
+  netProfitCents: number | null
   createdAt: string
 }
 
@@ -35,6 +35,7 @@ export interface DealFilters {
   status?: DealStage
   page?: number
   limit?: number
+  enabled?: boolean
 }
 
 export function useDeals(filters: DealFilters = {}) {
@@ -48,5 +49,6 @@ export function useDeals(filters: DealFilters = {}) {
   return useQuery({
     queryKey: ['deals', filters],
     queryFn: () => apiFetch<PaginatedResponse<Deal>>(`/api/deals?${query}`),
+    enabled: filters.enabled ?? true,
   })
 }

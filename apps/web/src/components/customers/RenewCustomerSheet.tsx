@@ -1,7 +1,7 @@
 // apps/web/src/components/customers/RenewCustomerSheet.tsx
 import { addYears, format, isBefore, startOfDay } from 'date-fns'
 import { CalendarSync } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { apiFetch } from '@/lib/api'
+import { yuanToCents } from '@/lib/money'
 
 export interface RenewCustomerTarget {
   customerId: string
@@ -45,6 +46,7 @@ export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetP
   const [years, setYears] = useState(1)
   const [amount, setAmount] = useState('')
   const [channel, setChannel] = useState('')
+  const renewalRequestId = useRef<string | null>(null)
 
   useEffect(() => {
     if (!target) return
@@ -52,20 +54,21 @@ export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetP
     setChannel(target.channel ?? '')
     setYears(1)
     setAmount('')
+    renewalRequestId.current = crypto.randomUUID()
   }, [target])
 
   const renewalPreview = useMemo(() => {
     if (!target || !Number.isSafeInteger(years) || years < 1) return null
     return getRenewalPreview(target.currentExpireDate, years)
   }, [target, years])
-  const numericAmount = Number(amount)
-  const canSubmit = Boolean(target && product.trim() && Number.isSafeInteger(numericAmount) && numericAmount > 0 && years >= 1 && years <= 20)
+  const amountCents = yuanToCents(amount)
+  const canSubmit = Boolean(target && product.trim() && amountCents !== null && amountCents > 0 && years >= 1 && years <= 20)
 
   const renewCustomer = useMutation({
     mutationFn: () => apiFetch(`/api/customers/${target?.customerId}/renew`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: numericAmount, years, product: product.trim(), channel: channel.trim() }),
+      headers: { 'Content-Type': 'application/json', 'x-idempotency-key': renewalRequestId.current ?? (renewalRequestId.current = crypto.randomUUID()) },
+      body: JSON.stringify({ amount_cents: amountCents, years, product: product.trim(), channel: channel.trim() }),
     }),
     onSuccess: async () => {
       await Promise.all([
@@ -75,6 +78,7 @@ export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetP
         target ? queryClient.invalidateQueries({ queryKey: ['customers', target.customerId] }) : Promise.resolve(),
       ])
       onOpenChange(false)
+      renewalRequestId.current = null
       toast.success('续费成功，到期日已更新')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : '续费失败，请重试'),
@@ -92,7 +96,7 @@ export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetP
       </section>
       <div className="space-y-1.5"><Label htmlFor="renew-product"><span className="text-rose-500">*</span> 续费产品</Label><select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm md:h-9" id="renew-product" onChange={(event) => setProduct(event.target.value)} value={product}>{!productOptions.includes(product) && product && <option value={product}>{product}</option>}{productOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
       <div className="space-y-1.5"><Label htmlFor="renew-years"><span className="text-rose-500">*</span> 续费年限</Label><Input id="renew-years" max="20" min="1" onChange={(event) => setYears(Math.max(1, Math.min(20, Number.parseInt(event.target.value, 10) || 1)))} type="number" value={years} /></div>
-      <div className="space-y-1.5"><Label htmlFor="renew-amount"><span className="text-rose-500">*</span> 续费成交金额（元）</Label><Input id="renew-amount" inputMode="numeric" min="1" onChange={(event) => setAmount(event.target.value)} placeholder="请输入本次续费金额" type="number" value={amount} /></div>
+      <div className="space-y-1.5"><Label htmlFor="renew-amount"><span className="text-rose-500">*</span> 续费成交金额（元）</Label><Input id="renew-amount" inputMode="decimal" min="0.01" onChange={(event) => setAmount(event.target.value)} placeholder="请输入本次续费金额" step="0.01" type="number" value={amount} /></div>
       <div className="space-y-1.5"><Label htmlFor="renew-channel">续费渠道</Label><Input id="renew-channel" list="renew-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="renew-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div>
       <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <p className="text-xs font-semibold text-slate-500">续费日期预览</p>

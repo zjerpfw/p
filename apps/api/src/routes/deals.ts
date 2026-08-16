@@ -1,8 +1,8 @@
 // apps/api/src/routes/deals.ts
 import { createDb } from '@crm/db/client'
 import { customers, dealSplits, deals, dealStages, users } from '@crm/db/schema'
-import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { and, count, desc, eq, inArray, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
+import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
@@ -17,44 +17,44 @@ dealRoutes.use('*', async (c, next) => {
 
 interface DealSplitPayload {
   user_id?: unknown
-  split_amount?: unknown
+  split_amount_cents?: unknown
 }
 
 interface WonDealPayload {
   product_name?: unknown
   channel?: unknown
-  original_price?: unknown
+  original_price_cents?: unknown
   start_date?: unknown
   duration_years?: unknown
   gift_months?: unknown
   expire_date?: unknown
   renewal_reminder_days?: unknown
-  software_cost?: unknown
-  tax_cost?: unknown
-  rebate_amount?: unknown
-  net_profit?: unknown
+  software_cost_cents?: unknown
+  tax_cost_cents?: unknown
+  rebate_amount_cents?: unknown
+  net_profit_cents?: unknown
   splits?: unknown
 }
 
 interface UpdateDealPayload {
   product_name?: unknown
   channel?: unknown
-  original_price?: unknown
-  amount?: unknown
+  original_price_cents?: unknown
+  amount_cents?: unknown
   stage?: unknown
   expected_close_date?: unknown
-  software_cost?: unknown
-  tax_cost?: unknown
-  rebate_amount?: unknown
-  net_profit?: unknown
+  software_cost_cents?: unknown
+  tax_cost_cents?: unknown
+  rebate_amount_cents?: unknown
+  net_profit_cents?: unknown
 }
 
 interface CreateDealPayload {
   customer_id?: unknown
   product_name?: unknown
   channel?: unknown
-  original_price?: unknown
-  amount?: unknown
+  original_price_cents?: unknown
+  amount_cents?: unknown
   stage?: unknown
   expected_close_date?: unknown
 }
@@ -64,34 +64,39 @@ const createDealSchema = z.object({
   customer_id: z.string().uuid('客户编号无效'),
   product_name: productNameSchema,
   channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
-  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
-  amount: z.number().int().nonnegative('预计金额不能小于 0'),
+  original_price_cents: z.number().int().nonnegative('原价不能小于 0').optional(),
+  amount_cents: z.number().int().nonnegative('预计金额不能小于 0'),
   stage: z.enum(['Leads', 'Qualified', 'Proposal', 'Lost']).optional().default('Leads'),
   expected_close_date: z.union([z.string(), z.number()]),
 })
 const updateProductSchema = z.object({
   product_name: productNameSchema.optional(),
   channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional(),
-  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
+  original_price_cents: z.number().int().nonnegative('原价不能小于 0').optional(),
 })
 const wonProductSchema = z.object({
   product_name: productNameSchema,
   channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
-  original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
+  original_price_cents: z.number().int().nonnegative('原价不能小于 0').optional(),
 })
 const wonGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0) })
 
 const financialFields = [
   'duration_years',
   'renewal_reminder_days',
-  'software_cost',
-  'tax_cost',
-  'rebate_amount',
-  'net_profit',
+  'software_cost_cents',
+  'tax_cost_cents',
+  'rebate_amount_cents',
+  'net_profit_cents',
 ] as const
 
 function isInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value)
+}
+
+function getIdempotencyKey(c: Context) {
+  const value = c.req.header('x-idempotency-key')?.trim()
+  return value && z.string().uuid().safeParse(value).success ? value : null
 }
 
 function parseDate(value: unknown): Date | null {
@@ -112,6 +117,151 @@ function parsePagination(value: string | undefined, fallback: number, max: numbe
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback
 }
 
+interface PipelineCursor {
+  createdAt: number
+  id: string
+}
+
+function encodePipelineCursor(cursor: PipelineCursor) {
+  return btoa(JSON.stringify(cursor)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+function decodePipelineCursor(value: string | undefined): PipelineCursor | null | undefined {
+  if (!value) return undefined
+  try {
+    const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    const parsed: unknown = JSON.parse(atob(padded))
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('createdAt' in parsed) ||
+      !('id' in parsed) ||
+      typeof parsed.createdAt !== 'number' ||
+      !Number.isSafeInteger(parsed.createdAt) ||
+      typeof parsed.id !== 'string' ||
+      parsed.id.length === 0
+    ) {
+      return null
+    }
+    return { createdAt: parsed.createdAt, id: parsed.id }
+  } catch {
+    return null
+  }
+}
+
+const dealSelection = {
+  id: deals.id,
+  customerId: deals.customerId,
+  customerName: customers.name,
+  amountCents: deals.amountCents,
+  channel: deals.channel,
+  originalPriceCents: deals.originalPriceCents,
+  dealType: deals.dealType,
+  productName: deals.productName,
+  stage: deals.stage,
+  expectedCloseDate: deals.expectedCloseDate,
+  startDate: deals.startDate,
+  durationYears: deals.durationYears,
+  giftMonths: deals.giftMonths,
+  expireDate: deals.expireDate,
+  renewalReminderDays: deals.renewalReminderDays,
+  softwareCostCents: deals.softwareCostCents,
+  taxCostCents: deals.taxCostCents,
+  rebateAmountCents: deals.rebateAmountCents,
+  netProfitCents: deals.netProfitCents,
+  createdAt: deals.createdAt,
+}
+
+dealRoutes.get('/pipeline', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const db = createDb(c.env.DB)
+  const rows = await db
+    .select({
+      stage: deals.stage,
+      count: count(),
+      totalAmountCents: sql<number>`coalesce(sum(${deals.amountCents}), 0)`,
+    })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(
+      eq(deals.isDeleted, false),
+      eq(customers.isDeleted, false),
+      search ? like(customers.name, `%${search}%`) : undefined,
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .groupBy(deals.stage)
+
+  const byStage = new Map(rows.map((row) => [row.stage, row]))
+  const stages = dealStages.map((stage) => {
+    const row = byStage.get(stage)
+    return {
+      stage,
+      count: Number(row?.count ?? 0),
+      totalAmountCents: Number(row?.totalAmountCents ?? 0),
+    }
+  })
+
+  return c.json({
+    count: stages.reduce((total, stage) => total + stage.count, 0),
+    totalAmountCents: stages.reduce((total, stage) => total + stage.totalAmountCents, 0),
+    stages,
+  })
+})
+
+dealRoutes.get('/pipeline/:stage', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const stageParam = c.req.param('stage')
+  if (!dealStages.includes(stageParam as (typeof dealStages)[number])) {
+    return c.json({ error: '商机阶段无效' }, 400)
+  }
+  const stage = stageParam as (typeof dealStages)[number]
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const limit = parsePagination(c.req.query('limit'), 10, 50)
+  const cursor = decodePipelineCursor(c.req.query('cursor'))
+  if (cursor === null) return c.json({ error: '分页游标无效' }, 400)
+
+  const cursorDate = cursor ? new Date(cursor.createdAt) : undefined
+  const db = createDb(c.env.DB)
+  const rows = await db
+    .select(dealSelection)
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .where(and(
+      eq(deals.stage, stage),
+      eq(deals.isDeleted, false),
+      eq(customers.isDeleted, false),
+      search ? like(customers.name, `%${search}%`) : undefined,
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+      cursor && cursorDate
+        ? or(
+            lt(deals.createdAt, cursorDate),
+            and(eq(deals.createdAt, cursorDate), lt(deals.id, cursor.id)),
+          )
+        : undefined,
+    ))
+    .orderBy(desc(deals.createdAt), desc(deals.id))
+    .limit(limit + 1)
+
+  const hasMore = rows.length > limit
+  const data = hasMore ? rows.slice(0, limit) : rows
+  const lastItem = data.at(-1)
+  return c.json({
+    data,
+    pageInfo: {
+      hasMore,
+      nextCursor: hasMore && lastItem
+        ? encodePipelineCursor({ createdAt: lastItem.createdAt.getTime(), id: lastItem.id })
+        : null,
+    },
+  })
+})
+
 dealRoutes.get('/', async (c) => {
   const db = createDb(c.env.DB)
   const actor = getAuthenticatedActor(c)
@@ -131,27 +281,7 @@ dealRoutes.get('/', async (c) => {
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = filters.length ? and(...filters) : undefined
   const dealQuery = db
-    .select({
-      id: deals.id,
-      customerId: deals.customerId,
-      customerName: customers.name,
-      amount: deals.amount,
-      channel: deals.channel,
-      originalPrice: deals.originalPrice,
-      productName: deals.productName,
-      stage: deals.stage,
-      expectedCloseDate: deals.expectedCloseDate,
-      startDate: deals.startDate,
-      durationYears: deals.durationYears,
-      giftMonths: deals.giftMonths,
-      expireDate: deals.expireDate,
-      renewalReminderDays: deals.renewalReminderDays,
-      softwareCost: deals.softwareCost,
-      taxCost: deals.taxCost,
-      rebateAmount: deals.rebateAmount,
-      netProfit: deals.netProfit,
-      createdAt: deals.createdAt,
-    })
+    .select(dealSelection)
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(where)
@@ -204,9 +334,9 @@ dealRoutes.post('/', async (c) => {
     id: crypto.randomUUID(),
     customerId: customer.id,
     productName: parsed.data.product_name,
-    amount: parsed.data.amount,
+    amountCents: parsed.data.amount_cents,
     channel: parsed.data.channel || null,
-    originalPrice: parsed.data.original_price ?? parsed.data.amount,
+    originalPriceCents: parsed.data.original_price_cents ?? parsed.data.amount_cents,
     stage: parsed.data.stage,
     expectedCloseDate,
     createdAt: new Date(),
@@ -245,12 +375,14 @@ dealRoutes.post('/:id/won', async (c) => {
         split !== null &&
         typeof split.user_id === 'string' &&
         split.user_id.length > 0 &&
-        isInteger(split.split_amount) &&
-        split.split_amount >= 0,
+        isInteger(split.split_amount_cents) &&
+        split.split_amount_cents >= 0,
     )
   ) {
     return c.json({ error: '成交参数无效，请检查日期、财务字段和分成明细' }, 400)
   }
+  const idempotencyKey = getIdempotencyKey(c)
+  if (!idempotencyKey) return c.json({ error: 'x-idempotency-key 必须为 UUID' }, 400)
   const calculatedExpireDate = calculateExpireDate(startDate, durationYears, giftMonthsResult.data.gift_months)
   if (expireDate.getTime() !== calculatedExpireDate.getTime()) {
     return c.json({ error: '到期时间与服务年限、赠送时长不一致' }, 400)
@@ -261,7 +393,7 @@ dealRoutes.post('/:id/won', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const [deal] = await db
-    .select({ id: deals.id, customerId: deals.customerId, amount: deals.amount, originalPrice: deals.originalPrice })
+    .select({ id: deals.id, customerId: deals.customerId, amountCents: deals.amountCents, originalPriceCents: deals.originalPriceCents, stage: deals.stage, idempotencyKey: deals.idempotencyKey })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, dealId), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -269,15 +401,22 @@ dealRoutes.post('/:id/won', async (c) => {
   if (!deal) {
     return c.json({ error: '商机不存在' }, 404)
   }
+  if (deal.stage === 'Won') {
+    if (deal.idempotencyKey === idempotencyKey) return c.json({ id: dealId, stage: 'Won', idempotent: true })
+    return c.json({ error: '商机已确认赢单，不能重复操作' }, 409)
+  }
+  if (deal.idempotencyKey) {
+    return c.json({ error: deal.idempotencyKey === idempotencyKey ? '赢单请求正在处理中' : '商机已有待处理的赢单请求' }, 409)
+  }
 
   const splits = body.splits
   const expectedNetProfit =
-    deal.amount -
-    (body.software_cost as number) -
-    (body.tax_cost as number) -
-    (body.rebate_amount as number)
-  const totalSplitAmount = splits.reduce((total, split) => total + (split.split_amount as number), 0)
-  if ((body.net_profit as number) !== expectedNetProfit || totalSplitAmount > expectedNetProfit) {
+    deal.amountCents -
+    (body.software_cost_cents as number) -
+    (body.tax_cost_cents as number) -
+    (body.rebate_amount_cents as number)
+  const totalSplitAmountCents = splits.reduce((total, split) => total + (split.split_amount_cents as number), 0)
+  if ((body.net_profit_cents as number) !== expectedNetProfit || totalSplitAmountCents > expectedNetProfit) {
     return c.json({ error: '实际利润或分成金额不合法' }, 400)
   }
 
@@ -289,24 +428,45 @@ dealRoutes.post('/:id/won', async (c) => {
     }
   }
 
+  // Claim the request key first. Only the caller that wins this atomic update may insert splits.
+  try {
+    const claimed = await db
+      .update(deals)
+      .set({ idempotencyKey })
+      .where(and(eq(deals.id, dealId), eq(deals.isDeleted, false), isNull(deals.idempotencyKey), ne(deals.stage, 'Won')))
+      .returning({ id: deals.id })
+    if (claimed.length === 0) return c.json({ error: '赢单请求正在处理中，请刷新后确认结果' }, 409)
+  } catch (error) {
+    if (!(error instanceof Error) || !/unique/i.test(error.message)) throw error
+    const [existingRequest] = await db
+      .select({ id: deals.id, stage: deals.stage })
+      .from(deals)
+      .where(eq(deals.idempotencyKey, idempotencyKey))
+      .limit(1)
+    if (existingRequest?.id === dealId && existingRequest.stage === 'Won') {
+      return c.json({ id: dealId, stage: 'Won', idempotent: true })
+    }
+    return c.json({ error: '幂等请求键已被并发请求使用' }, 409)
+  }
+
   const updateDeal = db
     .update(deals)
     .set({
       stage: 'Won',
       productName: productNameResult.data.product_name,
       channel: productNameResult.data.channel || null,
-      originalPrice: productNameResult.data.original_price ?? deal.originalPrice ?? deal.amount,
+      originalPriceCents: productNameResult.data.original_price_cents ?? deal.originalPriceCents ?? deal.amountCents,
       startDate,
       durationYears,
       giftMonths: giftMonthsResult.data.gift_months,
       expireDate,
       renewalReminderDays: body.renewal_reminder_days as number,
-      softwareCost: body.software_cost as number,
-      taxCost: body.tax_cost as number,
-      rebateAmount: body.rebate_amount as number,
-      netProfit: body.net_profit as number,
+      softwareCostCents: body.software_cost_cents as number,
+      taxCostCents: body.tax_cost_cents as number,
+      rebateAmountCents: body.rebate_amount_cents as number,
+      netProfitCents: body.net_profit_cents as number,
     })
-    .where(eq(deals.id, dealId))
+    .where(and(eq(deals.id, dealId), eq(deals.idempotencyKey, idempotencyKey)))
   const updateCustomerExpireDate = db
     .update(customers)
     .set({ saasExpireDate: expireDate, status: 'Active', updatedAt: new Date() })
@@ -317,12 +477,20 @@ dealRoutes.post('/:id/won', async (c) => {
       id: crypto.randomUUID(),
       dealId,
       userId: split.user_id as string,
-      splitAmount: split.split_amount as number,
+      splitAmountCents: split.split_amount_cents as number,
     }),
   )
 
   // Cloudflare D1 commits a batch atomically, which provides the transaction boundary here.
-  await db.batch([updateDeal, updateCustomerExpireDate, ...splitInserts])
+  try {
+    await db.batch([updateDeal, updateCustomerExpireDate, ...splitInserts])
+  } catch (error) {
+    // Release a failed claim so the client can safely retry with a new request key.
+    await db.update(deals)
+      .set({ idempotencyKey: null })
+      .where(and(eq(deals.id, dealId), eq(deals.idempotencyKey, idempotencyKey), ne(deals.stage, 'Won')))
+    throw error
+  }
 
   return c.json({ id: dealId, stage: 'Won', splitCount: splits.length })
 })
@@ -337,25 +505,25 @@ dealRoutes.put('/:id', async (c) => {
 
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
-  const amount = body.amount === undefined ? undefined : isInteger(body.amount) && body.amount >= 0 ? body.amount : null
+  const amountCents = body.amount_cents === undefined ? undefined : isInteger(body.amount_cents) && body.amount_cents >= 0 ? body.amount_cents : null
   const productNameResult = updateProductSchema.safeParse(body)
   const stage = body.stage === undefined ? undefined : typeof body.stage === 'string' && dealStages.includes(body.stage as (typeof dealStages)[number]) ? body.stage as (typeof dealStages)[number] : null
   const expectedCloseDate = body.expected_close_date === undefined ? undefined : parseDate(body.expected_close_date)
   const integerFields = [
-    ['softwareCost', body.software_cost],
-    ['taxCost', body.tax_cost],
-    ['rebateAmount', body.rebate_amount],
-    ['netProfit', body.net_profit],
+    ['softwareCostCents', body.software_cost_cents],
+    ['taxCostCents', body.tax_cost_cents],
+    ['rebateAmountCents', body.rebate_amount_cents],
+    ['netProfitCents', body.net_profit_cents],
   ] as const
-  if (!productNameResult.success || amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
+  if (!productNameResult.success || amountCents === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
     return c.json({ error: '商机资料格式无效' }, 400)
   }
 
   const updates = {
-    ...(amount !== undefined ? { amount } : {}),
+    ...(amountCents !== undefined ? { amountCents } : {}),
     ...(productNameResult.data.product_name !== undefined ? { productName: productNameResult.data.product_name } : {}),
     ...(productNameResult.data.channel !== undefined ? { channel: productNameResult.data.channel || null } : {}),
-    ...(productNameResult.data.original_price !== undefined ? { originalPrice: productNameResult.data.original_price } : {}),
+    ...(productNameResult.data.original_price_cents !== undefined ? { originalPriceCents: productNameResult.data.original_price_cents } : {}),
     ...(stage !== undefined ? { stage } : {}),
     ...(expectedCloseDate ? { expectedCloseDate } : {}),
     ...Object.fromEntries(integerFields.filter(([, value]) => value !== undefined).map(([key, value]) => [key, value])),
@@ -375,17 +543,17 @@ dealRoutes.put('/:id', async (c) => {
     return c.json({ error: '请使用确认赢单流程完成服务期限、财务和分成信息' }, 400)
   }
 
-  if (authorizedDeal.stage === 'Won' && body.net_profit !== undefined) {
-    const netProfit = body.net_profit
-    if (!isInteger(netProfit) || netProfit < 0) {
+  if (authorizedDeal.stage === 'Won' && body.net_profit_cents !== undefined) {
+    const netProfitCents = body.net_profit_cents
+    if (!isInteger(netProfitCents) || netProfitCents < 0) {
       return c.json({ error: '商机资料格式无效' }, 400)
     }
     const splitRows = await db
-      .select({ splitAmount: dealSplits.splitAmount })
+      .select({ splitAmountCents: dealSplits.splitAmountCents })
       .from(dealSplits)
       .where(eq(dealSplits.dealId, authorizedDeal.id))
-    const assignedAmount = splitRows.reduce((total, split) => total + split.splitAmount, 0)
-    if (assignedAmount > netProfit) {
+    const assignedAmountCents = splitRows.reduce((total, split) => total + split.splitAmountCents, 0)
+    if (assignedAmountCents > netProfitCents) {
       return c.json({ error: '实际利润不能低于已分配的订单分成金额' }, 400)
     }
   }

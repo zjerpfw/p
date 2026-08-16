@@ -1,7 +1,7 @@
 // apps/web/src/components/deals/SaaSDealWonModal.tsx
 import { addMonths, addYears, format } from 'date-fns'
 import { Minus, Plus, WalletCards } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -18,28 +18,29 @@ import { Label } from '@/components/ui/label'
 import type { Deal } from '@/hooks/useDeals'
 import { useUsers } from '@/hooks/useUsers'
 import { apiFetch } from '@/lib/api'
+import { centsToYuanInput, formatCents, yuanToCents } from '@/lib/money'
 import { getUserRoleLabel } from '@/lib/presentation'
 
 interface SplitDraft {
   key: string
   userId: string
-  amount: number
+  amount: string
 }
 
 interface WonDealPayload {
   product_name: string
   channel: string
-  original_price: number
+  original_price_cents: number
   start_date: string
   duration_years: number
   gift_months: number
   expire_date: string
   renewal_reminder_days: number
-  software_cost: number
-  tax_cost: number
-  rebate_amount: number
-  net_profit: number
-  splits: Array<{ user_id: string; split_amount: number }>
+  software_cost_cents: number
+  tax_cost_cents: number
+  rebate_amount_cents: number
+  net_profit_cents: number
+  splits: Array<{ user_id: string; split_amount_cents: number }>
 }
 
 interface SaaSDealWonModalProps {
@@ -66,14 +67,15 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
   const [startDate, setStartDate] = useState(today)
   const [productName, setProductName] = useState('')
   const [channel, setChannel] = useState('')
-  const [originalPrice, setOriginalPrice] = useState(0)
+  const [originalPrice, setOriginalPrice] = useState('')
   const [durationYears, setDurationYears] = useState(1)
   const [giftMonths, setGiftMonths] = useState(0)
   const [reminderDays, setReminderDays] = useState(30)
-  const [softwareCost, setSoftwareCost] = useState(0)
-  const [taxCost, setTaxCost] = useState(0)
-  const [rebateAmount, setRebateAmount] = useState(0)
+  const [softwareCost, setSoftwareCost] = useState('0')
+  const [taxCost, setTaxCost] = useState('0')
+  const [rebateAmount, setRebateAmount] = useState('0')
   const [splits, setSplits] = useState<SplitDraft[]>([])
+  const wonRequestId = useRef<string | null>(null)
 
   useEffect(() => {
     if (!deal) return
@@ -81,14 +83,15 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
     setStartDate(deal.startDate ? formatDateInput(new Date(deal.startDate)) : today())
     setProductName(deal.productName)
     setChannel(deal.channel ?? '')
-    setOriginalPrice(deal.originalPrice ?? deal.amount)
+    setOriginalPrice(centsToYuanInput(deal.originalPriceCents ?? deal.amountCents))
     setDurationYears(deal.durationYears ?? 1)
     setGiftMonths(deal.giftMonths ?? 0)
     setReminderDays(deal.renewalReminderDays ?? 30)
-    setSoftwareCost(deal.softwareCost ?? 0)
-    setTaxCost(deal.taxCost ?? 0)
-    setRebateAmount(deal.rebateAmount ?? 0)
+    setSoftwareCost(centsToYuanInput(deal.softwareCostCents ?? 0))
+    setTaxCost(centsToYuanInput(deal.taxCostCents ?? 0))
+    setRebateAmount(centsToYuanInput(deal.rebateAmountCents ?? 0))
     setSplits([])
+    wonRequestId.current = crypto.randomUUID()
   }, [deal])
 
   const expireDate = useMemo(() => {
@@ -96,14 +99,22 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
     return Number.isNaN(parsed.getTime()) ? '' : formatDateInput(addMonths(addYears(parsed, durationYears), giftMonths))
   }, [durationYears, giftMonths, startDate])
 
-  const netProfit = deal ? deal.amount - softwareCost - taxCost - rebateAmount : 0
-  const totalSplitAmount = splits.reduce((total, split) => total + split.amount, 0)
-  const isSplitValid = totalSplitAmount <= netProfit && splits.every((split) => split.userId)
+  const originalPriceCents = yuanToCents(originalPrice)
+  const softwareCostCents = yuanToCents(softwareCost)
+  const taxCostCents = yuanToCents(taxCost)
+  const rebateAmountCents = yuanToCents(rebateAmount)
+  const splitAmountsCents = splits.map((split) => yuanToCents(split.amount))
+  const financialInputsValid = [originalPriceCents, softwareCostCents, taxCostCents, rebateAmountCents, ...splitAmountsCents].every((value) => value !== null)
+  const netProfitCents = deal && softwareCostCents !== null && taxCostCents !== null && rebateAmountCents !== null
+    ? deal.amountCents - softwareCostCents - taxCostCents - rebateAmountCents
+    : -1
+  const totalSplitAmountCents = splitAmountsCents.reduce<number>((total, amount) => total + (amount ?? 0), 0)
+  const isSplitValid = financialInputsValid && netProfitCents >= 0 && totalSplitAmountCents <= netProfitCents && splits.every((split) => split.userId)
 
   const confirmWon = useMutation({
     mutationFn: (payload: WonDealPayload) => apiFetch(`/api/deals/${deal?.id}/won`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-idempotency-key': wonRequestId.current ?? (wonRequestId.current = crypto.randomUUID()) },
       body: JSON.stringify(payload),
     }),
     onSuccess: async () => {
@@ -113,6 +124,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
         deal ? queryClient.invalidateQueries({ queryKey: ['customers', deal.customerId] }) : Promise.resolve(),
       ])
       onOpenChange(false)
+      wonRequestId.current = null
       toast.success('商机已确认赢单')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : '确认赢单失败'),
@@ -124,7 +136,7 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
 
   function addSplit() {
     const firstAvailable = usersData?.users.find((user) => !splits.some((split) => split.userId === user.id))
-    setSplits((current) => [...current, { key: crypto.randomUUID(), userId: firstAvailable?.id ?? '', amount: 0 }])
+    setSplits((current) => [...current, { key: crypto.randomUUID(), userId: firstAvailable?.id ?? '', amount: '0' }])
   }
 
   function submit() {
@@ -133,17 +145,17 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
     confirmWon.mutate({
       product_name: productName.trim(),
       channel: channel.trim(),
-      original_price: originalPrice,
+      original_price_cents: originalPriceCents ?? 0,
       start_date: startDate,
       duration_years: durationYears,
       gift_months: giftMonths,
       expire_date: expireDate,
       renewal_reminder_days: reminderDays,
-      software_cost: softwareCost,
-      tax_cost: taxCost,
-      rebate_amount: rebateAmount,
-      net_profit: netProfit,
-      splits: splits.map((split) => ({ user_id: split.userId, split_amount: split.amount })),
+      software_cost_cents: softwareCostCents ?? 0,
+      tax_cost_cents: taxCostCents ?? 0,
+      rebate_amount_cents: rebateAmountCents ?? 0,
+      net_profit_cents: netProfitCents,
+      splits: splits.map((split, index) => ({ user_id: split.userId, split_amount_cents: splitAmountsCents[index] ?? 0 })),
     })
   }
 
@@ -171,15 +183,15 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
           <section className="space-y-3 border-t border-border pt-5">
             <h3 className="text-sm font-semibold">财务信息</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5"><Label htmlFor="deal-amount">成交金额（分）</Label><Input disabled id="deal-amount" type="number" value={deal?.amount ?? 0} /></div>
-              <div className="space-y-1.5"><Label htmlFor="won-original-price">原价 / 刊例价（元）</Label><Input id="won-original-price" min="0" onChange={(event) => setOriginalPrice(toInteger(event.target.value))} type="number" value={originalPrice} /></div>
-              <div className="space-y-1.5"><Label htmlFor="software-cost">软件成本（分）</Label><Input id="software-cost" min="0" onChange={(event) => setSoftwareCost(toInteger(event.target.value))} type="number" value={softwareCost} /></div>
-              <div className="space-y-1.5"><Label htmlFor="tax-cost">开票成本（分）</Label><Input id="tax-cost" min="0" onChange={(event) => setTaxCost(toInteger(event.target.value))} type="number" value={taxCost} /></div>
-              <div className="space-y-1.5"><Label htmlFor="rebate-amount">返利（分）</Label><Input id="rebate-amount" min="0" onChange={(event) => setRebateAmount(toInteger(event.target.value))} type="number" value={rebateAmount} /></div>
+              <div className="space-y-1.5"><Label htmlFor="deal-amount">成交金额（元）</Label><Input disabled id="deal-amount" type="text" value={formatCents(deal?.amountCents)} /></div>
+              <div className="space-y-1.5"><Label htmlFor="won-original-price">原价 / 刊例价（元）</Label><Input id="won-original-price" min="0" onChange={(event) => setOriginalPrice(event.target.value)} step="0.01" type="number" value={originalPrice} /></div>
+              <div className="space-y-1.5"><Label htmlFor="software-cost">软件成本（元）</Label><Input id="software-cost" min="0" onChange={(event) => setSoftwareCost(event.target.value)} step="0.01" type="number" value={softwareCost} /></div>
+              <div className="space-y-1.5"><Label htmlFor="tax-cost">开票成本（元）</Label><Input id="tax-cost" min="0" onChange={(event) => setTaxCost(event.target.value)} step="0.01" type="number" value={taxCost} /></div>
+              <div className="space-y-1.5"><Label htmlFor="rebate-amount">返利（元）</Label><Input id="rebate-amount" min="0" onChange={(event) => setRebateAmount(event.target.value)} step="0.01" type="number" value={rebateAmount} /></div>
             </div>
             <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950">
               <span className="flex items-center gap-2 text-sm font-medium"><WalletCards aria-hidden="true" className="size-4" />实际利润</span>
-              <strong>{netProfit.toLocaleString('zh-CN')} 分</strong>
+              <strong>{formatCents(netProfitCents)}</strong>
             </div>
           </section>
 
@@ -191,12 +203,12 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
                   <option value="">选择内部人员</option>
                   {usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}
                 </select>
-                <Input aria-label={`分成金额 ${index + 1}`} className="col-span-1 row-start-2 sm:col-auto sm:row-auto" min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} />
+                <Input aria-label={`分成金额（元）${index + 1}`} className="col-span-1 row-start-2 sm:col-auto sm:row-auto" min="0" onChange={(event) => updateSplit(split.key, { amount: event.target.value })} step="0.01" type="number" value={split.amount} />
                 <Button aria-label={`移除分成 ${index + 1}`} className="col-start-2 row-span-2 row-start-1 sm:col-auto sm:row-auto" onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button>
               </div>
             ))}
             {splits.length === 0 && <p className="text-sm text-muted-foreground">尚未配置内部人员分成。</p>}
-            <p className={isSplitValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>已分成 {totalSplitAmount.toLocaleString('zh-CN')} 分，实际利润 {netProfit.toLocaleString('zh-CN')} 分。</p>
+            <p className={isSplitValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>已分成 {formatCents(totalSplitAmountCents)}，实际利润 {formatCents(netProfitCents)}。</p>
           </section>
         </div>
 

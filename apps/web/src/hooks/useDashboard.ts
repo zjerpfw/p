@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/api'
 export interface DashboardData {
   month: string
   newLeads: number
-  wonNetProfit: number
+  wonNetProfitCents: number
   stageDistribution: Array<{ stage: DealStage; count: number }>
   funnelDistribution: Array<{ name: string; value: number; stage: DealStage }>
   renewalDeals: Array<{
@@ -17,7 +17,7 @@ export interface DashboardData {
     channel: string | null
     giftMonths: number
     expireDate: string
-    amount: number
+    amountCents: number
   }>
 }
 

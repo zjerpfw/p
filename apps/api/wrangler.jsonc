@@ -12,6 +12,7 @@
   "vars": {
     "CORP_ID": "REPLACE_WITH_WECHAT_CORP_ID",
     "WECHAT_AGENT_ID": "REPLACE_WITH_WECHAT_AGENT_ID",
+    "FRONTEND_URL": "https://crm-web.pages.dev",
     "GITHUB_OWNER": "zjerpfw",
     "GITHUB_REPOSITORY": "crm-images-storage",
     "SUPABASE_S3_ENDPOINT": "https://idtxusyasdmnozfdzmuj.storage.supabase.co/storage/v1/s3",

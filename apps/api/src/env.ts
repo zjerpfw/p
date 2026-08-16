@@ -5,6 +5,7 @@ export interface Env {
   CORP_ID: string
   CORP_SECRET: string
   WECHAT_AGENT_ID: string
+  FRONTEND_URL: string
   JWT_SECRET: string
   GITHUB_OWNER: string
   GITHUB_REPOSITORY: string

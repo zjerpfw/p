@@ -1,0 +1,1 @@
+CREATE INDEX `deals_stage_deleted_created_id_idx` ON `deals` (`stage`,`is_deleted`,`created_at`,`id`);

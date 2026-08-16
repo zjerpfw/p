@@ -11,6 +11,8 @@
     "clean": "wrangler delete --dry-run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@crm/db": "workspace:*",
     "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.44.4",

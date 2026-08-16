@@ -33,14 +33,23 @@ export function clearAccessToken() {
 }
 
 export function getCurrentUserRole() {
+  const payload = getJwtPayload()
+  return typeof payload?.role === 'string' ? payload.role : null
+}
+
+export function getCurrentUserId() {
+  const payload = getJwtPayload()
+  return typeof payload?.sub === 'string' && payload.sub.length > 0 ? payload.sub : null
+}
+
+function getJwtPayload() {
   const token = getAccessToken()
   if (!token) return null
   try {
     const payload = token.split('.')[1]
     if (!payload) return null
     const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const decoded = JSON.parse(atob(normalizedPayload)) as { role?: unknown }
-    return typeof decoded.role === 'string' ? decoded.role : null
+    return JSON.parse(atob(normalizedPayload)) as { sub?: unknown; role?: unknown }
   } catch {
     return null
   }

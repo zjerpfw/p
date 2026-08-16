@@ -1,7 +1,9 @@
 // apps/api/src/routes/storage.ts
 import { AwsClient } from 'aws4fetch'
+import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createDb } from '@crm/db/client'
-import { activities, attachments, customers, deals } from '@crm/db/schema'
+import { activities, attachmentAssets, attachments, contracts, customers, deals, invoices, payments } from '@crm/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { Hono, type Context, type Next } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -12,6 +14,9 @@ const GITHUB_API_BASE = 'https://api.github.com'
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const PRESIGNED_UPLOAD_TTL_SECONDS = 5 * 60
 const PRESIGNED_VIEW_TTL_SECONDS = 5 * 60
+const ASSET_UPLOAD_TTL_SECONDS = 5 * 60
+const MAX_ASSET_BYTES = 50 * 1024 * 1024
+const ASSET_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp'])
 
 function githubHeaders(env: Env, accept = 'application/vnd.github+json') {
   return {
@@ -65,6 +70,22 @@ function isSafeDocumentKey(fileKey: string) {
   return fileKey.startsWith('documents/') && fileKey.length <= 400 && !fileKey.includes('..')
 }
 
+function createPrivateS3Client(env: Env) {
+  return new S3Client({
+    region: env.SUPABASE_S3_REGION,
+    endpoint: env.SUPABASE_S3_ENDPOINT,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: env.SUPABASE_S3_ACCESS_KEY_ID,
+      secretAccessKey: env.SUPABASE_S3_SECRET_ACCESS_KEY,
+    },
+  })
+}
+
+function isSafeAssetKey(objectKey: string) {
+  return objectKey.startsWith('private-assets/') && objectKey.length <= 500 && !objectKey.includes('..')
+}
+
 function contentTypeFromFilename(filename: string) {
   const extension = filename.split('.').pop()?.toLowerCase()
   const contentTypes: Record<string, string> = {
@@ -84,6 +105,131 @@ async function requireStorageAuth(c: Context<{ Bindings: Env }>, next: Next) {
 storage.use('/presign/*', requireStorageAuth)
 storage.use('/attachments', requireStorageAuth)
 storage.use('/attachments/*', requireStorageAuth)
+storage.use('/upload/image', requireStorageAuth)
+storage.use('/presigned-url', requireStorageAuth)
+storage.use('/confirm-upload', requireStorageAuth)
+
+type AssetType = 'Contract' | 'Invoice' | 'PaymentProof'
+
+interface AssetParent {
+  customerId: string
+  dealId: string
+  contractId: string | null
+  invoiceId: string | null
+  paymentId: string | null
+}
+
+async function getAuthorizedAssetParent(
+  db: ReturnType<typeof createDb>,
+  actor: NonNullable<ReturnType<typeof getAuthenticatedActor>>,
+  assetType: AssetType,
+  parentId: string,
+): Promise<AssetParent | null> {
+  const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
+  if (assetType === 'Contract') {
+    const [row] = await db.select({ customerId: contracts.customerId, dealId: contracts.dealId, contractId: contracts.id })
+      .from(contracts).innerJoin(customers, eq(contracts.customerId, customers.id))
+      .where(and(eq(contracts.id, parentId), eq(customers.isDeleted, false), ownerFilter)).limit(1)
+    return row ? { ...row, invoiceId: null, paymentId: null } : null
+  }
+  if (assetType === 'Invoice') {
+    const [row] = await db.select({ customerId: invoices.customerId, dealId: invoices.dealId, contractId: invoices.contractId, invoiceId: invoices.id })
+      .from(invoices).innerJoin(customers, eq(invoices.customerId, customers.id))
+      .where(and(eq(invoices.id, parentId), eq(customers.isDeleted, false), ownerFilter)).limit(1)
+    return row ? { ...row, paymentId: null } : null
+  }
+  const [row] = await db.select({ customerId: payments.customerId, dealId: payments.dealId, contractId: payments.contractId, invoiceId: payments.invoiceId, paymentId: payments.id })
+    .from(payments).innerJoin(customers, eq(payments.customerId, customers.id))
+    .where(and(eq(payments.id, parentId), eq(customers.isDeleted, false), ownerFilter)).limit(1)
+  return row ?? null
+}
+
+storage.get('/presigned-url', async (c) => {
+  const assetType = c.req.query('asset_type')
+  const parentId = c.req.query('parent_id')
+  const filename = c.req.query('filename')
+  const mimeType = c.req.query('mime_type')
+  const sizeBytes = Number(c.req.query('size_bytes'))
+  if (
+    (assetType !== 'Contract' && assetType !== 'Invoice' && assetType !== 'PaymentProof') ||
+    !parentId ||
+    !filename ||
+    !mimeType ||
+    !Number.isSafeInteger(sizeBytes) ||
+    sizeBytes <= 0 ||
+    sizeBytes > MAX_ASSET_BYTES ||
+    !ASSET_MIME_TYPES.has(mimeType)
+  ) {
+    return c.json({ error: '资产上传参数无效' }, 400)
+  }
+  const safeName = safeFilename(filename)
+  if (!safeName) return c.json({ error: '文件名无效' }, 400)
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const parent = await getAuthorizedAssetParent(db, actor, assetType, parentId)
+  if (!parent) return c.json({ error: '资产主体不存在或无权上传文件' }, 404)
+
+  const now = new Date()
+  const assetId = crypto.randomUUID()
+  const objectKey = `private-assets/${parent.customerId}/${assetType.toLowerCase()}/${assetId}-${safeName}`
+  await db.insert(attachmentAssets).values({
+    id: assetId,
+    ...parent,
+    assetType,
+    uploadStatus: 'Pending',
+    bucket: c.env.SUPABASE_S3_BUCKET,
+    objectKey,
+    originalFilename: safeName,
+    mimeType,
+    sizeBytes,
+    version: 1,
+    uploadedBy: actor.id,
+    createdAt: now,
+    updatedAt: now,
+  })
+  const uploadUrl = await getSignedUrl(createPrivateS3Client(c.env), new PutObjectCommand({
+    Bucket: c.env.SUPABASE_S3_BUCKET,
+    Key: objectKey,
+    ContentType: mimeType,
+  }), { expiresIn: ASSET_UPLOAD_TTL_SECONDS })
+  return c.json({ assetId, uploadUrl, objectKey, expiresIn: ASSET_UPLOAD_TTL_SECONDS }, 201)
+})
+
+storage.post('/confirm-upload', async (c) => {
+  let body: { asset_id?: unknown }
+  try {
+    body = await c.req.json<typeof body>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+  if (typeof body.asset_id !== 'string' || body.asset_id.length === 0) return c.json({ error: 'asset_id 是必填项' }, 400)
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [asset] = await db.select({ id: attachmentAssets.id, objectKey: attachmentAssets.objectKey, bucket: attachmentAssets.bucket, mimeType: attachmentAssets.mimeType, uploadStatus: attachmentAssets.uploadStatus, uploadedBy: attachmentAssets.uploadedBy })
+    .from(attachmentAssets).innerJoin(customers, eq(attachmentAssets.customerId, customers.id))
+    .where(and(eq(attachmentAssets.id, body.asset_id), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!asset || !isSafeAssetKey(asset.objectKey) || asset.bucket !== c.env.SUPABASE_S3_BUCKET) return c.json({ error: '资产附件不存在或无权确认' }, 404)
+  if (actor.role !== 'admin' && asset.uploadedBy !== actor.id) return c.json({ error: '仅上传者或管理员可以确认上传' }, 403)
+  if (asset.uploadStatus === 'Uploaded') return c.json({ assetId: asset.id, uploadStatus: 'Uploaded', alreadyConfirmed: true })
+
+  try {
+    const metadata = await createPrivateS3Client(c.env).send(new HeadObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }))
+    const contentLength = metadata.ContentLength
+    if (contentLength === undefined || !Number.isSafeInteger(contentLength) || contentLength <= 0 || contentLength > MAX_ASSET_BYTES) return c.json({ error: '对象大小无效' }, 400)
+    const sizeBytes = contentLength
+    const mimeType = metadata.ContentType
+    if (!mimeType || !ASSET_MIME_TYPES.has(mimeType) || mimeType !== asset.mimeType) return c.json({ error: '对象 MIME 类型与上传申请不一致' }, 400)
+    await db.update(attachmentAssets).set({ uploadStatus: 'Uploaded', sizeBytes, mimeType, uploadedAt: new Date(), updatedAt: new Date() }).where(eq(attachmentAssets.id, asset.id))
+    return c.json({ assetId: asset.id, uploadStatus: 'Uploaded', sizeBytes, mimeType })
+  } catch (error) {
+    console.error('Asset upload confirmation failed:', error)
+    await db.update(attachmentAssets).set({ uploadStatus: 'Failed', updatedAt: new Date() }).where(eq(attachmentAssets.id, asset.id))
+    return c.json({ error: '未找到可确认的私有资产对象' }, 409)
+  }
+})
 
 storage.post('/upload/image', async (c) => {
   let formData: FormData
@@ -243,17 +389,18 @@ storage.post('/attachments', async (c) => {
       .limit(1)
     if (!activity) return c.json({ error: '关联跟进记录不存在或不属于当前客户' }, 400)
   }
+  const fileName = safeFilename(body.file_name)
+  if (!fileName) return c.json({ error: '文件名无效' }, 400)
   const attachment = {
     id: crypto.randomUUID(),
     customerId: customer.id,
     activityId: typeof body.activity_id === 'string' && body.activity_id.length > 0 ? body.activity_id : null,
     fileKey: body.file_key,
-    fileName: safeFilename(body.file_name),
+    fileName,
     contentType: body.content_type.slice(0, 255),
     uploadedBy: actor.id,
     createdAt: new Date(),
   }
-  if (!attachment.fileName) return c.json({ error: '文件名无效' }, 400)
   try {
     await db.insert(attachments).values(attachment)
   } catch (error) {

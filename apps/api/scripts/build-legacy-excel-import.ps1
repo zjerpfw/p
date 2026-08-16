@@ -133,14 +133,14 @@ foreach ($row in ($rows | Select-Object -Skip 1)) {
   $durationYears = To-SqlInteger $data['D']
   $expireDate = if ($durationYears -eq 'NULL') { 'NULL' } else { "unixepoch(date('$date', '+' || $durationYears || ' years'))" }
   $productName = if ([string]::IsNullOrWhiteSpace($data['E'])) { '未填写产品' } else { $data['E'].Trim() }
-  $amount = To-SqlInteger $data['J']
-  $originalPrice = if ([string]::IsNullOrWhiteSpace($data['F'])) { $amount } else { To-SqlInteger $data['F'] }
+  $amountCents = "$(To-SqlInteger $data['J']) * 100"
+  $originalPriceCents = if ([string]::IsNullOrWhiteSpace($data['F'])) { $amountCents } else { "$(To-SqlInteger $data['F']) * 100" }
   $channel = To-SqlText $data['C']
-  $softwareCost = To-SqlInteger $data['G']
-  $taxCost = To-SqlInteger $data['H']
-  $rebateAmount = To-SqlInteger $data['I']
-  $netProfit = To-SqlInteger $data['K']
-  $sql.Add("INSERT OR IGNORE INTO deals (id, customer_id, amount, channel, original_price, product_name, stage, expected_close_date, start_date, duration_years, gift_months, expire_date, renewal_reminder_days, software_cost, tax_cost, rebate_amount, net_profit, is_deleted, created_at) VALUES ('$dealId', COALESCE((SELECT id FROM customers WHERE name = $(To-SqlText $customerName) AND is_deleted = 0 ORDER BY created_at ASC LIMIT 1), '$customerId'), $amount, $channel, $originalPrice, $(To-SqlText $productName), 'Won', unixepoch('$date'), unixepoch('$date'), $durationYears, 0, $expireDate, 30, $softwareCost, $taxCost, $rebateAmount, $netProfit, 0, unixepoch('$date'));")
+  $softwareCostCents = "$(To-SqlInteger $data['G']) * 100"
+  $taxCostCents = "$(To-SqlInteger $data['H']) * 100"
+  $rebateAmountCents = "$(To-SqlInteger $data['I']) * 100"
+  $netProfitCents = "$(To-SqlInteger $data['K']) * 100"
+  $sql.Add("INSERT OR IGNORE INTO deals (id, customer_id, amount_cents, channel, original_price_cents, product_name, stage, expected_close_date, start_date, duration_years, gift_months, expire_date, renewal_reminder_days, software_cost_cents, tax_cost_cents, rebate_amount_cents, net_profit_cents, is_deleted, created_at) VALUES ('$dealId', COALESCE((SELECT id FROM customers WHERE name = $(To-SqlText $customerName) AND is_deleted = 0 ORDER BY created_at ASC LIMIT 1), '$customerId'), $amountCents, $channel, $originalPriceCents, $(To-SqlText $productName), 'Won', unixepoch('$date'), unixepoch('$date'), $durationYears, 0, $expireDate, 30, $softwareCostCents, $taxCostCents, $rebateAmountCents, $netProfitCents, 0, unixepoch('$date'));")
   $dealsInserted++
 }
 

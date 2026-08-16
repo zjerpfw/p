@@ -41,7 +41,7 @@ dashboardRoutes.get('/', async (c) => {
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(eq(deals.stage, 'Leads'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
     db
-      .select({ total: sql<number>`coalesce(sum(${deals.netProfit}), 0)` })
+      .select({ totalCents: sql<number>`coalesce(sum(${deals.netProfitCents}), 0)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(eq(deals.stage, 'Won'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
@@ -77,7 +77,7 @@ dashboardRoutes.get('/', async (c) => {
           productName: deals.productName,
           channel: deals.channel,
           giftMonths: deals.giftMonths,
-          amount: deals.amount,
+          amountCents: deals.amountCents,
           createdAt: deals.createdAt,
         })
         .from(deals)
@@ -101,7 +101,7 @@ dashboardRoutes.get('/', async (c) => {
   return c.json({
     month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     newLeads: Number(newLead?.count ?? 0),
-    wonNetProfit: Number(wonProfit?.total ?? 0),
+    wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
     stageDistribution: normalizedStageDistribution,
     funnelDistribution: normalizedStageDistribution.map((item) => ({
       name: stageLabels[item.stage] ?? item.stage,

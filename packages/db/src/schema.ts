@@ -19,6 +19,12 @@ export const dealStages = [
 
 export const activityTypes = ['Call', 'Meeting', 'Email'] as const
 
+export const contractStatuses = ['Draft', 'Active', 'Expired', 'Terminated', 'Void'] as const
+export const invoiceStatuses = ['Draft', 'Issued', 'Voided'] as const
+export const paymentStatuses = ['Pending', 'Received', 'Reversed'] as const
+export const assetTypes = ['Contract', 'Invoice', 'PaymentProof'] as const
+export const assetUploadStatuses = ['Pending', 'Uploaded', 'Failed', 'Deleted'] as const
+
 export const users = sqliteTable(
   'users',
   {
@@ -29,7 +35,7 @@ export const users = sqliteTable(
     wechatUserId: text('wechat_userid'),
     avatarUrl: text('avatar_url'),
     role: text('role').notNull(),
-    pinCode: text('pin_code').notNull().default('123456'),
+    pinHash: text('pin_hash').notNull(),
     createdAt: integer('created_at', { mode: 'timestamp' }),
   },
   (table) => [
@@ -77,9 +83,9 @@ export const deals = sqliteTable(
     customerId: text('customer_id')
       .notNull()
       .references(() => customers.id),
-    amount: integer('amount').notNull(),
+    amountCents: integer('amount_cents').notNull(),
     channel: text('channel'),
-    originalPrice: integer('original_price'),
+    originalPriceCents: integer('original_price_cents'),
     dealType: text('deal_type').notNull().default('New'),
     productName: text('product_name').notNull().default('未填写产品'),
     stage: text('stage', { enum: dealStages }).notNull(),
@@ -89,16 +95,24 @@ export const deals = sqliteTable(
     giftMonths: integer('gift_months').notNull().default(0),
     expireDate: integer('expire_date', { mode: 'timestamp' }),
     renewalReminderDays: integer('renewal_reminder_days').notNull().default(30),
-    softwareCost: integer('software_cost'),
-    taxCost: integer('tax_cost'),
-    rebateAmount: integer('rebate_amount'),
-    netProfit: integer('net_profit'),
+    softwareCostCents: integer('software_cost_cents'),
+    taxCostCents: integer('tax_cost_cents'),
+    rebateAmountCents: integer('rebate_amount_cents'),
+    netProfitCents: integer('net_profit_cents'),
+    idempotencyKey: text('idempotency_key'),
     isDeleted: integer('is_deleted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
   (table) => [
     index('deals_customer_id_idx').on(table.customerId),
     index('deals_stage_idx').on(table.stage),
+    uniqueIndex('deals_idempotency_key_unique').on(table.idempotencyKey),
+    index('deals_stage_deleted_created_id_idx').on(
+      table.stage,
+      table.isDeleted,
+      table.createdAt,
+      table.id,
+    ),
   ],
 )
 
@@ -110,7 +124,7 @@ export const dealSplits = sqliteTable('deal_splits', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id),
-  splitAmount: integer('split_amount').notNull(),
+  splitAmountCents: integer('split_amount_cents').notNull(),
 })
 
 export const activities = sqliteTable('activities', {
@@ -155,5 +169,119 @@ export const attachments = sqliteTable(
     uniqueIndex('attachments_file_key_unique').on(table.fileKey),
     index('attachments_customer_id_idx').on(table.customerId),
     index('attachments_activity_id_idx').on(table.activityId),
+  ],
+)
+
+export const contracts = sqliteTable(
+  'contracts',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id').notNull().references(() => customers.id),
+    dealId: text('deal_id').notNull().references(() => deals.id),
+    contractNumber: text('contract_number').notNull(),
+    title: text('title').notNull(),
+    status: text('status', { enum: contractStatuses }).notNull().default('Draft'),
+    totalAmountCents: integer('total_amount_cents').notNull(),
+    signedAt: integer('signed_at', { mode: 'timestamp' }),
+    effectiveStartDate: integer('effective_start_date', { mode: 'timestamp' }),
+    effectiveEndDate: integer('effective_end_date', { mode: 'timestamp' }),
+    createdBy: text('created_by').notNull().references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('contracts_contract_number_unique').on(table.contractNumber),
+    index('contracts_customer_id_idx').on(table.customerId),
+    index('contracts_deal_id_idx').on(table.dealId),
+    index('contracts_status_idx').on(table.status),
+  ],
+)
+
+export const invoices = sqliteTable(
+  'invoices',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id').notNull().references(() => customers.id),
+    dealId: text('deal_id').notNull().references(() => deals.id),
+    contractId: text('contract_id').notNull().references(() => contracts.id),
+    invoiceNumber: text('invoice_number'),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    status: text('status', { enum: invoiceStatuses }).notNull().default('Draft'),
+    amountCents: integer('amount_cents').notNull(),
+    taxAmountCents: integer('tax_amount_cents').notNull().default(0),
+    issuedAt: integer('issued_at', { mode: 'timestamp' }),
+    createdBy: text('created_by').notNull().references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('invoices_invoice_number_unique').on(table.invoiceNumber),
+    index('invoices_customer_id_idx').on(table.customerId),
+    index('invoices_deal_id_idx').on(table.dealId),
+    index('invoices_contract_id_idx').on(table.contractId),
+    index('invoices_status_idx').on(table.status),
+  ],
+)
+
+export const payments = sqliteTable(
+  'payments',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id').notNull().references(() => customers.id),
+    dealId: text('deal_id').notNull().references(() => deals.id),
+    contractId: text('contract_id').notNull().references(() => contracts.id),
+    invoiceId: text('invoice_id').references(() => invoices.id),
+    paymentNumber: text('payment_number').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    status: text('status', { enum: paymentStatuses }).notNull().default('Pending'),
+    paidAt: integer('paid_at', { mode: 'timestamp' }),
+    note: text('note'),
+    claimedBy: text('claimed_by').notNull().references(() => users.id),
+    createdBy: text('created_by').notNull().references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('payments_payment_number_unique').on(table.paymentNumber),
+    index('payments_customer_id_idx').on(table.customerId),
+    index('payments_deal_id_idx').on(table.dealId),
+    index('payments_contract_id_idx').on(table.contractId),
+    index('payments_invoice_id_idx').on(table.invoiceId),
+    index('payments_status_paid_at_idx').on(table.status, table.paidAt),
+  ],
+)
+
+export const attachmentAssets = sqliteTable(
+  'attachment_assets',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id').notNull().references(() => customers.id),
+    dealId: text('deal_id').notNull().references(() => deals.id),
+    contractId: text('contract_id').references(() => contracts.id),
+    invoiceId: text('invoice_id').references(() => invoices.id),
+    paymentId: text('payment_id').references(() => payments.id),
+    assetType: text('asset_type', { enum: assetTypes }).notNull(),
+    uploadStatus: text('upload_status', { enum: assetUploadStatuses }).notNull().default('Pending'),
+    bucket: text('bucket').notNull(),
+    objectKey: text('object_key').notNull(),
+    originalFilename: text('original_filename').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes'),
+    contentHash: text('content_hash'),
+    version: integer('version').notNull().default(1),
+    uploadedBy: text('uploaded_by').notNull().references(() => users.id),
+    uploadedAt: integer('uploaded_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('attachment_assets_object_key_unique').on(table.objectKey),
+    index('attachment_assets_customer_id_idx').on(table.customerId),
+    index('attachment_assets_deal_id_idx').on(table.dealId),
+    index('attachment_assets_contract_id_idx').on(table.contractId),
+    index('attachment_assets_invoice_id_idx').on(table.invoiceId),
+    index('attachment_assets_payment_id_idx').on(table.paymentId),
+    index('attachment_assets_status_idx').on(table.uploadStatus),
   ],
 )

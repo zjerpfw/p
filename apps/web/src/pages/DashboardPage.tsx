@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useDashboard } from '@/hooks/useDashboard'
 import { dealStages } from '@/hooks/useDeals'
 import { dealStageLabels } from '@/lib/presentation'
+import { formatCents } from '@/lib/money'
 import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 
 const funnelColors = ['#64748b', '#0ea5e9', '#f59e0b', '#10b981', '#f43f5e']
@@ -19,12 +20,6 @@ function FunnelTooltip({ active, payload }: { active?: boolean; payload?: Array<
   const item = payload[0].payload
   return <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg"><p className="text-xs font-semibold text-slate-800">{item.name}</p><p className="mt-1 text-xs text-slate-500">商机数量：<span className="font-semibold text-indigo-700">{item.value} 个</span></p></div>
 }
-
-const currency = new Intl.NumberFormat('zh-CN', {
-  style: 'currency',
-  currency: 'CNY',
-  maximumFractionDigits: 0,
-})
 
 export default function DashboardPage() {
   const [renewTarget, setRenewTarget] = useState<RenewCustomerTarget | null>(null)
@@ -56,7 +51,7 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">当月赢单净利润</CardTitle>
             <CircleDollarSign aria-hidden="true" className="size-4 text-emerald-600" />
           </CardHeader>
-          <CardContent className="px-5 pb-5"><strong className="text-3xl text-emerald-700">{currency.format((data?.wonNetProfit ?? 0) / 100)}</strong></CardContent>
+          <CardContent className="px-5 pb-5"><strong className="text-3xl text-emerald-700">{formatCents(data?.wonNetProfitCents)}</strong></CardContent>
         </Card>
         <Card className="gap-0 py-0 sm:col-span-2 xl:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between px-5 py-4">
@@ -113,7 +108,7 @@ export default function DashboardPage() {
                     <TableCell>{deal.productName}{deal.giftMonths > 0 && <span className="ml-1 text-xs font-medium text-amber-700">（含赠送 {deal.giftMonths} 个月）</span>}</TableCell>
                     <TableCell>{format(new Date(deal.expireDate), 'yyyy-MM-dd')}</TableCell>
                     <TableCell><Badge tone={remainingDays < 15 ? 'danger' : 'warning'}>{remainingDays} 天</Badge></TableCell>
-                    <TableCell className="text-right">{currency.format(deal.amount)}</TableCell>
+                    <TableCell className="text-right">{formatCents(deal.amountCents)}</TableCell>
                     <TableCell className="text-right"><Button className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => setRenewTarget({ customerId: deal.customerId, customerName: deal.customerName, currentExpireDate: deal.expireDate, productName: deal.productName, channel: deal.channel })} size="sm" type="button" variant="ghost">立即续费</Button></TableCell>
                   </TableRow>
                 )
