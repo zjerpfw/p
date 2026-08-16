@@ -1,7 +1,7 @@
 // apps/web/src/lib/api.ts
 const TOKEN_STORAGE_KEY = 'crm_jwt'
 const API_BASE_URL = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+  ? (import.meta.env.VITE_API_BASE_URL ?? 'https://serverless-crm-api.q84536346.workers.dev').replace(/\/$/, '')
   : ''
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 
