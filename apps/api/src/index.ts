@@ -24,9 +24,10 @@ app.get('/', (c) => c.text('CRM API is running normally! 🚀'))
 app.use(
   '/api/*',
   cors({
-    origin: '*',
+    origin: (origin) => origin,
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
     maxAge: 86400,
   }),
 )

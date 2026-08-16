@@ -203,8 +203,8 @@ export default function CustomerDetailPage() {
         返回客户池
       </Link>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(250px,0.8fr)_minmax(420px,1.35fr)_minmax(280px,0.9fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-4">
+      <div className="flex flex-col items-stretch gap-4 md:flex-row md:items-start md:gap-5">
+        <aside className="order-1 min-w-0 space-y-4 md:sticky md:top-4 md:w-[28%] md:shrink-0">
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><div className="flex items-center justify-between gap-3"><div><CardTitle>{customer.name}</CardTitle><div className="mt-2"><Badge tone={getCustomerStatusTone(customer.status)}>{getCustomerStatusLabel(customer.status)}</Badge></div></div><Button aria-label="编辑客户" onClick={() => setEditCustomerOpen(true)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></div></CardHeader>
             <CardContent className="space-y-5 p-5 text-sm"><div><p className="mb-1.5 text-xs font-semibold text-slate-400">联系方式</p><p className="flex items-center gap-2 font-medium text-slate-700"><Phone aria-hidden="true" className="size-4 text-indigo-500" />{customer.contactPhone ?? '未填写电话'}</p></div><div><p className="mb-1.5 text-xs font-semibold text-slate-400">公司地址</p><p className="flex items-start gap-2 leading-5 text-slate-700"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-indigo-500" />{customer.address ?? '未填写地址'}</p></div><div className="border-t border-slate-100 pt-4"><p className="text-xs text-muted-foreground">归属销售</p><p className="mt-1 font-semibold text-slate-800">{customer.ownerId}</p><p className="mt-4 text-xs text-muted-foreground">创建时间</p><p className="mt-1 font-medium text-slate-700">{format(new Date(customer.createdAt), 'yyyy-MM-dd')}</p></div></CardContent>
@@ -212,7 +212,7 @@ export default function CustomerDetailPage() {
           <div className="grid gap-2"><Button onClick={() => setActivitySheetOpen(true)} type="button"><CalendarCheck aria-hidden="true" />完整跟进记录</Button><Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="ghost"><Trash2 aria-hidden="true" />作废客户</Button></div>
         </aside>
 
-        <main className="min-w-0 space-y-4">
+        <main className="order-2 min-w-0 space-y-4 md:flex-1">
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><CardTitle>快捷写跟进</CardTitle></CardHeader>
             <CardContent className="space-y-3 p-4"><Textarea onChange={(event) => setNotes(event.target.value)} placeholder="记录本次沟通重点、客户需求和下一步计划..." value={notes} /><div className="flex flex-wrap items-center justify-between gap-3"><div className="w-full sm:w-44"><Select onValueChange={(value) => setActivityType(value as CreateActivityPayload['type'])} value={activityType}><SelectTrigger aria-label="跟进方式"><SelectValue placeholder="选择跟进方式" /></SelectTrigger><SelectContent>{Object.entries(activityTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><Button disabled={createActivity.isPending || !notes.trim() || !activityType} onClick={submitQuickNote} size="sm" type="button"><Send aria-hidden="true" />{createActivity.isPending ? '正在保存' : '提交跟进'}</Button></div>{createActivity.error && <p className="text-sm text-destructive">{createActivity.error.message}</p>}</CardContent>
@@ -240,7 +240,7 @@ export default function CustomerDetailPage() {
           </Card>
         </main>
 
-        <aside className="min-w-0 space-y-4">
+        <aside className="order-3 min-w-0 space-y-4 md:w-[30%] md:shrink-0">
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><CardTitle>商机与 SaaS 服务</CardTitle></CardHeader>
             <CardContent className="space-y-3 p-4">{data?.deals.map((deal) => { const serviceStatus = deal.stage === 'Won' ? getServiceStatus(deal.expireDate) : null; return <article className="rounded-md border border-slate-200 bg-slate-50 p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</p>{serviceStatus && <p className={`mt-2 text-xs font-medium ${serviceStatus.className}`}>{serviceStatus.label} · {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善服务日期'}</p>}</article> })}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</CardContent>

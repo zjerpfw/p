@@ -186,13 +186,13 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
           <section className="space-y-3 border-t border-border pt-5">
             <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">订单分成</h3><Button disabled={isLoadingUsers} onClick={addSplit} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />添加人员</Button></div>
             {splits.map((split, index) => (
-              <div className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2" key={split.key}>
-                <select aria-label={`分成人员 ${index + 1}`} className="h-9 min-w-0 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]" key={split.key}>
+                <select aria-label={`分成人员 ${index + 1}`} className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-sm md:h-9" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}>
                   <option value="">选择内部人员</option>
                   {usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}
                 </select>
-                <Input aria-label={`分成金额 ${index + 1}`} min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} />
-                <Button aria-label={`移除分成 ${index + 1}`} onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button>
+                <Input aria-label={`分成金额 ${index + 1}`} className="col-span-1 row-start-2 sm:col-auto sm:row-auto" min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} />
+                <Button aria-label={`移除分成 ${index + 1}`} className="col-start-2 row-span-2 row-start-1 sm:col-auto sm:row-auto" onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button>
               </div>
             ))}
             {splits.length === 0 && <p className="text-sm text-muted-foreground">尚未配置内部人员分成。</p>}

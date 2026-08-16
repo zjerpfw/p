@@ -2,6 +2,7 @@
 import { LockKeyhole, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -37,7 +38,9 @@ export default function LoginPage() {
       setAccessToken(response.token)
       navigate('/deals', { replace: true })
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : '登录失败，请重试')
+      const message = loginError instanceof Error ? loginError.message : '登录失败，请重试'
+      setError(message)
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -58,7 +61,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <Label htmlFor="username">用户名</Label>
               <div className="relative">
-                <UserRound aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground md:top-2.5" />
                 <Input autoComplete="username" autoFocus className="pl-9" id="username" onChange={(event) => setUsername(event.target.value)} required value={username} />
               </div>
             </div>
@@ -67,7 +70,7 @@ export default function LoginPage() {
               <Input autoComplete="current-password" id="pin-code" inputMode="numeric" onChange={(event) => setPinCode(event.target.value)} required type="password" value={pinCode} />
             </div>
             {error && <p aria-live="polite" className="text-sm text-destructive">{error}</p>}
-            <Button className="w-full" disabled={isSubmitting || !username || !pinCode} type="submit">
+            <Button className="h-11 w-full touch-manipulation" disabled={isSubmitting || !username.trim() || !pinCode} type="submit">
               {isSubmitting ? '正在登录' : '登录'}
             </Button>
           </form>

@@ -10,11 +10,13 @@ import { DirectWonCustomerModal } from '@/components/customers/DirectWonCustomer
 import { Input } from '@/components/ui/input'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Link, useSearchParams } from 'react-router-dom'
 
 export default function CustomersPage() {
+  const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -60,7 +62,7 @@ export default function CustomersPage() {
           <Input className="pl-9 pr-9" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户名称" value={search} />
           {search && <Button aria-label="清空客户搜索" className="absolute right-1 top-0.5" onClick={() => updateSearch('')} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" /></Button>}
         </div>
-        <select aria-label="客户状态筛选" className="h-9 rounded-md border border-input bg-background px-3 text-sm sm:w-36" onChange={(event) => updateStatus(event.target.value)} value={status}>
+        <select aria-label="客户状态筛选" className="h-11 rounded-md border border-input bg-background px-3 text-sm md:h-9 md:w-36" onChange={(event) => updateStatus(event.target.value)} value={status}>
           <option value="">全部状态</option>
           {statuses.map((item) => <option key={item} value={item}>{getCustomerStatusLabel(item)}</option>)}
         </select>
@@ -68,7 +70,7 @@ export default function CustomersPage() {
       </Card>
       {isLoading && <p className="mt-8 text-sm text-muted-foreground">正在加载客户数据...</p>}
       {error && <p className="mt-8 text-sm text-destructive">{error.message}</p>}
-      {data && (
+      {data && !isMobile && (
         <Card className="gap-0 overflow-hidden py-0">
           <CardContent className="p-0">
             <Table>
@@ -90,6 +92,13 @@ export default function CustomersPage() {
           <PaginationControls onPageChange={setPage} page={data.page} total={data.total} totalPages={data.totalPages} />
         </Card>
       )}
+      {data && isMobile && <div className="space-y-3">
+        <ul className="space-y-3">
+          {data.data.map((customer) => <li key={customer.id}><Link className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-colors active:bg-slate-50" to={`/customers/${customer.id}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-semibold text-slate-900">{customer.name}</h2><p className="mt-2 flex items-center gap-1.5 text-sm text-slate-600"><Phone aria-hidden="true" className="size-4 shrink-0 text-slate-400" />{customer.contactPhone ?? '未填写电话'}</p></div><Badge tone={getCustomerStatusTone(customer.status)}>{getCustomerStatusLabel(customer.status)}</Badge></div><p className="mt-3 flex items-start gap-1.5 text-sm leading-5 text-slate-500"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-400" /><span className="line-clamp-2">{customer.address ?? '未填写地址'}</span></p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400"><span>归属：{customer.ownerId}</span><span className="inline-flex items-center font-medium text-indigo-600">查看详情<ChevronRight aria-hidden="true" className="size-4" /></span></div></Link></li>)}
+          {data.data.length === 0 && <li className="rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-muted-foreground">未找到匹配的客户</li>}
+        </ul>
+        <div className="rounded-lg border border-slate-200 bg-white"><PaginationControls onPageChange={setPage} page={data.page} total={data.total} totalPages={data.totalPages} /></div>
+      </div>}
       <CreateCustomerModal onOpenChange={setCreateDialogOpen} open={createDialogOpen} />
       <DirectWonCustomerModal onOpenChange={setDirectWonDialogOpen} open={directWonDialogOpen} />
     </section>

@@ -127,12 +127,12 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
 
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
-      <SheetContent className="w-full gap-0 p-0 sm:max-w-[600px]">
-        <SheetHeader className="border-b border-slate-200 px-6 py-5">
+      <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-[600px]">
+        <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
           <SheetTitle>直接录入成交客户</SheetTitle>
           <SheetDescription>一次完成客户建档、SaaS 赢单、服务期限、利润核算与业绩分成。</SheetDescription>
         </SheetHeader>
-        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-6">
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <h3 className="text-sm font-semibold">客户资料</h3>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -161,12 +161,12 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
 
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">业绩分成</h3><Button disabled={isLoadingUsers} onClick={addSplit} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />添加人员</Button></div>
-            {splits.map((split, index) => <div className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2" key={split.key}><select aria-label={`分成人员 ${index + 1}`} className="h-9 min-w-0 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}><option value="">选择内部人员</option>{usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}</select><Input aria-label={`分成金额 ${index + 1}`} min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} /><Button aria-label={`移除分成 ${index + 1}`} onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button></div>)}
+            {splits.map((split, index) => <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]" key={split.key}><select aria-label={`分成人员 ${index + 1}`} className="h-11 min-w-0 rounded-md border border-input bg-background px-3 text-sm md:h-9" onChange={(event) => updateSplit(split.key, { userId: event.target.value })} value={split.userId}><option value="">选择内部人员</option>{usersData?.users.map((user) => <option disabled={splits.some((item) => item.key !== split.key && item.userId === user.id)} key={user.id} value={user.id}>{user.name} · {getUserRoleLabel(user.role)}</option>)}</select><Input aria-label={`分成金额 ${index + 1}`} className="col-span-1 row-start-2 sm:col-auto sm:row-auto" min="0" onChange={(event) => updateSplit(split.key, { amount: toInteger(event.target.value) })} type="number" value={split.amount} /><Button aria-label={`移除分成 ${index + 1}`} className="col-start-2 row-span-2 row-start-1 sm:col-auto sm:row-auto" onClick={() => setSplits((current) => current.filter((item) => item.key !== split.key))} size="icon" type="button" variant="ghost"><Minus aria-hidden="true" /></Button></div>)}
             {splits.length === 0 && <p className="text-sm text-muted-foreground">尚未配置内部人员分成。</p>}
             <p className={isSplitValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>已分成 {totalSplitAmount.toLocaleString('zh-CN')} 分，实际利润 {netProfit.toLocaleString('zh-CN')} 分。</p>
           </section>
         </div>
-        <SheetFooter className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!canSubmit || directWon.isPending} onClick={() => directWon.mutate()} type="button">{directWon.isPending ? '正在录入' : '确认录入成交客户'}</Button></SheetFooter>
+        <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!canSubmit || directWon.isPending} onClick={() => directWon.mutate()} type="button">{directWon.isPending ? '正在录入' : '确认录入成交客户'}</Button></SheetFooter>
       </SheetContent>
     </Sheet>
   )

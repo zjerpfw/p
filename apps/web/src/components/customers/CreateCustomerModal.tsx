@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { apiFetch } from '@/lib/api'
 
 interface CreateCustomerModalProps {
@@ -21,6 +22,7 @@ interface CreateCustomerPayload {
 }
 
 export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalProps) {
+  const isMobile = useIsMobile()
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
@@ -61,14 +63,12 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
     })
   }
 
-  return (
-    <Sheet onOpenChange={onOpenChange} open={open}>
-      <SheetContent className="w-full p-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-slate-200 px-6 py-5">
+  const content = <>
+        <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
           <SheetTitle>新建客户</SheetTitle>
           <SheetDescription>客户将自动归属到当前登录的销售人员。</SheetDescription>
         </SheetHeader>
-        <form className="flex-1 overflow-y-auto p-6" onSubmit={(event) => { event.preventDefault(); submit() }}>
+        <form className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6" onSubmit={(event) => { event.preventDefault(); submit() }}>
           <div className="space-y-4 rounded-lg bg-slate-50 p-4">
             <div className="space-y-1.5"><Label htmlFor="customer-name"><span className="text-rose-500">*</span> 客户名称</Label>
             <Input autoFocus id="customer-name" onChange={(event) => setName(event.target.value)} placeholder="请输入客户名称" value={name} />
@@ -79,7 +79,7 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
             </div>
             <div className="space-y-1.5">
             <Label htmlFor="customer-status">当前状态</Label>
-            <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="customer-status" onChange={(event) => setStatus(event.target.value)} value={status}>
+            <select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm md:h-9" id="customer-status" onChange={(event) => setStatus(event.target.value)} value={status}>
               <option value="Active">活跃</option>
               <option value="Inactive">沉睡</option>
             </select>
@@ -90,15 +90,19 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
             </div>
           </div>
         </form>
-        <SheetFooter className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:justify-end">
+        <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button>
           <Button disabled={!name.trim() || createCustomer.isPending} onClick={submit} type="button">
             {createCustomer.isPending ? '正在创建' : '保存客户'}
           </Button>
         </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  )
+  </>
+
+  if (isMobile) {
+    return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
+  }
+
+  return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
 }
 
 export { CreateCustomerSheet as CreateCustomerModal }

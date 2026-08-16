@@ -8,7 +8,7 @@ export const Select = SelectPrimitive.Root
 export const SelectValue = SelectPrimitive.Value
 
 export function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
-  return <SelectPrimitive.Trigger className={cn('flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-[3px] focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50', className)} {...props}>{children}<SelectPrimitive.Icon><ChevronDown className="size-4 text-muted-foreground" /></SelectPrimitive.Icon></SelectPrimitive.Trigger>
+  return <SelectPrimitive.Trigger className={cn('flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-[3px] focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 md:h-9', className)} {...props}>{children}<SelectPrimitive.Icon><ChevronDown className="size-4 text-muted-foreground" /></SelectPrimitive.Icon></SelectPrimitive.Trigger>
 }
 
 export function SelectContent({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
@@ -16,5 +16,5 @@ export function SelectContent({ className, children, ...props }: React.Component
 }
 
 export function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
-  return <SelectPrimitive.Item className={cn('relative flex h-8 cursor-pointer select-none items-center rounded-sm py-1 pr-8 pl-2 text-sm outline-none data-[highlighted]:bg-indigo-50 data-[highlighted]:text-indigo-800', className)} {...props}><SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText><SelectPrimitive.ItemIndicator className="absolute right-2"><Check className="size-3.5" /></SelectPrimitive.ItemIndicator></SelectPrimitive.Item>
+  return <SelectPrimitive.Item className={cn('relative flex min-h-11 cursor-pointer select-none items-center rounded-sm py-1 pr-8 pl-2 text-sm outline-none data-[highlighted]:bg-indigo-50 data-[highlighted]:text-indigo-800 md:min-h-8', className)} {...props}><SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText><SelectPrimitive.ItemIndicator className="absolute right-2"><Check className="size-3.5" /></SelectPrimitive.ItemIndicator></SelectPrimitive.Item>
 }

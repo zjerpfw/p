@@ -1,8 +1,9 @@
 // apps/web/src/lib/api.ts
 const TOKEN_STORAGE_KEY = 'crm_jwt'
 const API_BASE_URL = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL ?? '')
-  : 'http://localhost:8787'
+  ? (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+  : ''
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 
 export class ApiError extends Error {
   constructor(
@@ -48,15 +49,31 @@ export function getCurrentUserRole() {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   const token = getAccessToken()
+  const timeoutController = init.signal ? null : new AbortController()
+  const timeoutId = timeoutController
+    ? window.setTimeout(() => timeoutController.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+    : null
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      credentials: 'include',
+      headers,
+      signal: init.signal ?? timeoutController?.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError('网络请求超时，请检查 API 地址或网络连接', 0)
+    }
+    throw new ApiError('网络请求失败，请检查 API 地址或网络连接', 0)
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId)
+  }
 
   if (response.status === 401) {
     clearAccessToken()
