@@ -1,5 +1,5 @@
 // apps/web/src/pages/DealsPage.tsx
-import { format, isBefore, startOfDay } from 'date-fns'
+import { format, isBefore, parseISO, startOfDay } from 'date-fns'
 import { CalendarDays, CircleDollarSign, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -30,12 +30,13 @@ const stageStyle: Record<DealStage, { line: string; dot: string }> = {
 }
 
 function formatDate(value: string) {
-  return format(new Date(value), 'yyyy-MM-dd')
+  return format(parseISO(value), 'yyyy-MM-dd')
 }
 
 function isOverdue(value: string | null, stage: DealStage) {
-  if (!value || stage === 'Lost') return false
-  return isBefore(new Date(value), startOfDay(new Date()))
+  // Expected-close-date alerts only apply to open opportunities. Won/Lost are final outcomes.
+  if (!value || stage === 'Won' || stage === 'Lost') return false
+  return isBefore(parseISO(value), startOfDay(new Date()))
 }
 
 interface PipelineColumnProps {
