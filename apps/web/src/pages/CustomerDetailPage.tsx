@@ -1,7 +1,7 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
-import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
+import { differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns'
 import { CalendarCheck, CalendarSync, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, Paperclip, Pencil, Phone, Send, Trash2, Upload } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -43,12 +43,13 @@ interface CreateActivityPayload {
 }
 
 function getServiceStatus(expireDate: string | null) {
-  if (!expireDate) return { label: '服务日期待完善', className: 'bg-muted text-muted-foreground', icon: Clock3 }
+  if (!expireDate) return { label: '服务日期待完善', detail: '尚未记录当前服务期限', className: 'bg-muted text-muted-foreground', icon: Clock3 }
 
-  const remainingDays = differenceInCalendarDays(new Date(expireDate), startOfDay(new Date()))
-  if (remainingDays < 0) return { label: '已过期', className: 'bg-rose-100 text-rose-800', icon: CircleAlert }
-  if (remainingDays < 30) return { label: '即将到期', className: 'bg-amber-100 text-amber-800', icon: CircleAlert }
-  return { label: '服务中', className: 'bg-emerald-100 text-emerald-800', icon: CircleCheck }
+  const remainingDays = differenceInCalendarDays(parseISO(expireDate), startOfDay(new Date()))
+  if (remainingDays < 0) return { label: '服务已到期', detail: `已到期 ${Math.abs(remainingDays)} 天`, className: 'bg-rose-100 text-rose-800', icon: CircleAlert }
+  if (remainingDays === 0) return { label: '今日到期', detail: '请尽快联系客户续费', className: 'bg-amber-100 text-amber-800', icon: CircleAlert }
+  if (remainingDays < 30) return { label: '即将到期', detail: `剩余 ${remainingDays} 天`, className: 'bg-amber-100 text-amber-800', icon: CircleAlert }
+  return { label: '服务中', detail: `剩余 ${remainingDays} 天`, className: 'bg-emerald-100 text-emerald-800', icon: CircleCheck }
 }
 
 export default function CustomerDetailPage() {
@@ -69,6 +70,10 @@ export default function CustomerDetailPage() {
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false)
 
   const customer = data?.customer
+  const assetCustomerId = customer?.id ?? ''
+  // Hooks must run in the same order during loading and loaded renders.
+  const customerContracts = useContracts({ customer_id: assetCustomerId, limit: 100, enabled: Boolean(assetCustomerId) })
+  const customerInvoices = useInvoices({ customer_id: assetCustomerId, limit: 100, enabled: Boolean(assetCustomerId) })
 
   const createActivity = useMutation({
     mutationFn: (payload: CreateActivityPayload) =>
@@ -205,8 +210,6 @@ export default function CustomerDetailPage() {
   const CurrentServiceIcon = currentServiceStatus.icon
   const latestWonDeal = data?.deals.find((deal) => deal.stage === 'Won')
   const canManageFinance = getCurrentUserRole() === 'admin' || getCurrentUserId() === customer.ownerId
-  const customerContracts = useContracts({ customer_id: customer.id, limit: 100 })
-  const customerInvoices = useInvoices({ customer_id: customer.id, limit: 100 })
 
   return (
     <section className="space-y-6">
@@ -258,7 +261,8 @@ export default function CustomerDetailPage() {
             <CardContent className="space-y-4 p-4">
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-2 text-sm font-semibold text-slate-800"><CurrentServiceIcon aria-hidden="true" className="size-4" />当前 SaaS 到期日</p><Badge className={currentServiceStatus.className}>{currentServiceStatus.label}</Badge></div>
-                <p className="mt-3 text-lg font-bold text-slate-900">{customer.saasExpireDate ? format(new Date(customer.saasExpireDate), 'yyyy-MM-dd') : '尚未开通'}</p>
+                <p className="mt-3 text-lg font-bold text-slate-900">{customer.saasExpireDate ? format(parseISO(customer.saasExpireDate), 'yyyy-MM-dd') : '尚未开通'}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{currentServiceStatus.detail}</p>
                 {customer.saasExpireDate && latestWonDeal && <Button className="mt-3 w-full text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => setRenewTarget({ customerId: customer.id, customerName: customer.name, currentExpireDate: customer.saasExpireDate!, productName: latestWonDeal.productName, channel: latestWonDeal.channel })} size="sm" type="button" variant="outline"><CalendarSync aria-hidden="true" />续费</Button>}
               </div>
               <div><p className="mb-2 text-xs font-semibold text-slate-500">历史成交与商机记录</p><div className="space-y-3">{data?.deals.map((deal) => <article className="rounded-md border border-slate-200 bg-white p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}</p><p className="mt-2 text-xs text-muted-foreground">{deal.dealType === 'Renewal' ? '续费成交' : '新购商机'} · {format(new Date(deal.createdAt), 'yyyy-MM-dd')}</p></article>)}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</div></div>
