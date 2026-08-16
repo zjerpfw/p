@@ -14,6 +14,7 @@ export interface Deal {
   amount: number
   channel: string | null
   originalPrice: number | null
+  dealType: string
   productName: string
   stage: DealStage
   expectedCloseDate: string

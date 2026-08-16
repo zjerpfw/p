@@ -1,6 +1,6 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
-import { CalendarCheck, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, Paperclip, Pencil, Phone, Send, Trash2, Upload } from 'lucide-react'
+import { CalendarCheck, CalendarSync, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, Paperclip, Pencil, Phone, Send, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CreateActivitySheet } from '@/components/activities/CreateActivitySheet'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
+import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -62,6 +63,7 @@ export default function CustomerDetailPage() {
   const [notes, setNotes] = useState('')
   const [activityType, setActivityType] = useState<CreateActivityPayload['type']>('Meeting')
   const [selectedAttachmentActivityId, setSelectedAttachmentActivityId] = useState('')
+  const [renewTarget, setRenewTarget] = useState<RenewCustomerTarget | null>(null)
 
   const customer = data?.customer
 
@@ -196,6 +198,10 @@ export default function CustomerDetailPage() {
     )
   }
 
+  const currentServiceStatus = getServiceStatus(customer.saasExpireDate)
+  const CurrentServiceIcon = currentServiceStatus.icon
+  const latestWonDeal = data?.deals.find((deal) => deal.stage === 'Won')
+
   return (
     <section className="space-y-6">
       <Link className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground" to="/customers">
@@ -242,8 +248,15 @@ export default function CustomerDetailPage() {
 
         <aside className="order-3 min-w-0 space-y-4 md:w-[30%] md:shrink-0">
           <Card className="gap-0 py-0">
-            <CardHeader className="border-b border-border px-5 py-4"><CardTitle>商机与 SaaS 服务</CardTitle></CardHeader>
-            <CardContent className="space-y-3 p-4">{data?.deals.map((deal) => { const serviceStatus = deal.stage === 'Won' ? getServiceStatus(deal.expireDate) : null; return <article className="rounded-md border border-slate-200 bg-slate-50 p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</p>{serviceStatus && <p className={`mt-2 text-xs font-medium ${serviceStatus.className}`}>{serviceStatus.label} · {deal.expireDate ? format(new Date(deal.expireDate), 'yyyy-MM-dd') : '待完善服务日期'}</p>}</article> })}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</CardContent>
+            <CardHeader className="border-b border-border px-5 py-4"><CardTitle>当前 SaaS 服务</CardTitle></CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-2 text-sm font-semibold text-slate-800"><CurrentServiceIcon aria-hidden="true" className="size-4" />当前 SaaS 到期日</p><Badge className={currentServiceStatus.className}>{currentServiceStatus.label}</Badge></div>
+                <p className="mt-3 text-lg font-bold text-slate-900">{customer.saasExpireDate ? format(new Date(customer.saasExpireDate), 'yyyy-MM-dd') : '尚未开通'}</p>
+                {customer.saasExpireDate && latestWonDeal && <Button className="mt-3 w-full text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => setRenewTarget({ customerId: customer.id, customerName: customer.name, currentExpireDate: customer.saasExpireDate!, productName: latestWonDeal.productName, channel: latestWonDeal.channel })} size="sm" type="button" variant="outline"><CalendarSync aria-hidden="true" />续费</Button>}
+              </div>
+              <div><p className="mb-2 text-xs font-semibold text-slate-500">历史成交与商机记录</p><div className="space-y-3">{data?.deals.map((deal) => <article className="rounded-md border border-slate-200 bg-white p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</p><p className="mt-2 text-xs text-muted-foreground">{deal.dealType === 'Renewal' ? '续费成交' : '新购商机'} · {format(new Date(deal.createdAt), 'yyyy-MM-dd')}</p></article>)}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</div></div>
+            </CardContent>
           </Card>
           <Card className="gap-0 overflow-hidden py-0">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
@@ -255,6 +268,7 @@ export default function CustomerDetailPage() {
 
       <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
+      <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
     </section>
   )
 }

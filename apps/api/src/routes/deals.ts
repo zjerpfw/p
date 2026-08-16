@@ -43,11 +43,6 @@ interface UpdateDealPayload {
   amount?: unknown
   stage?: unknown
   expected_close_date?: unknown
-  start_date?: unknown
-  duration_years?: unknown
-  gift_months?: unknown
-  expire_date?: unknown
-  renewal_reminder_days?: unknown
   software_cost?: unknown
   tax_cost?: unknown
   rebate_amount?: unknown
@@ -85,7 +80,6 @@ const wonProductSchema = z.object({
   original_price: z.number().int().nonnegative('原价不能小于 0').optional(),
 })
 const wonGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0) })
-const updateGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional() })
 
 const financialFields = [
   'duration_years',
@@ -267,7 +261,7 @@ dealRoutes.post('/:id/won', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const [deal] = await db
-    .select({ id: deals.id, amount: deals.amount, originalPrice: deals.originalPrice })
+    .select({ id: deals.id, customerId: deals.customerId, amount: deals.amount, originalPrice: deals.originalPrice })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, dealId), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -313,6 +307,10 @@ dealRoutes.post('/:id/won', async (c) => {
       netProfit: body.net_profit as number,
     })
     .where(eq(deals.id, dealId))
+  const updateCustomerExpireDate = db
+    .update(customers)
+    .set({ saasExpireDate: expireDate, status: 'Active', updatedAt: new Date() })
+    .where(eq(customers.id, deal.customerId))
 
   const splitInserts = splits.map((split) =>
     db.insert(dealSplits).values({
@@ -324,7 +322,7 @@ dealRoutes.post('/:id/won', async (c) => {
   )
 
   // Cloudflare D1 commits a batch atomically, which provides the transaction boundary here.
-  await db.batch([updateDeal, ...splitInserts])
+  await db.batch([updateDeal, updateCustomerExpireDate, ...splitInserts])
 
   return c.json({ id: dealId, stage: 'Won', splitCount: splits.length })
 })
@@ -341,20 +339,15 @@ dealRoutes.put('/:id', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const amount = body.amount === undefined ? undefined : isInteger(body.amount) && body.amount >= 0 ? body.amount : null
   const productNameResult = updateProductSchema.safeParse(body)
-  const giftMonthsResult = updateGiftMonthsSchema.safeParse(body)
   const stage = body.stage === undefined ? undefined : typeof body.stage === 'string' && dealStages.includes(body.stage as (typeof dealStages)[number]) ? body.stage as (typeof dealStages)[number] : null
   const expectedCloseDate = body.expected_close_date === undefined ? undefined : parseDate(body.expected_close_date)
-  const startDate = body.start_date === undefined ? undefined : parseDate(body.start_date)
-  const expireDate = body.expire_date === undefined ? undefined : parseDate(body.expire_date)
   const integerFields = [
-    ['durationYears', body.duration_years],
-    ['renewalReminderDays', body.renewal_reminder_days],
     ['softwareCost', body.software_cost],
     ['taxCost', body.tax_cost],
     ['rebateAmount', body.rebate_amount],
     ['netProfit', body.net_profit],
   ] as const
-  if (!productNameResult.success || !giftMonthsResult.success || amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (body.start_date !== undefined && !startDate) || (body.expire_date !== undefined && !expireDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
+  if (!productNameResult.success || amount === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
     return c.json({ error: '商机资料格式无效' }, 400)
   }
 
@@ -363,11 +356,8 @@ dealRoutes.put('/:id', async (c) => {
     ...(productNameResult.data.product_name !== undefined ? { productName: productNameResult.data.product_name } : {}),
     ...(productNameResult.data.channel !== undefined ? { channel: productNameResult.data.channel || null } : {}),
     ...(productNameResult.data.original_price !== undefined ? { originalPrice: productNameResult.data.original_price } : {}),
-    ...(giftMonthsResult.data.gift_months !== undefined ? { giftMonths: giftMonthsResult.data.gift_months } : {}),
     ...(stage !== undefined ? { stage } : {}),
     ...(expectedCloseDate ? { expectedCloseDate } : {}),
-    ...(startDate ? { startDate } : {}),
-    ...(expireDate ? { expireDate } : {}),
     ...Object.fromEntries(integerFields.filter(([, value]) => value !== undefined).map(([key, value]) => [key, value])),
   }
   if (Object.keys(updates).length === 0) {
@@ -375,7 +365,7 @@ dealRoutes.put('/:id', async (c) => {
   }
   const db = createDb(c.env.DB)
   const [authorizedDeal] = await db
-    .select({ id: deals.id, stage: deals.stage, startDate: deals.startDate, durationYears: deals.durationYears, giftMonths: deals.giftMonths })
+    .select({ id: deals.id, stage: deals.stage })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, c.req.param('id')), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -383,19 +373,6 @@ dealRoutes.put('/:id', async (c) => {
   if (!authorizedDeal) return c.json({ error: '商机不存在或无权编辑' }, 404)
   if (stage === 'Won' && authorizedDeal.stage !== 'Won') {
     return c.json({ error: '请使用确认赢单流程完成服务期限、财务和分成信息' }, 400)
-  }
-
-  if (authorizedDeal.stage === 'Won' && (startDate || body.duration_years !== undefined || giftMonthsResult.data.gift_months !== undefined)) {
-    const effectiveStartDate = startDate ?? authorizedDeal.startDate
-    const effectiveDurationYears = body.duration_years ?? authorizedDeal.durationYears
-    const effectiveGiftMonths = giftMonthsResult.data.gift_months ?? authorizedDeal.giftMonths
-    if (!effectiveStartDate || !effectiveDurationYears || effectiveGiftMonths === null || effectiveGiftMonths === undefined) {
-      return c.json({ error: '赢单商机缺少完整的服务期限信息' }, 400)
-    }
-    const calculatedExpireDate = calculateExpireDate(effectiveStartDate, effectiveDurationYears, effectiveGiftMonths)
-    if (!expireDate || expireDate.getTime() !== calculatedExpireDate.getTime()) {
-      return c.json({ error: '到期时间与服务年限、赠送时长不一致' }, 400)
-    }
   }
 
   if (authorizedDeal.stage === 'Won' && body.net_profit !== undefined) {

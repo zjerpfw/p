@@ -7,3 +7,4 @@ dev.vars
 .env
 .env.*
 !.env.example
+apps/web/.vite-dev.log

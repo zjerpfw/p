@@ -116,13 +116,13 @@ export default function DealsPage() {
               </header>
               <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
                 {stageDeals.map((deal) => {
-                  const dateValue = deal.stage === 'Won' ? deal.expireDate : deal.expectedCloseDate
+                  const dateValue = deal.expectedCloseDate
                   const overdue = isOverdue(dateValue, deal.stage)
                   return <Card className="gap-0 py-0 transition-all hover:-translate-y-1 hover:shadow-md" key={deal.id}><CardContent className="space-y-2.5 p-3">
                     <div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-bold text-slate-900" title={deal.customerName}>{deal.customerName}</p><div className="flex shrink-0 gap-0.5"><Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => setDealToEdit(deal)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.customerName}的商机`} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
                     <div className="flex items-center gap-1.5 text-lg font-bold tracking-tight text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-4 shrink-0" />{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</div>
                     <div className="flex flex-wrap gap-1.5"><Badge tone="neutral">{deal.productName}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}</div>
-                    {dateValue && <p className={`flex items-center gap-1.5 text-xs ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />{deal.stage === 'Won' ? '到期' : '预计成交'}：{formatDate(dateValue)}{overdue && ' · 已逾期'}</p>}
+                    {dateValue && <p className={`flex items-center gap-1.5 text-xs ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />{deal.stage === 'Won' ? '成交日期' : '预计成交'}：{formatDate(dateValue)}{overdue && ' · 已逾期'}</p>}
                     {deal.stage === 'Won' && deal.giftMonths > 0 && <p className="text-[11px] font-medium text-amber-700">含赠送 {deal.giftMonths} 个月</p>}
                     {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="mt-0.5 w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => setDealToConfirm(deal)} size="sm" type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}
                   </CardContent></Card>
@@ -137,12 +137,12 @@ export default function DealsPage() {
       {data && isMobile && <div className="space-y-3">
         <ul className="space-y-3">
           {data.data.map((deal) => {
-            const dateValue = deal.stage === 'Won' ? deal.expireDate : deal.expectedCloseDate
+            const dateValue = deal.expectedCloseDate
             const overdue = isOverdue(dateValue, deal.stage)
             return <li key={deal.id}><Card className="gap-0 py-0"><CardContent className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-bold text-slate-900">{deal.customerName}</h2><div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge><Badge tone="neutral">{deal.productName}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}</div></div><div className="flex shrink-0"><Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.customerName}的商机`} className="text-rose-600" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
               <div className="flex items-center gap-2 text-xl font-bold text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-5 shrink-0" />{deal.originalPrice && deal.originalPrice > deal.amount && <span className="text-xs font-normal text-slate-400 line-through">{currency.format(deal.originalPrice)}</span>}{currency.format(deal.amount)}</div>
-              {dateValue && <p className={`flex items-center gap-1.5 text-sm ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-4 shrink-0" />{deal.stage === 'Won' ? '到期' : '预计成交'}：{formatDate(dateValue)}{overdue && ' · 已逾期'}</p>}
+              {dateValue && <p className={`flex items-center gap-1.5 text-sm ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-4 shrink-0" />{deal.stage === 'Won' ? '成交日期' : '预计成交'}：{formatDate(dateValue)}{overdue && ' · 已逾期'}</p>}
               {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="w-full border-indigo-200 text-indigo-700" onClick={() => setDealToConfirm(deal)} type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}
             </CardContent></Card></li>
           })}

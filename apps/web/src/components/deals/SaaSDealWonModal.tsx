@@ -159,12 +159,12 @@ export default function SaaSDealWonModal({ deal, onOpenChange }: SaaSDealWonModa
           <section className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="won-product">正式购买产品 / 规格</Label><Input id="won-product" onChange={(event) => setProductName(event.target.value)} placeholder="例如：旗舰版 CRM - 50 账号" value={productName} /></div><div className="space-y-1.5"><Label htmlFor="won-channel">渠道 / 来源</Label><Input id="won-channel" list="won-channel-options" onChange={(event) => setChannel(event.target.value)} placeholder="例如：直销、代理商、转介绍" value={channel} /><datalist id="won-channel-options"><option value="直销" /><option value="代理商" /><option value="转介绍" /><option value="线上推广" /></datalist></div></div>
             <h3 className="text-sm font-semibold">服务时间</h3>
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5"><Label htmlFor="start-date">使用日期</Label><Input id="start-date" onChange={(event) => setStartDate(event.target.value)} type="date" value={startDate} /></div>
               <div className="space-y-1.5"><Label htmlFor="duration-years">使用年限</Label><Input id="duration-years" min="1" onChange={(event) => setDurationYears(Math.max(1, toInteger(event.target.value)))} type="number" value={durationYears} /></div>
               <div className="space-y-1.5"><Label htmlFor="gift-months">赠送时长（月）</Label><Input id="gift-months" min="0" onChange={(event) => setGiftMonths(toInteger(event.target.value))} type="number" value={giftMonths} /></div>
-              <div className="space-y-1.5"><Label htmlFor="expire-date">到期时间</Label><Input id="expire-date" readOnly type="date" value={expireDate} /></div>
             </div>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3"><p className="text-xs font-medium text-emerald-700">客户当前 SaaS 到期日预览</p><p className="mt-1 text-base font-bold text-emerald-900">{expireDate || '-'}</p></div>
             <div className="max-w-48 space-y-1.5"><Label htmlFor="reminder-days">提前提醒天数</Label><Input id="reminder-days" min="0" onChange={(event) => setReminderDays(toInteger(event.target.value))} type="number" value={reminderDays} /></div>
           </section>
 

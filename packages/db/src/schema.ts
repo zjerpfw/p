@@ -59,6 +59,7 @@ export const customers = sqliteTable(
     ownerId: text('owner_id')
       .notNull()
       .references(() => users.id),
+    saasExpireDate: integer('saas_expire_date', { mode: 'timestamp' }),
     isDeleted: integer('is_deleted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -79,6 +80,7 @@ export const deals = sqliteTable(
     amount: integer('amount').notNull(),
     channel: text('channel'),
     originalPrice: integer('original_price'),
+    dealType: text('deal_type').notNull().default('New'),
     productName: text('product_name').notNull().default('未填写产品'),
     stage: text('stage', { enum: dealStages }).notNull(),
     expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),

@@ -1,7 +1,7 @@
 // apps/api/src/routes/dashboard.ts
 import { createDb } from '@crm/db/client'
 import { customers, deals } from '@crm/db/schema'
-import { and, asc, eq, gt, gte, isNotNull, lte, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lte, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
@@ -34,7 +34,7 @@ dashboardRoutes.get('/', async (c) => {
   const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], stageDistribution, renewalDeals] = await Promise.all([
+  const [[newLead], [wonProfit], stageDistribution, renewalCustomers] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -53,24 +53,45 @@ dashboardRoutes.get('/', async (c) => {
       .groupBy(deals.stage),
     db
       .select({
-        id: deals.id,
+        customerId: customers.id,
         customerName: customers.name,
-        productName: deals.productName,
-        giftMonths: deals.giftMonths,
-        expireDate: deals.expireDate,
-        amount: deals.amount,
+        expireDate: customers.saasExpireDate,
       })
-      .from(deals)
-      .innerJoin(customers, eq(deals.customerId, customers.id))
+      .from(customers)
       .where(and(
-        eq(deals.stage, 'Won'),
-        isNotNull(deals.expireDate),
-        gt(deals.expireDate, now),
-        lte(deals.expireDate, renewalDeadline),
-        ...activeFilters,
+        eq(customers.isDeleted, false),
+        isNotNull(customers.saasExpireDate),
+        gt(customers.saasExpireDate, now),
+        lte(customers.saasExpireDate, renewalDeadline),
+        ownerFilter,
       ))
-      .orderBy(asc(deals.expireDate)),
+      .orderBy(asc(customers.saasExpireDate)),
   ])
+
+  const renewalCustomerIds = renewalCustomers.map((customer) => customer.customerId)
+  const renewalDealRows = renewalCustomerIds.length > 0
+    ? await db
+        .select({
+          id: deals.id,
+          customerId: deals.customerId,
+          productName: deals.productName,
+          channel: deals.channel,
+          giftMonths: deals.giftMonths,
+          amount: deals.amount,
+          createdAt: deals.createdAt,
+        })
+        .from(deals)
+        .where(and(
+          inArray(deals.customerId, renewalCustomerIds),
+          eq(deals.stage, 'Won'),
+          eq(deals.isDeleted, false),
+        ))
+        .orderBy(desc(deals.createdAt))
+    : []
+  const latestDealByCustomer = new Map<string, (typeof renewalDealRows)[number]>()
+  for (const deal of renewalDealRows) {
+    if (!latestDealByCustomer.has(deal.customerId)) latestDealByCustomer.set(deal.customerId, deal)
+  }
 
   const normalizedStageDistribution = stageDistribution.map((item) => ({
     stage: item.stage,
@@ -87,9 +108,15 @@ dashboardRoutes.get('/', async (c) => {
       value: item.count,
       stage: item.stage,
     })),
-    renewalDeals: renewalDeals.map((deal) => ({
-      ...deal,
-      expireDate: deal.expireDate!.toISOString(),
-    })),
+    renewalDeals: renewalCustomers.flatMap((customer) => {
+      const latestDeal = latestDealByCustomer.get(customer.customerId)
+      if (!latestDeal || !customer.expireDate) return []
+      return [{
+        ...latestDeal,
+        customerId: customer.customerId,
+        customerName: customer.customerName,
+        expireDate: customer.expireDate.toISOString(),
+      }]
+    }),
   })
 })

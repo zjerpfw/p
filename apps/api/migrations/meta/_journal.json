@@ -92,6 +92,13 @@
       "when": 1786799400000,
       "tag": "0012_deal_channel_original_price",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1786850536466,
+      "tag": "0013_customer_renewal",
+      "breakpoints": true
     }
   ]
 }

@@ -1,13 +1,16 @@
 // apps/web/src/pages/DashboardPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
 import { BarChart3, CircleAlert, CircleDollarSign, Lightbulb, Target, TrendingUp } from 'lucide-react'
+import { useState } from 'react'
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useDashboard } from '@/hooks/useDashboard'
 import { dealStages } from '@/hooks/useDeals'
 import { dealStageLabels } from '@/lib/presentation'
+import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 
 const funnelColors = ['#64748b', '#0ea5e9', '#f59e0b', '#10b981', '#f43f5e']
 
@@ -24,6 +27,7 @@ const currency = new Intl.NumberFormat('zh-CN', {
 })
 
 export default function DashboardPage() {
+  const [renewTarget, setRenewTarget] = useState<RenewCustomerTarget | null>(null)
   const { data, error, isLoading } = useDashboard()
   const distribution = new Map(data?.stageDistribution.map((item) => [item.stage, item.count]))
   const maxCount = Math.max(1, ...dealStages.map((stage) => distribution.get(stage) ?? 0))
@@ -97,6 +101,7 @@ export default function DashboardPage() {
                 <TableHead>到期时间</TableHead>
                 <TableHead>剩余天数</TableHead>
                 <TableHead className="text-right">历史成交金额</TableHead>
+                <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -109,15 +114,17 @@ export default function DashboardPage() {
                     <TableCell>{format(new Date(deal.expireDate), 'yyyy-MM-dd')}</TableCell>
                     <TableCell><Badge tone={remainingDays < 15 ? 'danger' : 'warning'}>{remainingDays} 天</Badge></TableCell>
                     <TableCell className="text-right">{currency.format(deal.amount)}</TableCell>
+                    <TableCell className="text-right"><Button className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => setRenewTarget({ customerId: deal.customerId, customerName: deal.customerName, currentExpireDate: deal.expireDate, productName: deal.productName, channel: deal.channel })} size="sm" type="button" variant="ghost">立即续费</Button></TableCell>
                   </TableRow>
                 )
               })}
-              {data?.renewalDeals.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>60 天内暂无待续费 SaaS 订单</TableCell></TableRow>}
+              {data?.renewalDeals.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={6}>60 天内暂无待续费 SaaS 订单</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
       </div>
+      <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
     </section>
   )
 }

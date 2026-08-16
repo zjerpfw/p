@@ -11,8 +11,10 @@ export interface DashboardData {
   funnelDistribution: Array<{ name: string; value: number; stage: DealStage }>
   renewalDeals: Array<{
     id: string
+    customerId: string
     customerName: string
     productName: string
+    channel: string | null
     giftMonths: number
     expireDate: string
     amount: number

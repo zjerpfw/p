@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
 import { activities, attachments, customers, dealSplits, deals, users } from '@crm/db/schema'
-import { and, count, desc, eq, like } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -76,6 +76,24 @@ const directWonSchema = z.object({
     split_amount: z.number().int().nonnegative('分成金额不能小于 0'),
   })),
 })
+
+const renewCustomerSchema = z.object({
+  amount: z.number().int().positive('续费金额必须大于 0'),
+  years: z.number().int().min(1, '续费年限至少为 1 年').max(20, '续费年限不能超过 20 年').optional().default(1),
+  product: z.string().trim().min(1, '请选择续费产品').max(200, '续费产品不能超过 200 个字符'),
+  channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
+})
+
+function startOfUtcDay(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
+function addCalendarYears(date: Date, years: number) {
+  const year = date.getUTCFullYear() + years
+  const month = date.getUTCMonth()
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(year, month, Math.min(date.getUTCDate(), lastDay)))
+}
 
 function optionalText(value: unknown, maxLength: number) {
   if (value === undefined || value === null) return null
@@ -164,6 +182,7 @@ customerRoutes.post('/direct-won', async (c) => {
     status: 'Active',
     address: parsed.data.address || null,
     ownerId: actor.id,
+    saasExpireDate: expireDate,
     createdAt: now,
     updatedAt: now,
   })
@@ -197,6 +216,77 @@ customerRoutes.post('/direct-won', async (c) => {
   // D1 batch commits all customer, deal, and split records atomically.
   await db.batch([customerInsert, dealInsert, ...splitInserts])
   return c.json({ customerId, dealId, stage: 'Won' }, 201)
+})
+
+customerRoutes.post('/:id/renew', async (c) => {
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const parsed = renewCustomerSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '续费资料格式无效' }, 400)
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [customer] = await db
+    .select({ id: customers.id, saasExpireDate: customers.saasExpireDate })
+    .from(customers)
+    .where(and(
+      eq(customers.id, c.req.param('id')),
+      eq(customers.isDeleted, false),
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .limit(1)
+  if (!customer) return c.json({ error: '客户不存在或无权续费' }, 404)
+
+  const [latestWonDeal] = await db
+    .select({ reminderDays: deals.renewalReminderDays })
+    .from(deals)
+    .where(and(eq(deals.customerId, customer.id), eq(deals.stage, 'Won'), eq(deals.isDeleted, false)))
+    .orderBy(desc(deals.createdAt))
+    .limit(1)
+
+  const now = new Date()
+  const today = startOfUtcDay(now)
+  const recordedExpireDate = customer.saasExpireDate
+  const normalizedExpireDate = recordedExpireDate ? startOfUtcDay(recordedExpireDate) : null
+  const renewalStartDate = normalizedExpireDate && normalizedExpireDate.getTime() >= today.getTime() ? normalizedExpireDate : today
+  const newExpireDate = addCalendarYears(renewalStartDate, parsed.data.years)
+  const dealId = crypto.randomUUID()
+  const insertRenewalDeal = db.insert(deals).values({
+    id: dealId,
+    customerId: customer.id,
+    amount: parsed.data.amount,
+    channel: parsed.data.channel || null,
+    originalPrice: parsed.data.amount,
+    dealType: 'Renewal',
+    productName: parsed.data.product,
+    stage: 'Won',
+    expectedCloseDate: now,
+    startDate: renewalStartDate,
+    durationYears: parsed.data.years,
+    giftMonths: 0,
+    renewalReminderDays: latestWonDeal?.reminderDays ?? 30,
+    createdAt: now,
+  })
+  const updateCustomerExpireDate = db
+    .update(customers)
+    .set({ saasExpireDate: newExpireDate, status: 'Active', updatedAt: now })
+    .where(eq(customers.id, customer.id))
+
+  await db.batch([insertRenewalDeal, updateCustomerExpireDate])
+  return c.json({
+    customerId: customer.id,
+    dealId,
+    dealType: 'Renewal',
+    previousExpireDate: recordedExpireDate?.toISOString() ?? null,
+    renewalStartDate: renewalStartDate.toISOString(),
+    newExpireDate: newExpireDate.toISOString(),
+  }, 201)
 })
 
 customerRoutes.get('/', async (c) => {
