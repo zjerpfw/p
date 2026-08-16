@@ -48,7 +48,7 @@ app.use(
   '/api/*',
   cors({
     origin: (origin, c) => getAllowedOrigins(c.env).has(origin) ? origin : '',
-    allowHeaders: ['Authorization', 'Content-Type'],
+    allowHeaders: ['Authorization', 'Content-Type', 'X-Idempotency-Key'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
     maxAge: 86400,
