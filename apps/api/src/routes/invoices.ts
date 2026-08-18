@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 
 export const invoiceRoutes = new Hono<{ Bindings: Env }>()
 
@@ -175,6 +176,7 @@ invoiceRoutes.post('/', async (c) => {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '发票号码已存在' }, 409)
     throw error
   }
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Invoice', entityId: invoice.id, action: 'Created', after: invoice }))
   return c.json({ invoice }, 201)
 })
 
@@ -188,7 +190,7 @@ invoiceRoutes.put('/:id', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
-  const [authorized] = await db.select({ id: invoices.id }).from(invoices)
+  const [authorized] = await db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, title: invoices.title, content: invoices.content, status: invoices.status, amountCents: invoices.amountCents, taxAmountCents: invoices.taxAmountCents, issuedAt: invoices.issuedAt }).from(invoices)
     .innerJoin(customers, eq(invoices.customerId, customers.id))
     .where(and(eq(invoices.id, c.req.param('id')), eq(customers.isDeleted, false), ownershipFilter(actor)))
     .limit(1)
@@ -205,6 +207,7 @@ invoiceRoutes.put('/:id', async (c) => {
   }
   try {
     const [invoice] = await db.update(invoices).set(updates).where(eq(invoices.id, authorized.id)).returning()
+    c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Invoice', entityId: invoice.id, action: 'Updated', before: authorized, after: invoice }))
     return c.json({ invoice })
   } catch (error) {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '发票号码已存在' }, 409)
@@ -216,7 +219,7 @@ invoiceRoutes.delete('/:id', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
-  const [authorized] = await db.select({ id: invoices.id }).from(invoices)
+  const [authorized] = await db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, title: invoices.title, content: invoices.content, status: invoices.status, amountCents: invoices.amountCents, taxAmountCents: invoices.taxAmountCents, issuedAt: invoices.issuedAt }).from(invoices)
     .innerJoin(customers, eq(invoices.customerId, customers.id))
     .where(and(eq(invoices.id, c.req.param('id')), eq(customers.isDeleted, false), ownershipFilter(actor)))
     .limit(1)
@@ -224,5 +227,6 @@ invoiceRoutes.delete('/:id', async (c) => {
   const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(payments).where(eq(payments.invoiceId, authorized.id))
   if (Number(count) > 0) return c.json({ error: '发票已关联回款记录，不能删除' }, 409)
   await db.delete(invoices).where(eq(invoices.id, authorized.id))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Invoice', entityId: authorized.id, action: 'Deleted', before: authorized }))
   return c.json({ id: authorized.id, deleted: true })
 })
