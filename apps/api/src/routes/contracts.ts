@@ -158,7 +158,12 @@ contractRoutes.put('/:id', async (c) => {
   const effectiveStartDate = parseOptionalDate(parsed.data.effective_start_date)
   const effectiveEndDate = parseOptionalDate(parsed.data.effective_end_date)
   const paymentDueAt = parseOptionalDate(parsed.data.payment_due_at)
-  if (signedAt === undefined || effectiveStartDate === undefined || effectiveEndDate === undefined || paymentDueAt === undefined) return c.json({ error: '合同日期格式无效' }, 400)
+  if (
+    (parsed.data.signed_at !== undefined && signedAt === undefined)
+    || (parsed.data.effective_start_date !== undefined && effectiveStartDate === undefined)
+    || (parsed.data.effective_end_date !== undefined && effectiveEndDate === undefined)
+    || (parsed.data.payment_due_at !== undefined && paymentDueAt === undefined)
+  ) return c.json({ error: '合同日期格式无效' }, 400)
   const nextEffectiveStartDate = parsed.data.effective_start_date === undefined
     ? authorized.effectiveStartDate
     : effectiveStartDate

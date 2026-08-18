@@ -1,10 +1,13 @@
 // apps/web/src/components/customers/CustomerFinancePanel.tsx
 import { format } from 'date-fns'
-import { FileText, Plus, ReceiptText, WalletCards } from 'lucide-react'
+import { FileText, Pencil, Plus, ReceiptText, WalletCards } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EditContractSheet } from '@/components/customers/EditContractSheet'
 import { useContracts, useInvoices, usePayments } from '@/hooks/useAssets'
+import type { ContractDto } from '@/lib/assets'
 import { formatCents } from '@/lib/money'
 
 interface CustomerFinancePanelProps {
@@ -45,6 +48,7 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
   const contracts = contractsQuery.data?.data ?? []
   const invoices = invoicesQuery.data?.data ?? []
   const payments = paymentsQuery.data?.data ?? []
+  const [editingContract, setEditingContract] = useState<ContractDto | null>(null)
 
   return (
     <Card className="gap-0 py-0">
@@ -71,7 +75,7 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
               <div className="space-y-3 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{contract.contract_number}</p><p className="mt-1 truncate text-xs text-muted-foreground">{contract.title}</p></div>
-                  <Badge tone={contract.status === 'Active' ? 'success' : contract.status === 'Void' ? 'danger' : 'neutral'}>{contractStatusLabel(contract.status)}</Badge>
+                  <div className="flex shrink-0 items-center gap-1"><Badge tone={contract.status === 'Active' ? 'success' : contract.status === 'Void' ? 'danger' : 'neutral'}>{contractStatusLabel(contract.status)}</Badge>{canManage && <Button aria-label={`编辑合同 ${contract.contract_number}`} onClick={() => setEditingContract(contract)} size="icon-xs" title="编辑合同" type="button" variant="ghost"><Pencil /></Button>}</div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div><p className="text-muted-foreground">合同总额</p><p className="mt-1 font-semibold text-slate-800">{formatCents(contract.total_amount_cents)}</p></div>
@@ -96,6 +100,7 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
         })}
         {!isLoading && !error && contracts.length === 0 && <div className="py-5 text-center text-sm text-muted-foreground"><FileText className="mx-auto mb-2 size-5" />暂无合同与财务记录</div>}
       </CardContent>
+      <EditContractSheet contract={editingContract} onOpenChange={(open) => { if (!open) setEditingContract(null) }} open={Boolean(editingContract)} />
     </Card>
   )
 }
