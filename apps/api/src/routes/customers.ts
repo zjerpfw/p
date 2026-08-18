@@ -43,6 +43,20 @@ const customerStatusSchema = z.enum(customerStatuses, { errorMap: () => ({ messa
 const customerTagIdsSchema = z.object({
   tag_ids: z.array(z.string().uuid('标签编号无效')).max(20, '每个客户最多添加 20 个标签'),
 })
+const MAX_CUSTOMER_IMPORT_BYTES = 512 * 1024
+const MAX_CUSTOMER_IMPORT_ROWS = 200
+const customerImportHeaderAliases: Record<string, 'name' | 'contactPhone' | 'status' | 'address'> = {
+  '客户名称': 'name',
+  name: 'name',
+  '联系电话': 'contactPhone',
+  contact_phone: 'contactPhone',
+  phone: 'contactPhone',
+  '当前状态': 'status',
+  status: 'status',
+  '公司地址': 'address',
+  '详细地址': 'address',
+  address: 'address',
+}
 
 interface ContactPayload {
   name?: unknown
@@ -129,6 +143,56 @@ function normalizePhone(value: string | null) {
   return value?.replaceAll(/[\s\-()]/g, '') || null
 }
 
+function parseCsvRows(content: string) {
+  const rows: string[][] = []
+  let row: string[] = []
+  let value = ''
+  let quoted = false
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index]!
+    if (quoted) {
+      if (character === '"' && content[index + 1] === '"') {
+        value += '"'
+        index += 1
+      } else if (character === '"') {
+        quoted = false
+      } else {
+        value += character
+      }
+      continue
+    }
+    if (character === '"') {
+      quoted = true
+    } else if (character === ',') {
+      row.push(value)
+      value = ''
+    } else if (character === '\n') {
+      row.push(value.replace(/\r$/, ''))
+      rows.push(row)
+      row = []
+      value = ''
+    } else {
+      value += character
+    }
+  }
+  if (quoted) return null
+  if (value.length > 0 || row.length > 0) {
+    row.push(value.replace(/\r$/, ''))
+    rows.push(row)
+  }
+  return rows
+}
+
+function getCustomerImportColumnIndexes(headers: string[]) {
+  const columns = new Map<'name' | 'contactPhone' | 'status' | 'address', number>()
+  headers.forEach((header, index) => {
+    const key = customerImportHeaderAliases[header.trim().replace(/^\uFEFF/, '').toLowerCase()]
+    if (key && !columns.has(key)) columns.set(key, index)
+  })
+  return columns.has('name') ? columns : null
+}
+
 async function findDuplicateCustomer(
   db: ReturnType<typeof createDb>,
   name: string,
@@ -191,6 +255,75 @@ customerRoutes.post('/', async (c) => {
   c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Created', after: customer }))
 
   return c.json({ customer }, 201)
+})
+
+customerRoutes.post('/import/csv', async (c) => {
+  let formData: FormData
+  try {
+    formData = await c.req.formData()
+  } catch {
+    return c.json({ error: '导入请求必须使用 multipart/form-data' }, 400)
+  }
+  const file = formData.get('file')
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_CUSTOMER_IMPORT_BYTES) {
+    return c.json({ error: '请选择不超过 512 KiB 的 CSV 文件' }, 400)
+  }
+  if (!file.name.toLowerCase().endsWith('.csv')) return c.json({ error: '仅支持 CSV 文件' }, 400)
+
+  const rows = parseCsvRows(await file.text())
+  if (!rows || rows.length < 2) return c.json({ error: 'CSV 内容无效或缺少数据行' }, 400)
+  const columns = getCustomerImportColumnIndexes(rows[0] ?? [])
+  if (!columns) return c.json({ error: 'CSV 必须包含“客户名称”或 name 表头' }, 400)
+  const dataRows = rows.slice(1).filter((row) => row.some((value) => value.trim().length > 0))
+  if (dataRows.length === 0) return c.json({ error: 'CSV 中没有可导入的客户' }, 400)
+  if (dataRows.length > MAX_CUSTOMER_IMPORT_ROWS) return c.json({ error: `单次最多导入 ${MAX_CUSTOMER_IMPORT_ROWS} 位客户` }, 400)
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const now = new Date()
+  const seenNames = new Set<string>()
+  const seenPhones = new Set<string>()
+  const importedCustomers: Array<{ id: string; name: string; contactPhone: string | null; status: (typeof customerStatuses)[number]; address: string | null; ownerId: string; createdAt: Date; updatedAt: Date }> = []
+  const errors: Array<{ row: number; reason: string }> = []
+  let skipped = 0
+
+  for (const [index, row] of dataRows.entries()) {
+    const name = optionalText(row[columns.get('name')!], 100)
+    const contactPhone = optionalText(columns.has('contactPhone') ? row[columns.get('contactPhone')!] : undefined, 30)
+    const statusResult = customerStatusSchema.safeParse(optionalText(columns.has('status') ? row[columns.get('status')!] : undefined, 50) ?? 'Active')
+    const address = optionalText(columns.has('address') ? row[columns.get('address')!] : undefined, 500)
+    const rowNumber = index + 2
+    if (!name || contactPhone === undefined || address === undefined || !statusResult.success) {
+      errors.push({ row: rowNumber, reason: !statusResult.success ? '客户状态无效' : '客户名称、联系电话或详细地址格式无效' })
+      continue
+    }
+    const normalizedName = name.toLowerCase()
+    const normalizedPhone = normalizePhone(contactPhone)
+    if (seenNames.has(normalizedName) || (normalizedPhone && seenPhones.has(normalizedPhone)) || await findDuplicateCustomer(db, name, contactPhone)) {
+      skipped += 1
+      continue
+    }
+    seenNames.add(normalizedName)
+    if (normalizedPhone) seenPhones.add(normalizedPhone)
+    importedCustomers.push({
+      id: crypto.randomUUID(), name, contactPhone, status: statusResult.data, address,
+      ownerId: actor.id, createdAt: now, updatedAt: now,
+    })
+  }
+
+  if (importedCustomers.length > 0) {
+    const [firstCustomer, ...remainingCustomers] = importedCustomers
+    if (!firstCustomer) return c.json({ error: 'CSV 中没有可导入的客户' }, 400)
+    await db.batch([
+      db.insert(customers).values(firstCustomer),
+      ...remainingCustomers.map((customer) => db.insert(customers).values(customer)),
+    ])
+    c.executionCtx.waitUntil(Promise.all(importedCustomers.map((customer) => writeAuditLog(c.env, {
+      actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Created', after: customer,
+    }))))
+  }
+  return c.json({ created: importedCustomers.length, skipped, errors })
 })
 
 customerRoutes.post('/direct-won', async (c) => {
