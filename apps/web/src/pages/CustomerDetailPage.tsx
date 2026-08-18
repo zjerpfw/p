@@ -1,6 +1,6 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns'
-import { CalendarCheck, CalendarSync, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, Paperclip, Pencil, Phone, Send, Trash2, Upload } from 'lucide-react'
+import { AtSign, CalendarCheck, CalendarSync, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, MessageCircleMore, Paperclip, Pencil, Phone, Plus, Send, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -11,12 +11,13 @@ import { CreateContractSheet } from '@/components/customers/CreateContractSheet'
 import { CreateInvoiceSheet } from '@/components/customers/CreateInvoiceSheet'
 import { CreatePaymentSheet } from '@/components/customers/CreatePaymentSheet'
 import { CustomerFinancePanel } from '@/components/customers/CustomerFinancePanel'
+import { ContactSheet } from '@/components/customers/ContactSheet'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { customerDetailQueryKey, useCustomerDetail } from '@/hooks/useCustomerDetail'
+import { customerDetailQueryKey, type Contact, useCustomerDetail } from '@/hooks/useCustomerDetail'
 import { useContracts, useInvoices } from '@/hooks/useAssets'
 import { apiFetch, getCurrentUserId, getCurrentUserRole } from '@/lib/api'
 import { formatCents } from '@/lib/money'
@@ -68,6 +69,8 @@ export default function CustomerDetailPage() {
   const [contractSheetOpen, setContractSheetOpen] = useState(false)
   const [invoiceSheetOpen, setInvoiceSheetOpen] = useState(false)
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false)
+  const [contactSheetOpen, setContactSheetOpen] = useState(false)
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
 
   const customer = data?.customer
   const assetCustomerId = customer?.id ?? ''
@@ -110,6 +113,15 @@ export default function CustomerDetailPage() {
       toast.success('附件已永久删除')
     },
     onError: (deleteError) => toast.error(deleteError instanceof Error ? deleteError.message : '附件删除失败'),
+  })
+
+  const deleteContact = useMutation({
+    mutationFn: (contactId: string) => apiFetch(`/api/customers/${customer?.id}/contacts/${contactId}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') })
+      toast.success('联系人已删除')
+    },
+    onError: (contactError) => toast.error(contactError instanceof Error ? contactError.message : '联系人删除失败'),
   })
 
   function confirmDeleteCustomer() {
@@ -190,6 +202,21 @@ export default function CustomerDetailPage() {
     deleteAttachment.mutate(attachmentId)
   }
 
+  function openCreateContact() {
+    setEditingContact(null)
+    setContactSheetOpen(true)
+  }
+
+  function openEditContact(contact: Contact) {
+    setEditingContact(contact)
+    setContactSheetOpen(true)
+  }
+
+  function confirmDeleteContact(contact: Contact) {
+    if (!window.confirm(`确定要删除联系人“${contact.name}”吗？`)) return
+    deleteContact.mutate(contact.id)
+  }
+
   if (isLoading) return <p className="text-sm text-muted-foreground">正在加载客户信息...</p>
 
   if (error) return <p className="text-sm text-destructive">{error.message}</p>
@@ -223,6 +250,16 @@ export default function CustomerDetailPage() {
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><div className="flex items-center justify-between gap-3"><div><CardTitle>{customer.name}</CardTitle><div className="mt-2"><Badge tone={getCustomerStatusTone(customer.status)}>{getCustomerStatusLabel(customer.status)}</Badge></div></div><Button aria-label="编辑客户" onClick={() => setEditCustomerOpen(true)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></div></CardHeader>
             <CardContent className="space-y-5 p-5 text-sm"><div><p className="mb-1.5 text-xs font-semibold text-slate-400">联系方式</p><p className="flex items-center gap-2 font-medium text-slate-700"><Phone aria-hidden="true" className="size-4 text-indigo-500" />{customer.contactPhone ?? '未填写电话'}</p></div><div><p className="mb-1.5 text-xs font-semibold text-slate-400">公司地址</p><p className="flex items-start gap-2 leading-5 text-slate-700"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-indigo-500" />{customer.address ?? '未填写地址'}</p></div><div className="border-t border-slate-100 pt-4"><p className="text-xs text-muted-foreground">归属销售</p><p className="mt-1 font-semibold text-slate-800">{customer.ownerId}</p><p className="mt-4 text-xs text-muted-foreground">创建时间</p><p className="mt-1 font-medium text-slate-700">{format(new Date(customer.createdAt), 'yyyy-MM-dd')}</p></div></CardContent>
+          </Card>
+          <Card className="gap-0 overflow-hidden py-0">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-4"><CardTitle>联系人</CardTitle><Button aria-label="添加联系人" onClick={openCreateContact} size="icon-sm" type="button" variant="ghost"><Plus aria-hidden="true" /></Button></CardHeader>
+            <CardContent className="divide-y divide-border p-0">
+              {data?.contacts.map((contact) => <article className="px-5 py-4" key={contact.id}>
+                <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-800">{contact.name}</p>{contact.isPrimary && <Badge tone="success">主要联系人</Badge>}</div>{contact.position && <p className="mt-1 text-xs text-muted-foreground">{contact.position}</p>}</div><div className="flex shrink-0"><Button aria-label={`编辑联系人 ${contact.name}`} onClick={() => openEditContact(contact)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`删除联系人 ${contact.name}`} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={deleteContact.isPending} onClick={() => confirmDeleteContact(contact)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
+                <div className="mt-3 space-y-1.5 text-xs text-slate-600">{contact.phone && <a className="flex items-center gap-2 hover:text-primary" href={`tel:${contact.phone}`}><Phone aria-hidden="true" className="size-3.5" />{contact.phone}</a>}{contact.email && <a className="flex items-center gap-2 hover:text-primary" href={`mailto:${contact.email}`}><AtSign aria-hidden="true" className="size-3.5" />{contact.email}</a>}{contact.wechat && <p className="flex items-center gap-2"><MessageCircleMore aria-hidden="true" className="size-3.5" />{contact.wechat}</p>}</div>{contact.notes && <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-muted-foreground">{contact.notes}</p>}
+              </article>)}
+              {data?.contacts.length === 0 && <div className="px-5 py-6 text-sm text-muted-foreground"><p>暂无联系人</p><Button className="mt-3" onClick={openCreateContact} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />添加首位联系人</Button></div>}
+            </CardContent>
           </Card>
           <div className="grid gap-2"><Button onClick={() => setActivitySheetOpen(true)} type="button"><CalendarCheck aria-hidden="true" />完整跟进记录</Button><Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="ghost"><Trash2 aria-hidden="true" />作废客户</Button></div>
         </aside>
@@ -285,6 +322,7 @@ export default function CustomerDetailPage() {
 
       <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
+      <ContactSheet contact={editingContact} customerId={customer.id} onOpenChange={(open) => { setContactSheetOpen(open); if (!open) setEditingContact(null) }} open={contactSheetOpen} />
       <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
       <CreateContractSheet
         customerId={customer.id}

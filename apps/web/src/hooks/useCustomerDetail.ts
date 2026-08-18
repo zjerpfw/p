@@ -26,8 +26,23 @@ export interface Attachment {
   createdAt: string
 }
 
+export interface Contact {
+  id: string
+  customerId: string
+  name: string
+  position: string | null
+  phone: string | null
+  email: string | null
+  wechat: string | null
+  isPrimary: boolean
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 interface CustomerDetailResponse {
   customer: Customer
+  contacts: Contact[]
   deals: Omit<Deal, 'customerName'>[]
   activities: Activity[]
   attachments: Attachment[]

@@ -99,6 +99,29 @@ export const customers = sqliteTable(
   ],
 )
 
+export const contacts = sqliteTable(
+  'contacts',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    name: text('name').notNull(),
+    position: text('position'),
+    phone: text('phone'),
+    email: text('email'),
+    wechat: text('wechat'),
+    isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
+    notes: text('notes'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    index('contacts_customer_id_idx').on(table.customerId),
+    index('contacts_customer_primary_idx').on(table.customerId, table.isPrimary),
+  ],
+)
+
 export const deals = sqliteTable(
   'deals',
   {

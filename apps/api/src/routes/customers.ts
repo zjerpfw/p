@@ -1,6 +1,6 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
-import { activities, attachments, customers, dealSplits, deals, users } from '@crm/db/schema'
+import { activities, attachments, contacts, customers, dealSplits, deals, users } from '@crm/db/schema'
 import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -34,6 +34,26 @@ interface UpdateCustomerPayload {
   status?: unknown
   address?: unknown
 }
+
+interface ContactPayload {
+  name?: unknown
+  position?: unknown
+  phone?: unknown
+  email?: unknown
+  wechat?: unknown
+  is_primary?: unknown
+  notes?: unknown
+}
+
+const contactPayloadSchema = z.object({
+  name: z.string().trim().min(1, '请填写联系人姓名').max(100, '联系人姓名不能超过 100 个字符'),
+  position: z.string().trim().max(100, '职位不能超过 100 个字符').optional().default(''),
+  phone: z.string().trim().max(30, '手机号不能超过 30 个字符').optional().default(''),
+  email: z.string().trim().email('邮箱格式无效').max(254, '邮箱不能超过 254 个字符').optional().or(z.literal('')).default(''),
+  wechat: z.string().trim().max(100, '企业微信或微信号不能超过 100 个字符').optional().default(''),
+  is_primary: z.boolean().optional().default(false),
+  notes: z.string().trim().max(2_000, '备注不能超过 2000 个字符').optional().default(''),
+})
 
 interface DirectWonCustomerPayload {
   name?: unknown
@@ -357,11 +377,18 @@ customerRoutes.get('/:id', async (c) => {
     return c.json({ error: '客户不存在' }, 404)
   }
 
-  const customerDeals = await db
+  const [customerDeals, customerContacts] = await Promise.all([
+    db
     .select()
     .from(deals)
     .where(and(eq(deals.customerId, customer.id), eq(deals.isDeleted, false)))
-    .orderBy(desc(deals.createdAt))
+    .orderBy(desc(deals.createdAt)),
+    db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.customerId, customer.id))
+      .orderBy(desc(contacts.isPrimary), desc(contacts.updatedAt)),
+  ])
 
   const customerActivities = await db
     .select({
@@ -396,10 +423,116 @@ customerRoutes.get('/:id', async (c) => {
 
   return c.json({
     customer,
+    contacts: customerContacts,
     deals: customerDeals,
     activities: customerActivities,
     attachments: customerAttachments,
   })
+})
+
+customerRoutes.post('/:id/contacts', async (c) => {
+  let body: ContactPayload
+  try {
+    body = await c.req.json<ContactPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+  const parsed = contactPayloadSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '联系人资料格式无效' }, 400)
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const customerId = c.req.param('id')
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(eq(customers.id, customerId), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!customer) return c.json({ error: '客户不存在或无权新增联系人' }, 404)
+
+  const now = new Date()
+  const contact = {
+    id: crypto.randomUUID(),
+    customerId: customer.id,
+    name: parsed.data.name,
+    position: parsed.data.position || null,
+    phone: parsed.data.phone || null,
+    email: parsed.data.email || null,
+    wechat: parsed.data.wechat || null,
+    isPrimary: parsed.data.is_primary,
+    notes: parsed.data.notes || null,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const insertContact = db.insert(contacts).values(contact)
+  if (contact.isPrimary) {
+    await db.batch([
+      db.update(contacts).set({ isPrimary: false, updatedAt: now }).where(and(eq(contacts.customerId, customer.id), eq(contacts.isPrimary, true))),
+      insertContact,
+    ])
+  } else {
+    await insertContact
+  }
+  return c.json({ contact }, 201)
+})
+
+customerRoutes.put('/:id/contacts/:contactId', async (c) => {
+  let body: ContactPayload
+  try {
+    body = await c.req.json<ContactPayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+  const parsed = contactPayloadSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '联系人资料格式无效' }, 400)
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const customerId = c.req.param('id')
+  const contactId = c.req.param('contactId')
+  const [existingContact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .innerJoin(customers, eq(contacts.customerId, customers.id))
+    .where(and(eq(contacts.id, contactId), eq(contacts.customerId, customerId), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!existingContact) return c.json({ error: '联系人不存在或无权编辑' }, 404)
+
+  const now = new Date()
+  const updateContact = db.update(contacts).set({
+    name: parsed.data.name,
+    position: parsed.data.position || null,
+    phone: parsed.data.phone || null,
+    email: parsed.data.email || null,
+    wechat: parsed.data.wechat || null,
+    isPrimary: parsed.data.is_primary,
+    notes: parsed.data.notes || null,
+    updatedAt: now,
+  }).where(eq(contacts.id, existingContact.id)).returning()
+  const [contact] = parsed.data.is_primary
+    ? await db.batch([
+        db.update(contacts).set({ isPrimary: false, updatedAt: now }).where(and(eq(contacts.customerId, customerId), eq(contacts.isPrimary, true))),
+        updateContact,
+      ]).then(([, updated]) => updated)
+    : await updateContact
+  return c.json({ contact })
+})
+
+customerRoutes.delete('/:id/contacts/:contactId', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [contact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .innerJoin(customers, eq(contacts.customerId, customers.id))
+    .where(and(eq(contacts.id, c.req.param('contactId')), eq(contacts.customerId, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!contact) return c.json({ error: '联系人不存在或无权删除' }, 404)
+  await db.delete(contacts).where(eq(contacts.id, contact.id))
+  return c.json({ id: contact.id, deleted: true })
 })
 
 customerRoutes.put('/:id', async (c) => {
