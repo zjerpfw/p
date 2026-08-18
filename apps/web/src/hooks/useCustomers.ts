@@ -9,6 +9,8 @@ export interface Customer {
   status: string
   lng: number | null
   lat: number | null
+  province: string | null
+  city: string | null
   address: string | null
   ownerId: string
   ownerName: string | null

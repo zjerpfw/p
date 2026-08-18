@@ -38,6 +38,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
   const { data: usersData, isLoading: isLoadingUsers } = useUsers()
   const [name, setName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const [province, setProvince] = useState('')
+  const [city, setCity] = useState('')
   const [address, setAddress] = useState('')
   const [productName, setProductName] = useState('')
   const [channel, setChannel] = useState('')
@@ -81,6 +83,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
       body: JSON.stringify({
         name: name.trim(),
         contact_phone: contactPhone.trim(),
+        province: province.trim(),
+        city: city.trim(),
         address: address.trim(),
         product_name: productName.trim(),
         amount_cents: amountCents,
@@ -106,6 +110,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
       ])
       setName('')
       setContactPhone('')
+      setProvince('')
+      setCity('')
       setAddress('')
       setProductName('')
       setChannel('')
@@ -148,6 +154,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5"><Label htmlFor="direct-won-name">客户名称</Label><Input autoFocus id="direct-won-name" onChange={(event) => setName(event.target.value)} placeholder="请输入客户名称" value={name} /></div>
               <div className="space-y-1.5"><Label htmlFor="direct-won-phone">联系电话</Label><Input id="direct-won-phone" inputMode="tel" onChange={(event) => setContactPhone(event.target.value)} placeholder="请输入联系电话" value={contactPhone} /></div>
+              <div className="space-y-1.5"><Label htmlFor="direct-won-province">省份</Label><Input id="direct-won-province" onChange={(event) => setProvince(event.target.value)} placeholder="例如：浙江省" value={province} /></div>
+              <div className="space-y-1.5"><Label htmlFor="direct-won-city">城市</Label><Input id="direct-won-city" onChange={(event) => setCity(event.target.value)} placeholder="例如：杭州市" value={city} /></div>
               <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="direct-won-address">详细地址</Label><Input id="direct-won-address" onChange={(event) => setAddress(event.target.value)} placeholder="请输入公司地址" value={address} /></div>
             </div>
           </section>

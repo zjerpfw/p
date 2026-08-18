@@ -1,10 +1,10 @@
 // apps/web/src/hooks/useDealPipeline.ts
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import type { Deal, DealStage } from './useDeals'
+import type { ActiveDealStage, Deal } from './useDeals'
 import { apiFetch } from '@/lib/api'
 
 export interface PipelineStageSummary {
-  stage: DealStage
+  stage: ActiveDealStage
   count: number
   totalAmountCents: number
   weightedAmountCents: number
@@ -36,7 +36,7 @@ export function useDealPipelineSummary(search: string) {
   })
 }
 
-export function useDealPipelineColumn(stage: DealStage, search: string, enabled = true) {
+export function useDealPipelineColumn(stage: ActiveDealStage, search: string, enabled = true) {
   return useInfiniteQuery({
     queryKey: ['deals', 'pipeline', 'column', stage, search],
     queryFn: ({ pageParam }) => {

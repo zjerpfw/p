@@ -4,8 +4,10 @@ import type { PaginatedResponse } from './useCustomers'
 import { apiFetch } from '@/lib/api'
 
 export const dealStages = ['Leads', 'Qualified', 'Proposal', 'Won', 'Lost'] as const
+export const activeDealStages = ['Leads', 'Qualified', 'Proposal'] as const
 
 export type DealStage = (typeof dealStages)[number]
+export type ActiveDealStage = (typeof activeDealStages)[number]
 
 export interface Deal {
   id: string

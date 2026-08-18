@@ -15,6 +15,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const MyWorkPage = lazy(() => import('./pages/MyWorkPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const UsersPage = lazy(() => import('./pages/UsersPage'))
+const WonCustomersPage = lazy(() => import('./pages/WonCustomersPage'))
 
 function PageLoader() {
   return <div className="grid min-h-48 place-items-center text-sm text-muted-foreground">正在加载页面...</div>
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
+            <Route path="/won-customers" element={<WonCustomersPage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/my-work" element={<MyWorkPage />} />
             <Route path="/finance" element={<FinancePage />} />

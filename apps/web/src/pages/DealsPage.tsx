@@ -12,7 +12,7 @@ import { PaginationControls } from '@/components/PaginationControls'
 import SaaSDealWonModal from '@/components/deals/SaaSDealWonModal'
 import { DealDetailModal } from '@/components/deals/DealDetailModal'
 import { CreateDealModal } from '@/components/deals/CreateDealModal'
-import { dealStages, type Deal, type DealStage, useDeals } from '@/hooks/useDeals'
+import { activeDealStages, type ActiveDealStage, type Deal, type DealStage, useDeals } from '@/hooks/useDeals'
 import { useDealPipelineColumn, useDealPipelineSummary, type PipelineStageSummary } from '@/hooks/useDealPipeline'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -21,12 +21,10 @@ import { formatCents } from '@/lib/money'
 import { dealStageLabels, getDealStageTone } from '@/lib/presentation'
 import { useSearchParams } from 'react-router-dom'
 
-const stageStyle: Record<DealStage, { line: string; dot: string }> = {
+const stageStyle: Record<ActiveDealStage, { line: string; dot: string }> = {
   Leads: { line: 'bg-slate-400', dot: 'bg-slate-400' },
   Qualified: { line: 'bg-sky-500', dot: 'bg-sky-500' },
   Proposal: { line: 'bg-amber-500', dot: 'bg-amber-500' },
-  Won: { line: 'bg-emerald-500', dot: 'bg-emerald-500' },
-  Lost: { line: 'bg-rose-500', dot: 'bg-rose-500' },
 }
 
 function formatDate(value: string) {
@@ -40,7 +38,7 @@ function isOverdue(value: string | null, stage: DealStage) {
 }
 
 interface PipelineColumnProps {
-  stage: DealStage
+  stage: ActiveDealStage
   summary: PipelineStageSummary
   search: string
   deletePending: boolean
@@ -82,9 +80,9 @@ function PipelineColumn({ stage, summary, search, deletePending, onEdit, onDelet
         const dateValue = deal.expectedCloseDate
         const overdue = isOverdue(dateValue, deal.stage)
         return <Card className="gap-0 py-0 transition-all hover:-translate-y-1 hover:shadow-md" key={deal.id}><CardContent className="space-y-2.5 p-3">
-          <div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-bold text-slate-900" title={deal.customerName}>{deal.customerName}</p><div className="flex shrink-0 gap-0.5"><Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => onEdit(deal)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.customerName}的商机`} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={deletePending} onClick={() => onDelete(deal)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
+          <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900" title={deal.productName}>{deal.productName}</p><p className="mt-0.5 truncate text-xs text-slate-500">客户：{deal.customerName}</p></div><div className="flex shrink-0 gap-0.5"><Button aria-label={`编辑${deal.productName}商机`} onClick={() => onEdit(deal)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.productName}商机`} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={deletePending} onClick={() => onDelete(deal)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
           <div className="flex items-center gap-1.5 text-lg font-bold tracking-tight text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-4 shrink-0" />{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}</div>
-          <div className="flex flex-wrap gap-1.5"><Badge tone="neutral">{deal.productName}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}{deal.stage !== 'Won' && deal.stage !== 'Lost' && <Badge tone="info">概率 {deal.probability}%</Badge>}{deal.stage === 'Lost' && deal.lostReason && <Badge tone="danger">{deal.lostReason}</Badge>}</div>
+          <div className="flex flex-wrap gap-1.5">{deal.channel && <Badge tone="info">{deal.channel}</Badge>}<Badge tone="info">概率 {deal.probability}%</Badge></div>
           {(deal.stage === 'Won' ? deal.wonAt : dateValue) && <p className={`flex items-center gap-1.5 text-xs ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />{deal.stage === 'Won' ? '实际成交' : '预计成交'}：{formatDate(deal.stage === 'Won' ? deal.wonAt! : dateValue)}{overdue && ' · 已逾期'}</p>}
           {deal.stage === 'Won' && deal.giftMonths > 0 && <p className="text-[11px] font-medium text-amber-700">含赠送 {deal.giftMonths} 个月</p>}
           {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="mt-0.5 w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => onConfirmWon(deal)} size="sm" type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}
@@ -99,7 +97,7 @@ function PipelineColumn({ stage, summary, search, deletePending, onEdit, onDelet
 export default function DealsPage() {
   const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<DealStage | ''>('')
+  const [status, setStatus] = useState<ActiveDealStage | ''>('')
   const [wonAtFrom, setWonAtFrom] = useState('')
   const [wonAtTo, setWonAtTo] = useState('')
   const [page, setPage] = useState(1)
@@ -108,7 +106,7 @@ export default function DealsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const debouncedSearch = useDebouncedValue(search.trim())
-  const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: status || undefined, page, enabled: isMobile })
+  const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: status || undefined, activeOnly: !status, page, enabled: isMobile })
   const pipelineSummary = useDealPipelineSummary(debouncedSearch)
   const queryClient = useQueryClient()
 
@@ -120,7 +118,7 @@ export default function DealsPage() {
     setSearchParams(nextParams, { replace: true })
   }, [searchParams, setSearchParams])
 
-  const visibleStages = status ? [status] : dealStages
+  const visibleStages = status ? [status] : activeDealStages
   const visibleSummary = pipelineSummary.data?.stages.filter((item) => visibleStages.includes(item.stage)) ?? []
   const visibleTotalAmountCents = visibleSummary.reduce((total, item) => total + item.totalAmountCents, 0)
   const deleteDeal = useMutation({
@@ -137,7 +135,7 @@ export default function DealsPage() {
     setPage(1)
   }
 
-  function updateStatus(value: DealStage | '') {
+  function updateStatus(value: ActiveDealStage | '') {
     setStatus(value)
     setPage(1)
   }
@@ -169,6 +167,7 @@ export default function DealsPage() {
       const query = new URLSearchParams()
       if (debouncedSearch) query.set('search', debouncedSearch)
       if (status) query.set('status', status)
+      else query.set('active_only', 'true')
       await downloadApiFile(`/api/deals/export/csv?${query.toString()}`, '商机清单.csv')
       toast.success('当前筛选商机清单已开始下载')
     } catch (exportError) {
@@ -187,9 +186,9 @@ export default function DealsPage() {
           <Input aria-label="搜索商机" className="h-11 bg-white pl-8 pr-11 text-sm md:h-8 md:pr-8" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户名称" value={search} />
           {search && <Button aria-label="清空商机搜索" className="absolute right-0.5 top-0.5" onClick={() => updateSearch('')} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" /></Button>}
         </div>
-        <select aria-label="商机阶段筛选" className="h-11 rounded-md border border-input bg-white px-2.5 text-sm md:h-8" onChange={(event) => updateStatus(event.target.value as DealStage | '')} value={status}>
-          <option value="">全部阶段</option>
-          {dealStages.map((stage) => <option key={stage} value={stage}>{dealStageLabels[stage]}</option>)}
+        <select aria-label="活跃商机阶段筛选" className="h-11 rounded-md border border-input bg-white px-2.5 text-sm md:h-8" onChange={(event) => updateStatus(event.target.value as ActiveDealStage | '')} value={status}>
+          <option value="">全部活跃阶段</option>
+          {activeDealStages.map((stage) => <option key={stage} value={stage}>{dealStageLabels[stage]}</option>)}
         </select>
         <Input aria-label="赢单成交开始日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
         <Input aria-label="赢单成交结束日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
@@ -213,7 +212,7 @@ export default function DealsPage() {
             const dateValue = deal.expectedCloseDate
             const overdue = isOverdue(dateValue, deal.stage)
             return <li key={deal.id}><Card className="gap-0 py-0"><CardContent className="space-y-3 p-4">
-              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-bold text-slate-900">{deal.customerName}</h2><div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge><Badge tone="neutral">{deal.productName}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}</div></div><div className="flex shrink-0"><Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.customerName}的商机`} className="text-rose-600" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
+              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-bold text-slate-900">{deal.productName}</h2><p className="mt-1 truncate text-sm text-slate-500">客户：{deal.customerName}</p><div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}</div></div><div className="flex shrink-0"><Button aria-label={`编辑${deal.productName}商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.productName}商机`} className="text-rose-600" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
               <div className="flex items-center gap-2 text-xl font-bold text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-5 shrink-0" />{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}{deal.stage !== 'Won' && deal.stage !== 'Lost' && <span className="text-xs font-medium text-indigo-500">· {deal.probability}%</span>}</div>
               {(deal.stage === 'Won' ? deal.wonAt : dateValue) && <p className={`flex items-center gap-1.5 text-sm ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-4 shrink-0" />{deal.stage === 'Won' ? '实际成交' : '预计成交'}：{formatDate(deal.stage === 'Won' ? deal.wonAt! : dateValue)}{overdue && ' · 已逾期'}</p>}
               {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="w-full border-indigo-200 text-indigo-700" onClick={() => setDealToConfirm(deal)} type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}

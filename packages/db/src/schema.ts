@@ -106,6 +106,8 @@ export const customers = sqliteTable(
     status: text('status', { enum: customerStatuses }).notNull(),
     lng: real('lng'),
     lat: real('lat'),
+    province: text('province'),
+    city: text('city'),
     address: text('address'),
     ownerId: text('owner_id')
       .notNull()
@@ -118,6 +120,7 @@ export const customers = sqliteTable(
   (table) => [
     index('customers_name_idx').on(table.name),
     index('customers_owner_id_idx').on(table.ownerId),
+    index('customers_region_idx').on(table.province, table.city),
   ],
 )
 

@@ -18,6 +18,8 @@ interface CreateCustomerPayload {
   name: string
   contact_phone: string
   status: string
+  province: string
+  city: string
   address: string
 }
 
@@ -27,6 +29,8 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
   const [name, setName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [status, setStatus] = useState('Active')
+  const [province, setProvince] = useState('')
+  const [city, setCity] = useState('')
   const [address, setAddress] = useState('')
 
   const createCustomer = useMutation({
@@ -44,6 +48,8 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
       setName('')
       setContactPhone('')
       setStatus('Active')
+      setProvince('')
+      setCity('')
       setAddress('')
       onOpenChange(false)
       toast.success('客户已创建并归属到当前销售')
@@ -59,6 +65,8 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
       name: name.trim(),
       contact_phone: contactPhone.trim(),
       status,
+      province: province.trim(),
+      city: city.trim(),
       address: address.trim(),
     })
   }
@@ -85,6 +93,7 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
               <option value="Inactive">沉睡</option>
             </select>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="customer-province">省份</Label><Input id="customer-province" onChange={(event) => setProvince(event.target.value)} placeholder="例如：浙江省" value={province} /></div><div className="space-y-1.5"><Label htmlFor="customer-city">城市</Label><Input id="customer-city" onChange={(event) => setCity(event.target.value)} placeholder="例如：杭州市" value={city} /></div></div>
             <div className="space-y-1.5">
             <Label htmlFor="customer-address">公司地址</Label>
             <Input id="customer-address" onChange={(event) => setAddress(event.target.value)} placeholder="请输入详细地址" value={address} />

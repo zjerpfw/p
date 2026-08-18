@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
 import { activities, attachments, contacts, customerStatuses, customerTagAssignments, customerTags, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
-import { and, asc, count, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, gte, inArray, like, lte, or, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -27,6 +27,8 @@ interface CreateCustomerPayload {
   name?: unknown
   contact_phone?: unknown
   status?: unknown
+  province?: unknown
+  city?: unknown
   address?: unknown
 }
 
@@ -34,6 +36,8 @@ interface UpdateCustomerPayload {
   name?: unknown
   contact_phone?: unknown
   status?: unknown
+  province?: unknown
+  city?: unknown
   address?: unknown
   owner_id?: unknown
 }
@@ -85,6 +89,8 @@ const contactPayloadSchema = z.object({
 interface DirectWonCustomerPayload {
   name?: unknown
   contact_phone?: unknown
+  province?: unknown
+  city?: unknown
   address?: unknown
   product_name?: unknown
   channel?: unknown
@@ -105,6 +111,8 @@ interface DirectWonCustomerPayload {
 const directWonSchema = z.object({
   name: z.string().trim().min(1, '请填写客户名称').max(100, '客户名称不能超过 100 个字符'),
   contact_phone: z.string().trim().max(30, '联系电话不能超过 30 个字符').optional().default(''),
+  province: z.string().trim().max(50, '省份不能超过 50 个字符').optional().default(''),
+  city: z.string().trim().max(50, '城市不能超过 50 个字符').optional().default(''),
   address: z.string().trim().max(500, '详细地址不能超过 500 个字符').optional().default(''),
   product_name: z.string().trim().min(1, '请填写购买产品或规格').max(200, '购买产品或规格不能超过 200 个字符'),
   channel: z.string().trim().max(100, '渠道名称不能超过 100 个字符').optional().default(''),
@@ -233,6 +241,28 @@ function customerSearchCondition(search: string | undefined) {
   )
 }
 
+function parseMultiValueQuery(value: string | undefined, maxValues = 20) {
+  if (!value) return []
+  return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))].slice(0, maxValues)
+}
+
+const wonCustomerExpiryBuckets = ['expired', 'within_30', 'within_90', 'beyond_90', 'unspecified'] as const
+
+function wonCustomerExpiryCondition(buckets: string[], now: Date) {
+  if (buckets.length === 0) return undefined
+  const day30 = new Date(now)
+  day30.setDate(day30.getDate() + 30)
+  const day90 = new Date(now)
+  day90.setDate(day90.getDate() + 90)
+  return or(
+    buckets.includes('expired') ? sql`${customers.saasExpireDate} < ${now}` : undefined,
+    buckets.includes('within_30') ? and(gte(customers.saasExpireDate, now), lte(customers.saasExpireDate, day30)) : undefined,
+    buckets.includes('within_90') ? and(gt(customers.saasExpireDate, day30), lte(customers.saasExpireDate, day90)) : undefined,
+    buckets.includes('beyond_90') ? gt(customers.saasExpireDate, day90) : undefined,
+    buckets.includes('unspecified') ? sql`${customers.saasExpireDate} is null` : undefined,
+  )
+}
+
 customerRoutes.post('/', async (c) => {
   let body: CreateCustomerPayload
 
@@ -248,9 +278,11 @@ customerRoutes.post('/', async (c) => {
   const name = optionalText(body.name, 100)
   const contactPhone = optionalText(body.contact_phone, 30)
   const statusResult = customerStatusSchema.safeParse(optionalText(body.status, 50) ?? 'Active')
+  const province = optionalText(body.province, 50)
+  const city = optionalText(body.city, 50)
   const address = optionalText(body.address, 500)
-  if (!name || contactPhone === undefined || address === undefined) {
-    return c.json({ error: '客户名称、联系电话或详细地址格式无效' }, 400)
+  if (!name || contactPhone === undefined || province === undefined || city === undefined || address === undefined) {
+    return c.json({ error: '客户名称、联系电话、地域或详细地址格式无效' }, 400)
   }
   if (!statusResult.success) return c.json({ error: '客户状态无效' }, 400)
 
@@ -260,6 +292,8 @@ customerRoutes.post('/', async (c) => {
     name,
     contactPhone,
     status: statusResult.data,
+    province,
+    city,
     address,
     ownerId: actor.id,
     createdAt: now,
@@ -389,6 +423,8 @@ customerRoutes.post('/direct-won', async (c) => {
     name: parsed.data.name,
     contactPhone: parsed.data.contact_phone || null,
     status: 'Active',
+    province: parsed.data.province || null,
+    city: parsed.data.city || null,
     address: parsed.data.address || null,
     ownerId: actor.id,
     saasExpireDate: expireDate,
@@ -593,6 +629,8 @@ customerRoutes.get('/', async (c) => {
       status: customers.status,
       lng: customers.lng,
       lat: customers.lat,
+      province: customers.province,
+      city: customers.city,
       address: customers.address,
       ownerId: customers.ownerId,
       ownerName: users.name,
@@ -609,6 +647,74 @@ customerRoutes.get('/', async (c) => {
       ...customer,
       lastActivityAt: customer.lastActivityAt ? new Date(customer.lastActivityAt).toISOString() : null,
     })),
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  })
+})
+
+customerRoutes.get('/won-customers', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const provinces = parseMultiValueQuery(c.req.query('provinces'))
+  const cities = parseMultiValueQuery(c.req.query('cities'))
+  const expiryBuckets = parseMultiValueQuery(c.req.query('expiry')).filter((bucket) => wonCustomerExpiryBuckets.includes(bucket as (typeof wonCustomerExpiryBuckets)[number]))
+  if (c.req.query('expiry') && expiryBuckets.length !== parseMultiValueQuery(c.req.query('expiry')).length) {
+    return c.json({ error: '服务到期筛选无效' }, 400)
+  }
+  const page = parsePagination(c.req.query('page'), 1, 1_000_000)
+  const limit = parsePagination(c.req.query('limit'), 20, 100)
+  const now = new Date()
+  const db = createDb(c.env.DB)
+  const filters = [
+    eq(customers.isDeleted, false),
+    customerSearchCondition(search),
+    provinces.length > 0 ? inArray(customers.province, provinces) : undefined,
+    cities.length > 0 ? inArray(customers.city, cities) : undefined,
+    wonCustomerExpiryCondition(expiryBuckets, now),
+    sql`exists (select 1 from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false)`,
+    actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+  ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
+  const where = and(...filters)
+  const [rows, [{ total }], regions] = await Promise.all([
+    db.select({
+      id: customers.id,
+      name: customers.name,
+      contactPhone: customers.contactPhone,
+      province: customers.province,
+      city: customers.city,
+      address: customers.address,
+      lng: customers.lng,
+      lat: customers.lat,
+      saasExpireDate: customers.saasExpireDate,
+      ownerId: customers.ownerId,
+      ownerName: users.name,
+      latestWonAt: sql<number | null>`(select max(${deals.wonAt}) from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false)`,
+      latestProductName: sql<string | null>`(select ${deals.productName} from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false order by ${deals.wonAt} desc, ${deals.createdAt} desc limit 1)`,
+    }).from(customers)
+      .leftJoin(users, eq(customers.ownerId, users.id))
+      .where(where)
+      .orderBy(asc(sql`case when ${customers.saasExpireDate} is null then 1 else 0 end`), asc(customers.saasExpireDate), asc(customers.name))
+      .limit(limit)
+      .offset((page - 1) * limit),
+    db.select({ total: count() }).from(customers).where(where),
+    db.selectDistinct({ province: customers.province, city: customers.city })
+      .from(customers)
+      .where(and(
+        eq(customers.isDeleted, false),
+        sql`exists (select 1 from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false)`,
+        actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+      ))
+      .orderBy(asc(customers.province), asc(customers.city)),
+  ])
+  return c.json({
+    data: rows.map((customer) => ({
+      ...customer,
+      latestWonAt: customer.latestWonAt ? new Date(customer.latestWonAt).toISOString() : null,
+    })),
+    regions: regions.filter((region) => region.province || region.city),
     total,
     page,
     totalPages: Math.max(1, Math.ceil(total / limit)),
@@ -634,6 +740,8 @@ customerRoutes.get('/export/csv', async (c) => {
       name: customers.name,
       contactPhone: customers.contactPhone,
       status: customers.status,
+      province: customers.province,
+      city: customers.city,
       address: customers.address,
       saasExpireDate: customers.saasExpireDate,
       ownerName: users.name,
@@ -654,11 +762,13 @@ customerRoutes.get('/export/csv', async (c) => {
 
   return csvResponse(
     '客户清单.csv',
-    ['客户名称', '联系电话', '当前状态', '详细地址', '当前服务到期日', '归属销售', '创建时间'],
+    ['客户名称', '联系电话', '当前状态', '省份', '城市', '详细地址', '当前服务到期日', '归属销售', '创建时间'],
     rows.map((row) => [
       row.name,
       row.contactPhone,
       row.status,
+      row.province,
+      row.city,
       row.address,
       row.saasExpireDate,
       row.ownerName,
@@ -744,6 +854,8 @@ customerRoutes.get('/:id', async (c) => {
       status: customers.status,
       lng: customers.lng,
       lat: customers.lat,
+      province: customers.province,
+      city: customers.city,
       address: customers.address,
       ownerId: customers.ownerId,
       ownerName: users.name,
@@ -1035,9 +1147,11 @@ customerRoutes.put('/:id', async (c) => {
   const name = body.name === undefined ? undefined : optionalText(body.name, 100)
   const contactPhone = body.contact_phone === undefined ? undefined : optionalText(body.contact_phone, 30)
   const statusResult = body.status === undefined ? undefined : customerStatusSchema.safeParse(optionalText(body.status, 50) ?? 'Active')
+  const province = body.province === undefined ? undefined : optionalText(body.province, 50)
+  const city = body.city === undefined ? undefined : optionalText(body.city, 50)
   const address = body.address === undefined ? undefined : optionalText(body.address, 500)
   const ownerIdResult = body.owner_id === undefined ? undefined : optionalText(body.owner_id, 128)
-  if (name === undefined || name === null || contactPhone === undefined || address === undefined) {
+  if (name === undefined || name === null || contactPhone === undefined || province === undefined || city === undefined || address === undefined) {
     return c.json({ error: '客户资料格式无效' }, 400)
   }
   if (statusResult && !statusResult.success) return c.json({ error: '客户状态无效' }, 400)
@@ -1055,12 +1169,14 @@ customerRoutes.put('/:id', async (c) => {
     ...(name !== undefined ? { name } : {}),
     ...(contactPhone !== undefined ? { contactPhone } : {}),
     ...(statusResult?.success ? { status: statusResult.data } : {}),
+    ...(province !== undefined ? { province } : {}),
+    ...(city !== undefined ? { city } : {}),
     ...(address !== undefined ? { address } : {}),
     ...(ownerId !== undefined ? { ownerId } : {}),
     updatedAt: new Date(),
   }
   const [beforeCustomer] = await db
-    .select({ id: customers.id, name: customers.name, contactPhone: customers.contactPhone, status: customers.status, address: customers.address, ownerId: customers.ownerId, saasExpireDate: customers.saasExpireDate })
+    .select({ id: customers.id, name: customers.name, contactPhone: customers.contactPhone, status: customers.status, province: customers.province, city: customers.city, address: customers.address, ownerId: customers.ownerId, saasExpireDate: customers.saasExpireDate })
     .from(customers)
     .where(and(eq(customers.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)

@@ -99,6 +99,7 @@ const defaultProbabilityByStage: Record<(typeof dealStages)[number], number> = {
   Won: 100,
   Lost: 0,
 }
+const activeDealStages = ['Leads', 'Qualified', 'Proposal'] as const
 
 const financialFields = [
   'duration_years',
@@ -223,13 +224,14 @@ dealRoutes.get('/pipeline', async (c) => {
     .where(and(
       eq(deals.isDeleted, false),
       eq(customers.isDeleted, false),
+      inArray(deals.stage, activeDealStages),
       search ? like(customers.name, `%${search}%`) : undefined,
       actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
     ))
     .groupBy(deals.stage)
 
   const byStage = new Map(rows.map((row) => [row.stage, row]))
-  const stages = dealStages.map((stage) => {
+  const stages = activeDealStages.map((stage) => {
     const row = byStage.get(stage)
     return {
       stage,
@@ -252,10 +254,10 @@ dealRoutes.get('/pipeline/:stage', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
   const stageParam = c.req.param('stage')
-  if (!dealStages.includes(stageParam as (typeof dealStages)[number])) {
+  if (!activeDealStages.includes(stageParam as (typeof activeDealStages)[number])) {
     return c.json({ error: '商机阶段无效' }, 400)
   }
-  const stage = stageParam as (typeof dealStages)[number]
+  const stage = stageParam as (typeof activeDealStages)[number]
   const search = c.req.query('search')?.trim().slice(0, 100)
   const limit = parsePagination(c.req.query('limit'), 10, 50)
   const cursor = decodePipelineCursor(c.req.query('cursor'))

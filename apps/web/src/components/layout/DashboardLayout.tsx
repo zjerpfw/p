@@ -1,5 +1,5 @@
 // apps/web/src/components/layout/DashboardLayout.tsx
-import { BriefcaseBusiness, ChevronRight, History, LayoutDashboard, LogOut, Settings, ShieldCheck, UserRound, UsersRound, WalletCards } from 'lucide-react'
+import { BriefcaseBusiness, ChevronRight, History, LayoutDashboard, LogOut, MapPinned, Settings, ShieldCheck, UserRound, UsersRound, WalletCards } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import { CommandPalette } from './CommandPalette'
 const navigation = [
   { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { to: '/customers', label: '客户池', icon: UsersRound },
+  { to: '/won-customers', label: '成交客户', icon: MapPinned },
   { to: '/deals', label: '商机看板', icon: BriefcaseBusiness },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
   { to: '/finance', label: '财务台账', icon: WalletCards },
@@ -44,7 +45,7 @@ function DesktopNavigation() {
 
 const mobileNavigation = [
   { to: '/deals', label: '看板', icon: BriefcaseBusiness },
-  { to: '/customers', label: '客户', icon: UsersRound },
+  { to: '/won-customers', label: '成交', icon: MapPinned },
   { to: '/my-work', label: '我的', icon: UserRound },
 ]
 
