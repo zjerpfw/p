@@ -1,6 +1,6 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns'
-import { AtSign, CalendarCheck, CalendarSync, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, MessageCircleMore, Paperclip, Pencil, Phone, Plus, Send, Trash2, Upload } from 'lucide-react'
+import { AtSign, CalendarCheck, CalendarSync, Check, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, MessageCircleMore, Paperclip, Pencil, Phone, Plus, Send, Square, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -12,6 +12,7 @@ import { CreateInvoiceSheet } from '@/components/customers/CreateInvoiceSheet'
 import { CreatePaymentSheet } from '@/components/customers/CreatePaymentSheet'
 import { CustomerFinancePanel } from '@/components/customers/CustomerFinancePanel'
 import { ContactSheet } from '@/components/customers/ContactSheet'
+import { TaskSheet } from '@/components/customers/TaskSheet'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -71,6 +72,7 @@ export default function CustomerDetailPage() {
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false)
   const [contactSheetOpen, setContactSheetOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [taskSheetOpen, setTaskSheetOpen] = useState(false)
 
   const customer = data?.customer
   const assetCustomerId = customer?.id ?? ''
@@ -122,6 +124,22 @@ export default function CustomerDetailPage() {
       toast.success('联系人已删除')
     },
     onError: (contactError) => toast.error(contactError instanceof Error ? contactError.message : '联系人删除失败'),
+  })
+
+  const updateTask = useMutation({
+    mutationFn: (taskId: string) => apiFetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Completed' }),
+    }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+      ])
+      toast.success('任务已完成')
+    },
+    onError: (taskError) => toast.error(taskError instanceof Error ? taskError.message : '任务更新失败'),
   })
 
   function confirmDeleteCustomer() {
@@ -261,6 +279,13 @@ export default function CustomerDetailPage() {
               {data?.contacts.length === 0 && <div className="px-5 py-6 text-sm text-muted-foreground"><p>暂无联系人</p><Button className="mt-3" onClick={openCreateContact} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />添加首位联系人</Button></div>}
             </CardContent>
           </Card>
+          <Card className="gap-0 overflow-hidden py-0">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-4"><CardTitle>跟进任务</CardTitle><Button aria-label="新建跟进任务" onClick={() => setTaskSheetOpen(true)} size="icon-sm" type="button" variant="ghost"><Plus aria-hidden="true" /></Button></CardHeader>
+            <CardContent className="divide-y divide-border p-0">
+              {data?.tasks.map((task) => <article className="flex items-start gap-3 px-5 py-4" key={task.id}><button aria-label={task.status === 'Completed' ? `任务 ${task.title} 已完成` : `完成任务 ${task.title}`} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" disabled={task.status === 'Completed' || updateTask.isPending} onClick={() => updateTask.mutate(task.id)} type="button">{task.status === 'Completed' ? <Check aria-hidden="true" className="size-4 text-emerald-600" /> : <Square aria-hidden="true" className="size-4" />}</button><div className="min-w-0 flex-1"><p className={`text-sm font-medium ${task.status === 'Completed' ? 'text-muted-foreground line-through' : 'text-slate-800'}`}>{task.title}</p><p className="mt-1 text-xs text-muted-foreground">{task.status === 'Completed' ? '已完成' : `截止 ${format(new Date(task.dueAt), 'MM-dd HH:mm')}`}{task.priority === 'High' && task.status !== 'Completed' ? ' · 高优先级' : ''}</p>{task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}</div></article>)}
+              {data?.tasks.length === 0 && <div className="px-5 py-6 text-sm text-muted-foreground"><p>暂无跟进任务</p><Button className="mt-3" onClick={() => setTaskSheetOpen(true)} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />创建任务</Button></div>}
+            </CardContent>
+          </Card>
           <div className="grid gap-2"><Button onClick={() => setActivitySheetOpen(true)} type="button"><CalendarCheck aria-hidden="true" />完整跟进记录</Button><Button disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} type="button" variant="ghost"><Trash2 aria-hidden="true" />作废客户</Button></div>
         </aside>
 
@@ -323,6 +348,7 @@ export default function CustomerDetailPage() {
       <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
       <ContactSheet contact={editingContact} customerId={customer.id} onOpenChange={(open) => { setContactSheetOpen(open); if (!open) setEditingContact(null) }} open={contactSheetOpen} />
+      <TaskSheet customerId={customer.id} deals={data?.deals.map((deal) => ({ id: deal.id, productName: deal.productName, stage: deal.stage })) ?? []} onOpenChange={setTaskSheetOpen} open={taskSheetOpen} />
       <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
       <CreateContractSheet
         customerId={customer.id}

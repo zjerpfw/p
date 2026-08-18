@@ -14,6 +14,7 @@ import { dealRoutes } from './routes/deals'
 import { invoiceRoutes } from './routes/invoices'
 import { paymentRoutes } from './routes/payments'
 import { storage } from './routes/storage'
+import { taskRoutes } from './routes/tasks'
 import { userRoutes } from './routes/users'
 import type { Env } from './env'
 import { sendRenewalReminders } from './scheduled/renewal-reminders'
@@ -91,6 +92,7 @@ app.route('/api/customers', customerRoutes)
 app.route('/api/deals', dealRoutes)
 app.route('/api/activities', activityRoutes)
 app.route('/api/storage', storage)
+app.route('/api/tasks', taskRoutes)
 app.route('/api/users', userRoutes)
 
 export default {
