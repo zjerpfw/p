@@ -25,6 +25,7 @@ interface SettingsFormValues {
   amap_security_code: string
   wechat_corp_id: string
   wechat_corp_secret: string
+  wechat_agent_id: string
   ww_verify_code: string
 }
 
@@ -47,6 +48,7 @@ const defaultValues: SettingsFormValues = {
   amap_security_code: '',
   wechat_corp_id: '',
   wechat_corp_secret: '',
+  wechat_agent_id: '',
   ww_verify_code: '',
 }
 
@@ -57,6 +59,7 @@ function toFormValues(configs: ConfigItem[]): SettingsFormValues {
     amap_security_code: values.amap_security_code ?? '',
     wechat_corp_id: values.wechat_corp_id ?? '',
     wechat_corp_secret: values.wechat_corp_secret ?? '',
+    wechat_agent_id: values.wechat_agent_id ?? '',
     ww_verify_code: values.ww_verify_code ?? '',
   }
 }
@@ -201,6 +204,18 @@ export default function SettingsPage() {
                     <FormLabel>企业微信应用密钥</FormLabel>
                     <FormControl><Input autoComplete="new-password" placeholder="请输入应用密钥" type="password" {...field} /></FormControl>
                     <FormDescription>已保存的应用密钥会以掩码显示，保留原值不会覆盖。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="wechat_agent_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>应用 Agent ID</FormLabel>
+                    <FormControl><Input autoComplete="off" inputMode="numeric" placeholder="请输入应用 Agent ID" {...field} /></FormControl>
+                    <FormDescription>用于向员工发送续费和任务提醒。</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
