@@ -53,7 +53,7 @@ const transferCustomersSchema = z.object({
 })
 const MAX_CUSTOMER_IMPORT_BYTES = 512 * 1024
 const MAX_CUSTOMER_IMPORT_ROWS = 200
-const customerImportHeaderAliases: Record<string, 'name' | 'contactPhone' | 'status' | 'address'> = {
+const customerImportHeaderAliases: Record<string, 'name' | 'contactPhone' | 'status' | 'province' | 'city' | 'address'> = {
   '客户名称': 'name',
   name: 'name',
   '联系电话': 'contactPhone',
@@ -61,6 +61,10 @@ const customerImportHeaderAliases: Record<string, 'name' | 'contactPhone' | 'sta
   phone: 'contactPhone',
   '当前状态': 'status',
   status: 'status',
+  '省份': 'province',
+  province: 'province',
+  '城市': 'city',
+  city: 'city',
   '公司地址': 'address',
   '详细地址': 'address',
   address: 'address',
@@ -197,7 +201,7 @@ function parseCsvRows(content: string) {
 }
 
 function getCustomerImportColumnIndexes(headers: string[]) {
-  const columns = new Map<'name' | 'contactPhone' | 'status' | 'address', number>()
+  const columns = new Map<'name' | 'contactPhone' | 'status' | 'province' | 'city' | 'address', number>()
   headers.forEach((header, index) => {
     const key = customerImportHeaderAliases[header.trim().replace(/^\uFEFF/, '').toLowerCase()]
     if (key && !columns.has(key)) columns.set(key, index)
@@ -336,7 +340,7 @@ customerRoutes.post('/import/csv', async (c) => {
   const now = new Date()
   const seenNames = new Set<string>()
   const seenPhones = new Set<string>()
-  const importedCustomers: Array<{ id: string; name: string; contactPhone: string | null; status: (typeof customerStatuses)[number]; address: string | null; ownerId: string; createdAt: Date; updatedAt: Date }> = []
+  const importedCustomers: Array<{ id: string; name: string; contactPhone: string | null; status: (typeof customerStatuses)[number]; province: string | null; city: string | null; address: string | null; ownerId: string; createdAt: Date; updatedAt: Date }> = []
   const errors: Array<{ row: number; reason: string }> = []
   let skipped = 0
 
@@ -344,10 +348,12 @@ customerRoutes.post('/import/csv', async (c) => {
     const name = optionalText(row[columns.get('name')!], 100)
     const contactPhone = optionalText(columns.has('contactPhone') ? row[columns.get('contactPhone')!] : undefined, 30)
     const statusResult = customerStatusSchema.safeParse(optionalText(columns.has('status') ? row[columns.get('status')!] : undefined, 50) ?? 'Active')
+    const province = optionalText(columns.has('province') ? row[columns.get('province')!] : undefined, 50)
+    const city = optionalText(columns.has('city') ? row[columns.get('city')!] : undefined, 50)
     const address = optionalText(columns.has('address') ? row[columns.get('address')!] : undefined, 500)
     const rowNumber = index + 2
-    if (!name || contactPhone === undefined || address === undefined || !statusResult.success) {
-      errors.push({ row: rowNumber, reason: !statusResult.success ? '客户状态无效' : '客户名称、联系电话或详细地址格式无效' })
+    if (!name || contactPhone === undefined || province === undefined || city === undefined || address === undefined || !statusResult.success) {
+      errors.push({ row: rowNumber, reason: !statusResult.success ? '客户状态无效' : '客户名称、联系电话、地域或详细地址格式无效' })
       continue
     }
     const normalizedName = name.toLowerCase()
@@ -359,7 +365,7 @@ customerRoutes.post('/import/csv', async (c) => {
     seenNames.add(normalizedName)
     if (normalizedPhone) seenPhones.add(normalizedPhone)
     importedCustomers.push({
-      id: crypto.randomUUID(), name, contactPhone, status: statusResult.data, address,
+      id: crypto.randomUUID(), name, contactPhone, status: statusResult.data, province, city, address,
       ownerId: actor.id, createdAt: now, updatedAt: now,
     })
   }

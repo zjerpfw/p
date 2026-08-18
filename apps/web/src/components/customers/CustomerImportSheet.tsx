@@ -19,7 +19,7 @@ interface CustomerImportResult {
 }
 
 function downloadTemplate() {
-  const content = '\uFEFF客户名称,联系电话,当前状态,公司地址\n示例客户,13800138000,Following,河南省焦作市\n'
+  const content = '\uFEFF客户名称,联系电话,当前状态,省份,城市,公司地址\n示例客户,13800138000,Following,河南省,焦作市,解放区示例路 100 号\n'
   const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
@@ -62,7 +62,7 @@ export function CustomerImportSheet({ open, onOpenChange }: CustomerImportSheetP
     <SheetContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
       <SheetHeader className="border-b border-slate-200 px-6 py-5">
         <SheetTitle>批量导入客户</SheetTitle>
-        <SheetDescription>上传 CSV 后，客户将自动归属到当前登录人员。</SheetDescription>
+        <SheetDescription>上传 CSV 后，客户将自动归属到当前登录人员；可填写省份和城市用于成交客户拜访规划。</SheetDescription>
       </SheetHeader>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
         <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5">
