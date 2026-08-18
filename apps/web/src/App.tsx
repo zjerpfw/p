@@ -13,6 +13,7 @@ const DealsPage = lazy(() => import('./pages/DealsPage'))
 const FinancePage = lazy(() => import('./pages/FinancePage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const MyWorkPage = lazy(() => import('./pages/MyWorkPage'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const UsersPage = lazy(() => import('./pages/UsersPage'))
 const WonCustomersPage = lazy(() => import('./pages/WonCustomersPage'))
@@ -36,7 +37,7 @@ export default function App() {
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/my-work" element={<MyWorkPage />} />
             <Route path="/finance" element={<FinancePage />} />
-            <Route element={<AdminRoute />}><Route path="/settings" element={<SettingsPage />} /><Route path="/users" element={<UsersPage />} /><Route path="/audit-logs" element={<AuditLogsPage />} /></Route>
+            <Route element={<AdminRoute />}><Route path="/settings" element={<SettingsPage />} /><Route path="/users" element={<UsersPage />} /><Route path="/audit-logs" element={<AuditLogsPage />} /><Route path="/notifications" element={<NotificationsPage />} /></Route>
           </Route>
         </Route>
         <Route path="*" element={<Navigate replace to="/" />} />

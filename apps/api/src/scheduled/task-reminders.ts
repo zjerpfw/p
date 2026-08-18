@@ -76,6 +76,8 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
       referenceId: candidate.task.id,
       recipientUserId: candidate.task.recipientUserId,
       reminderDate,
+      status: 'Pending',
+      attemptCount: 0,
       createdAt: now,
     }).onConflictDoNothing().returning({ id: notificationLogs.id })
     if (inserted) claimed.push({ ...candidate, logId })
@@ -99,9 +101,18 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
     ].filter(Boolean).join('\n')
     try {
       await sendWeChatMarkdownMessage(env, accessToken, task.wechatUserId!.trim(), content)
-      await db.update(notificationLogs).set({ sentAt: new Date() }).where(eq(notificationLogs.id, logId))
+      await db.update(notificationLogs).set({
+        status: 'Sent',
+        sentAt: new Date(),
+        lastError: null,
+        attemptCount: 1,
+      }).where(eq(notificationLogs.id, logId))
     } catch (error) {
-      await db.delete(notificationLogs).where(eq(notificationLogs.id, logId))
+      await db.update(notificationLogs).set({
+        status: 'Failed',
+        lastError: error instanceof Error ? error.message.slice(0, 1_000) : '企业微信发送失败',
+        attemptCount: 1,
+      }).where(eq(notificationLogs.id, logId))
       throw error
     }
   }))

@@ -1,5 +1,5 @@
 // apps/web/src/components/layout/DashboardLayout.tsx
-import { BriefcaseBusiness, ChevronRight, History, LayoutDashboard, LogOut, MapPinned, Settings, ShieldCheck, UserRound, UsersRound, WalletCards } from 'lucide-react'
+import { BellRing, BriefcaseBusiness, ChevronRight, History, LayoutDashboard, LogOut, MapPinned, Settings, ShieldCheck, UserRound, UsersRound, WalletCards } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ const navigation = [
   { to: '/finance', label: '财务台账', icon: WalletCards },
   { to: '/users', label: '员工管理', icon: ShieldCheck, adminOnly: true },
   { to: '/audit-logs', label: '操作日志', icon: History, adminOnly: true },
+  { to: '/notifications', label: '通知记录', icon: BellRing, adminOnly: true },
   { to: '/settings', label: '系统设置', icon: Settings, adminOnly: true },
 ]
 

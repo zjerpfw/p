@@ -136,6 +136,8 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
       referenceId: candidate.service.dealId,
       recipientUserId: candidate.localUserId,
       reminderDate,
+      status: 'Pending',
+      attemptCount: 0,
       createdAt: now,
     }).onConflictDoNothing().returning({ id: notificationLogs.id })
     if (inserted) claimedReminders.push(candidate)
@@ -161,11 +163,13 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
       return sendWeChatMarkdownMessage(env, accessToken, wechatUserId, content)
         .then(async () => {
           await db.update(notificationLogs)
-            .set({ sentAt: new Date() })
+            .set({ status: 'Sent', sentAt: new Date(), lastError: null, attemptCount: 1 })
             .where(eq(notificationLogs.id, logId))
         })
         .catch(async (error) => {
-          await db.delete(notificationLogs).where(eq(notificationLogs.id, logId))
+          await db.update(notificationLogs)
+            .set({ status: 'Failed', lastError: error instanceof Error ? error.message.slice(0, 1_000) : '企业微信发送失败', attemptCount: 1 })
+            .where(eq(notificationLogs.id, logId))
           throw error
         })
     }),

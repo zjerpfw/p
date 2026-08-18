@@ -15,6 +15,7 @@ import { DashboardQueryError, dashboardRoutes } from './routes/dashboard'
 import { dealRoutes } from './routes/deals'
 import { financeRoutes } from './routes/finance'
 import { invoiceRoutes } from './routes/invoices'
+import { notificationRoutes } from './routes/notifications'
 import { paymentRoutes } from './routes/payments'
 import { storage } from './routes/storage'
 import { taskRoutes } from './routes/tasks'
@@ -112,6 +113,7 @@ app.route('/api/audit-logs', auditLogRoutes)
 app.route('/api/configs', configRoutes)
 app.route('/api/contracts', contractRoutes)
 app.route('/api/invoices', invoiceRoutes)
+app.route('/api/notifications', notificationRoutes)
 app.route('/api/payments', paymentRoutes)
 app.route('/api/finance', financeRoutes)
 app.route('/api/dashboard', dashboardRoutes)

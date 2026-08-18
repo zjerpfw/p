@@ -26,6 +26,7 @@ export const paymentStatuses = ['Pending', 'Received', 'Reversed'] as const
 export const assetTypes = ['Contract', 'Invoice', 'PaymentProof'] as const
 export const assetUploadStatuses = ['Pending', 'Uploaded', 'Failed', 'Deleted'] as const
 export const notificationTypes = ['RenewalReminder', 'TaskUpcomingReminder', 'TaskDueReminder', 'TaskOverdueReminder'] as const
+export const notificationStatuses = ['Pending', 'Sent', 'Failed'] as const
 export const taskStatuses = ['Open', 'Completed'] as const
 export const taskPriorities = ['Low', 'Normal', 'High'] as const
 export const auditActions = ['Created', 'Updated', 'Deleted', 'Won', 'Renewed', 'Transferred'] as const
@@ -65,6 +66,9 @@ export const notificationLogs = sqliteTable(
     referenceId: text('reference_id').notNull(),
     recipientUserId: text('recipient_user_id').notNull(),
     reminderDate: text('reminder_date').notNull(),
+    status: text('status', { enum: notificationStatuses }).notNull().default('Pending'),
+    lastError: text('last_error'),
+    attemptCount: integer('attempt_count').notNull().default(0),
     sentAt: integer('sent_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
