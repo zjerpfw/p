@@ -20,7 +20,7 @@ export default function MyWorkPage() {
   const activitiesQuery = useActivities()
   const dealsQuery = useDeals({ limit: 5 })
   const [taskStatus, setTaskStatus] = useState<TaskStatus>('Open')
-  const tasksQuery = useTasks({ status: taskStatus, limit: 30 })
+  const tasksQuery = useTasks({ status: taskStatus, assigneeOnly: true, limit: 30 })
   const queryClient = useQueryClient()
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null)
   const updateTaskStatus = useMutation({

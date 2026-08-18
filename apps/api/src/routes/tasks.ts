@@ -46,6 +46,10 @@ function parseLimit(value: string | undefined) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, 100) : 50
 }
 
+function parseBooleanQuery(value: string | undefined) {
+  return value === 'true' || value === '1'
+}
+
 async function getVisibleTask(db: ReturnType<typeof createDb>, taskId: string, actor: { id: string; role: string }) {
   return db
     .select({
@@ -80,11 +84,13 @@ taskRoutes.get('/', async (c) => {
   const status = c.req.query('status')
   if (status && !taskStatuses.includes(status as (typeof taskStatuses)[number])) return c.json({ error: '任务状态无效' }, 400)
   const customerId = c.req.query('customer_id')?.trim()
+  const assigneeOnly = parseBooleanQuery(c.req.query('assignee_only'))
   const limit = parseLimit(c.req.query('limit'))
   const db = createDb(c.env.DB)
   const filters = [
     status ? eq(tasks.status, status as (typeof taskStatuses)[number]) : undefined,
     customerId ? eq(tasks.customerId, customerId) : undefined,
+    assigneeOnly ? eq(tasks.assigneeId, actor.id) : undefined,
     eq(customers.isDeleted, false),
     actor.role !== 'admin' ? or(eq(tasks.assigneeId, actor.id), eq(tasks.createdBy, actor.id), eq(customers.ownerId, actor.id)) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))

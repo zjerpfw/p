@@ -27,6 +27,7 @@ export interface Task {
 export interface TaskFilters {
   status?: TaskStatus
   customerId?: string
+  assigneeOnly?: boolean
   limit?: number
   enabled?: boolean
 }
@@ -35,6 +36,7 @@ export function useTasks(filters: TaskFilters = {}) {
   const params = new URLSearchParams()
   if (filters.status) params.set('status', filters.status)
   if (filters.customerId) params.set('customer_id', filters.customerId)
+  if (filters.assigneeOnly) params.set('assignee_only', 'true')
   params.set('limit', String(filters.limit ?? 50))
   return useQuery({
     queryKey: ['tasks', filters],
