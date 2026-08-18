@@ -26,6 +26,17 @@ export type { Env } from './env'
 
 const app = new Hono<{ Bindings: Env }>()
 
+app.onError((error, c) => {
+  const requestId = crypto.randomUUID()
+  console.error('Unhandled API error', {
+    requestId,
+    method: c.req.method,
+    path: new URL(c.req.url).pathname,
+    error: error instanceof Error ? error.message : String(error),
+  })
+  return c.json({ error: '服务器处理请求失败，请稍后重试', requestId }, 500)
+})
+
 const LOCAL_DEVELOPMENT_ORIGINS = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',

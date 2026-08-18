@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { todayInShanghai } from '../lib/shanghai-date'
 
 export const dashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -17,6 +18,18 @@ const stageLabels: Record<string, string> = {
   Lost: '遗憾输单',
 }
 
+async function runDashboardQuery<T>(name: string, query: () => Promise<T>): Promise<T> {
+  try {
+    return await query()
+  } catch (error) {
+    console.error('Dashboard query failed', {
+      query: name,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
+}
+
 dashboardRoutes.use('*', async (c, next) => {
   const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
   return middleware(c, next)
@@ -24,6 +37,7 @@ dashboardRoutes.use('*', async (c, next) => {
 
 dashboardRoutes.get('/', async (c) => {
   const now = new Date()
+  const todayStart = todayInShanghai(now)
   const renewalDeadline = new Date(now)
   renewalDeadline.setDate(renewalDeadline.getDate() + 60)
   const staleFollowUpAt = new Date(now.getTime() - 7 * 86_400_000)
@@ -38,32 +52,33 @@ dashboardRoutes.get('/', async (c) => {
     : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers, overdueReceivables, [taskSummary], overdueTasks, [staleFollowUpSummary], staleFollowUps] = await Promise.all([
-    db
+  // D1 queries are deliberately serialized. Concurrent dashboard aggregates can exhaust the
+  // subrequest resources available to a single Worker invocation and turn the whole page into a 500.
+  const [newLead] = await runDashboardQuery('new-leads', () => db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
-      .where(and(eq(deals.stage, 'Leads'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
-    db
+      .where(and(eq(deals.stage, 'Leads'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)))
+  const [wonProfit] = await runDashboardQuery('won-profit', () => db
       .select({ totalCents: sql<number>`coalesce(sum(${deals.netProfitCents}), 0)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
-      .where(and(eq(deals.stage, 'Won'), gte(deals.wonAt, monthStart), lt(deals.wonAt, nextMonthStart), ...activeFilters)),
-    db
+      .where(and(eq(deals.stage, 'Won'), gte(deals.wonAt, monthStart), lt(deals.wonAt, nextMonthStart), ...activeFilters)))
+  const [weightedForecast] = await runDashboardQuery('weighted-forecast', () => db
       .select({ totalCents: sql<number>`coalesce(sum(${deals.amountCents} * ${deals.probability} / 100), 0)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(
         inArray(deals.stage, ['Leads', 'Qualified', 'Proposal']),
         ...activeFilters,
-      )),
-    db
+      )))
+  const stageDistribution = await runDashboardQuery('stage-distribution', () => db
       .select({ stage: deals.stage, count: sql<number>`count(*)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(...activeFilters))
-      .groupBy(deals.stage),
-    db
+      .groupBy(deals.stage))
+  const renewalCustomers = await runDashboardQuery('renewal-customers', () => db
       .select({
         customerId: customers.id,
         customerName: customers.name,
@@ -77,8 +92,8 @@ dashboardRoutes.get('/', async (c) => {
         lte(customers.saasExpireDate, renewalDeadline),
         ownerFilter,
       ))
-      .orderBy(asc(customers.saasExpireDate)),
-    db
+      .orderBy(asc(customers.saasExpireDate)))
+  const overdueReceivables = await runDashboardQuery('overdue-receivables', () => db
       .select({
         id: contracts.id,
         customerId: contracts.customerId,
@@ -102,16 +117,16 @@ dashboardRoutes.get('/', async (c) => {
       .groupBy(contracts.id)
       .having(sql`coalesce(sum(case when ${payments.status} = 'Received' then ${payments.amountCents} else 0 end), 0) < ${contracts.totalAmountCents}`)
       .orderBy(asc(contracts.paymentDueAt))
-      .limit(20),
-    db
+      .limit(20))
+  const [taskSummary] = await runDashboardQuery('task-summary', () => db
       .select({
         openCount: sql<number>`count(*)`,
-        overdueCount: sql<number>`coalesce(sum(case when ${tasks.dueAt} < ${now} then 1 else 0 end), 0)`,
+        overdueCount: sql<number>`coalesce(sum(case when ${tasks.dueAt} < ${todayStart} then 1 else 0 end), 0)`,
       })
       .from(tasks)
       .innerJoin(customers, eq(tasks.customerId, customers.id))
-      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), taskVisibilityFilter)),
-    db
+      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), taskVisibilityFilter)))
+  const overdueTasks = await runDashboardQuery('overdue-tasks', () => db
       .select({
         id: tasks.id,
         customerId: tasks.customerId,
@@ -124,18 +139,18 @@ dashboardRoutes.get('/', async (c) => {
       .from(tasks)
       .innerJoin(customers, eq(tasks.customerId, customers.id))
       .innerJoin(users, eq(tasks.assigneeId, users.id))
-      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, now), taskVisibilityFilter))
+      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, todayStart), taskVisibilityFilter))
       .orderBy(asc(tasks.dueAt))
-      .limit(10),
-    db
+      .limit(10))
+  const [staleFollowUpSummary] = await runDashboardQuery('stale-follow-up-summary', () => db
       .select({ count: sql<number>`count(*)` })
       .from(customers)
       .where(and(
         eq(customers.isDeleted, false),
         ownerFilter,
         sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})`,
-      )),
-    db
+      )))
+  const staleFollowUps = await runDashboardQuery('stale-follow-ups', () => db
       .select({
         customerId: customers.id,
         customerName: customers.name,
@@ -150,8 +165,7 @@ dashboardRoutes.get('/', async (c) => {
         sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})`,
       ))
       .orderBy(asc(sql`coalesce((select max(${activities.createdAt}) from ${activities} where ${activities.customerId} = ${customers.id}), 0)`))
-      .limit(10),
-  ])
+      .limit(10))
 
   const renewalCustomerIds = renewalCustomers.map((customer) => customer.customerId)
   const renewalDealRows = renewalCustomerIds.length > 0
@@ -217,7 +231,7 @@ dashboardRoutes.get('/', async (c) => {
     }),
     overdueTasks: overdueTasks.map((task) => ({
       ...task,
-      overdueDays: Math.max(0, Math.floor((now.getTime() - task.dueAt.getTime()) / 86_400_000)),
+      overdueDays: Math.max(0, Math.floor((todayStart.getTime() - todayInShanghai(task.dueAt).getTime()) / 86_400_000)),
     })),
     staleFollowUps: staleFollowUps.map((customer) => ({
       ...customer,
