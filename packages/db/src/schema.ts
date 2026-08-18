@@ -24,6 +24,7 @@ export const invoiceStatuses = ['Draft', 'Issued', 'Voided'] as const
 export const paymentStatuses = ['Pending', 'Received', 'Reversed'] as const
 export const assetTypes = ['Contract', 'Invoice', 'PaymentProof'] as const
 export const assetUploadStatuses = ['Pending', 'Uploaded', 'Failed', 'Deleted'] as const
+export const notificationTypes = ['RenewalReminder'] as const
 
 export const users = sqliteTable(
   'users',
@@ -51,6 +52,28 @@ export const systemConfigs = sqliteTable('system_configs', {
     .notNull()
     .default(sql`(unixepoch())`),
 })
+
+export const notificationLogs = sqliteTable(
+  'notification_logs',
+  {
+    id: text('id').primaryKey(),
+    type: text('type', { enum: notificationTypes }).notNull(),
+    referenceId: text('reference_id').notNull(),
+    recipientUserId: text('recipient_user_id').notNull(),
+    reminderDate: text('reminder_date').notNull(),
+    sentAt: integer('sent_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('notification_logs_dedupe_unique').on(
+      table.type,
+      table.referenceId,
+      table.recipientUserId,
+      table.reminderDate,
+    ),
+    index('notification_logs_reference_idx').on(table.referenceId),
+  ],
+)
 
 export const customers = sqliteTable(
   'customers',

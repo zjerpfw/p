@@ -1,6 +1,6 @@
 // apps/api/src/scheduled/renewal-reminders.ts
 import { createDb } from '@crm/db/client'
-import { customers, dealSplits, deals, users } from '@crm/db/schema'
+import { customers, dealSplits, deals, notificationLogs, users } from '@crm/db/schema'
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import type { Env } from '../env'
 import { getWeChatAccessToken, sendWeChatMarkdownMessage } from '../services/wechat'
@@ -16,6 +16,17 @@ function formatDateInShanghai(date: Date) {
   })
     .format(date)
     .replaceAll('/', '-')
+}
+
+function getReminderDateInShanghai(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
 export async function sendRenewalReminders(env: Env, now = new Date()) {
@@ -88,10 +99,13 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
   )
   const reminders = expiringServices.flatMap((service) => {
     const localRecipientIds = new Set([service.ownerId, ...(splitUsersByDeal.get(service.dealId) ?? [])])
-    return [...localRecipientIds]
-      .map((localUserId) => wechatUserIdByLocalId.get(localUserId))
-      .filter((wechatUserId): wechatUserId is string => Boolean(wechatUserId))
-      .map((wechatUserId) => ({ service, wechatUserId }))
+    const seenWechatUserIds = new Set<string>()
+    return [...localRecipientIds].flatMap((localUserId) => {
+      const wechatUserId = wechatUserIdByLocalId.get(localUserId)
+      if (!wechatUserId || seenWechatUserIds.has(wechatUserId)) return []
+      seenWechatUserIds.add(wechatUserId)
+      return [{ service, localUserId, wechatUserId }]
+    })
   })
   const skippedRecipients = localUserIds.length - wechatUserIdByLocalId.size
   if (skippedRecipients > 0) {
@@ -103,9 +117,39 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
     return summary
   }
 
+  const reminderDate = getReminderDateInShanghai(now)
+  const candidates = reminders.map((reminder) => ({
+    ...reminder,
+    logId: `renewal:${reminder.service.dealId}:${reminder.localUserId}:${reminderDate}`,
+  }))
+  const existingRows = await db
+    .select({ id: notificationLogs.id })
+    .from(notificationLogs)
+    .where(inArray(notificationLogs.id, candidates.map((candidate) => candidate.logId)))
+  const existingIds = new Set(existingRows.map((row) => row.id))
+  const claimedReminders = [] as typeof candidates
+  for (const candidate of candidates) {
+    if (existingIds.has(candidate.logId)) continue
+    const [inserted] = await db.insert(notificationLogs).values({
+      id: candidate.logId,
+      type: 'RenewalReminder',
+      referenceId: candidate.service.dealId,
+      recipientUserId: candidate.localUserId,
+      reminderDate,
+      createdAt: now,
+    }).onConflictDoNothing().returning({ id: notificationLogs.id })
+    if (inserted) claimedReminders.push(candidate)
+  }
+  if (claimedReminders.length === 0) {
+    const summary = { matched: expiringServices.length, sent: 0, failed: 0, skippedRecipients, deduplicated: reminders.length }
+    console.info('Renewal reminder job completed', summary)
+    return summary
+  }
+
   const accessToken = await getWeChatAccessToken(env)
   const results = await Promise.allSettled(
-    reminders.map(({ service, wechatUserId }) => {
+    claimedReminders.map((reminder) => {
+      const { service, wechatUserId, logId } = reminder
       const content = [
         '🚨 **续费预警**',
         `客户：**${service.customerName}**`,
@@ -115,6 +159,15 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
       ].join('\n')
 
       return sendWeChatMarkdownMessage(env, accessToken, wechatUserId, content)
+        .then(async () => {
+          await db.update(notificationLogs)
+            .set({ sentAt: new Date() })
+            .where(eq(notificationLogs.id, logId))
+        })
+        .catch(async (error) => {
+          await db.delete(notificationLogs).where(eq(notificationLogs.id, logId))
+          throw error
+        })
     }),
   )
   const sent = results.filter((result) => result.status === 'fulfilled').length
@@ -123,7 +176,7 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
     console.error('Renewal reminder delivery failed', failure.reason)
   }
 
-  const summary = { matched: expiringServices.length, sent, failed: results.length - sent, skippedRecipients }
+  const summary = { matched: expiringServices.length, sent, failed: results.length - sent, skippedRecipients, deduplicated: reminders.length - claimedReminders.length }
   console.info('Renewal reminder job completed', summary)
   return summary
 }
