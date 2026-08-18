@@ -1,5 +1,5 @@
 // apps/web/src/components/layout/DashboardLayout.tsx
-import { BriefcaseBusiness, ChevronRight, LayoutDashboard, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
+import { BriefcaseBusiness, ChevronRight, History, LayoutDashboard, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ const navigation = [
   { to: '/deals', label: '商机看板', icon: BriefcaseBusiness },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
   { to: '/users', label: '员工管理', icon: ShieldCheck },
+  { to: '/audit-logs', label: '操作日志', icon: History, adminOnly: true },
   { to: '/settings', label: '系统设置', icon: Settings, adminOnly: true },
 ]
 

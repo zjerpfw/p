@@ -2,6 +2,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import DashboardLayout from './components/layout/DashboardLayout'
 import AdminRoute from './components/layout/AdminRoute'
+import AuditLogsPage from './pages/AuditLogsPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
@@ -24,7 +25,7 @@ export default function App() {
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/deals" element={<DealsPage />} />
           <Route path="/my-work" element={<MyWorkPage />} />
-          <Route element={<AdminRoute />}><Route path="/settings" element={<SettingsPage />} /><Route path="/users" element={<UsersPage />} /></Route>
+          <Route element={<AdminRoute />}><Route path="/settings" element={<SettingsPage />} /><Route path="/users" element={<UsersPage />} /><Route path="/audit-logs" element={<AuditLogsPage />} /></Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />

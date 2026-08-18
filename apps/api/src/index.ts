@@ -5,6 +5,7 @@ import { createDb } from '@crm/db/client'
 import { systemConfigs } from '@crm/db/schema'
 import { eq } from 'drizzle-orm'
 import { activityRoutes } from './routes/activities'
+import { auditLogRoutes } from './routes/audit-logs'
 import { auth } from './routes/auth'
 import { configRoutes } from './routes/configs'
 import { contractRoutes } from './routes/contracts'
@@ -83,6 +84,7 @@ app.get('/:verificationFile{WW_verify_[A-Za-z0-9_-]+\\.txt}', async (c) => {
 })
 
 app.route('/api/auth', auth)
+app.route('/api/audit-logs', auditLogRoutes)
 app.route('/api/configs', configRoutes)
 app.route('/api/contracts', contractRoutes)
 app.route('/api/invoices', invoiceRoutes)

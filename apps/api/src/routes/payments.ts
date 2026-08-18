@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 
 export const paymentRoutes = new Hono<{ Bindings: Env }>()
 
@@ -204,6 +205,7 @@ paymentRoutes.post('/', async (c) => {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '回款编号已存在' }, 409)
     throw error
   }
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Payment', entityId: payment.id, action: 'Created', after: payment }))
   return c.json({ payment }, 201)
 })
 
@@ -217,7 +219,7 @@ paymentRoutes.put('/:id', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
-  const [authorized] = await db.select({ id: payments.id }).from(payments)
+  const [authorized] = await db.select({ id: payments.id, paymentNumber: payments.paymentNumber, amountCents: payments.amountCents, status: payments.status, paidAt: payments.paidAt, note: payments.note, claimedBy: payments.claimedBy }).from(payments)
     .innerJoin(customers, eq(payments.customerId, customers.id))
     .where(and(eq(payments.id, c.req.param('id')), eq(customers.isDeleted, false), ownershipFilter(actor)))
     .limit(1)
@@ -237,6 +239,7 @@ paymentRoutes.put('/:id', async (c) => {
   }
   try {
     const [payment] = await db.update(payments).set(updates).where(eq(payments.id, authorized.id)).returning()
+    c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Payment', entityId: payment.id, action: 'Updated', before: authorized, after: payment }))
     return c.json({ payment })
   } catch (error) {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '回款编号已存在' }, 409)
@@ -248,11 +251,12 @@ paymentRoutes.delete('/:id', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
-  const [authorized] = await db.select({ id: payments.id }).from(payments)
+  const [authorized] = await db.select({ id: payments.id, paymentNumber: payments.paymentNumber, amountCents: payments.amountCents, status: payments.status, paidAt: payments.paidAt, note: payments.note, claimedBy: payments.claimedBy }).from(payments)
     .innerJoin(customers, eq(payments.customerId, customers.id))
     .where(and(eq(payments.id, c.req.param('id')), eq(customers.isDeleted, false), ownershipFilter(actor)))
     .limit(1)
   if (!authorized) return c.json({ error: '回款不存在或无权删除' }, 404)
   await db.delete(payments).where(eq(payments.id, authorized.id))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Payment', entityId: authorized.id, action: 'Deleted', before: authorized }))
   return c.json({ id: authorized.id, deleted: true })
 })

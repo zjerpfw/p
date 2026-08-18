@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 import { addShanghaiCalendarYears, startOfShanghaiDay, todayInShanghai } from '../lib/shanghai-date'
 
 export const customerRoutes = new Hono<{ Bindings: Env }>()
@@ -149,6 +150,7 @@ customerRoutes.post('/', async (c) => {
   }
   const db = createDb(c.env.DB)
   await db.insert(customers).values(customer)
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Created', after: customer }))
 
   return c.json({ customer }, 201)
 })
@@ -230,6 +232,20 @@ customerRoutes.post('/direct-won', async (c) => {
 
   // D1 batch commits all customer, deal, and split records atomically.
   await db.batch([customerInsert, dealInsert, ...splitInserts])
+  c.executionCtx.waitUntil(writeAuditLog(c.env, {
+    actorId: actor.id,
+    entityType: 'Customer',
+    entityId: customerId,
+    action: 'Created',
+    after: { id: customerId, name: parsed.data.name, status: 'Active', saasExpireDate: expireDate },
+  }))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, {
+    actorId: actor.id,
+    entityType: 'Deal',
+    entityId: dealId,
+    action: 'Won',
+    after: { id: dealId, customerId, productName: parsed.data.product_name, amountCents: parsed.data.amount_cents, stage: 'Won' },
+  }))
   return c.json({ customerId, dealId, stage: 'Won' }, 201)
 })
 
@@ -324,6 +340,21 @@ customerRoutes.post('/:id/renew', async (c) => {
     }
     return c.json({ error: '续费请求已被并发处理，请刷新后确认结果' }, 409)
   }
+  c.executionCtx.waitUntil(writeAuditLog(c.env, {
+    actorId: actor.id,
+    entityType: 'Customer',
+    entityId: customer.id,
+    action: 'Renewed',
+    before: { saasExpireDate: recordedExpireDate },
+    after: { saasExpireDate: newExpireDate, amountCents: parsed.data.amount_cents, years: parsed.data.years },
+  }))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, {
+    actorId: actor.id,
+    entityType: 'Deal',
+    entityId: dealId,
+    action: 'Renewed',
+    after: { customerId: customer.id, productName: parsed.data.product, amountCents: parsed.data.amount_cents, stage: 'Won' },
+  }))
   return c.json({
     customerId: customer.id,
     dealId,
@@ -583,12 +614,20 @@ customerRoutes.put('/:id', async (c) => {
     updatedAt: new Date(),
   }
   const db = createDb(c.env.DB)
+  const [beforeCustomer] = await db
+    .select({ id: customers.id, name: customers.name, contactPhone: customers.contactPhone, status: customers.status, address: customers.address, saasExpireDate: customers.saasExpireDate })
+    .from(customers)
+    .where(and(eq(customers.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .limit(1)
+  if (!beforeCustomer) return c.json({ error: '客户不存在或无权编辑' }, 404)
   const [customer] = await db
     .update(customers)
     .set(updates)
-    .where(and(eq(customers.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
+    .where(eq(customers.id, beforeCustomer.id))
     .returning()
   if (!customer) return c.json({ error: '客户不存在或无权编辑' }, 404)
+
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Updated', before: beforeCustomer, after: customer }))
 
   return c.json({ customer })
 })
@@ -599,7 +638,7 @@ customerRoutes.delete('/:id', async (c) => {
   const customerId = c.req.param('id')
   const db = createDb(c.env.DB)
   const [customer] = await db
-    .select({ id: customers.id })
+    .select({ id: customers.id, name: customers.name, status: customers.status, saasExpireDate: customers.saasExpireDate })
     .from(customers)
     .where(and(eq(customers.id, customerId), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)
@@ -613,5 +652,6 @@ customerRoutes.delete('/:id', async (c) => {
   if (wonDeal) return c.json({ error: '客户存在已赢单商机，不能作废' }, 409)
 
   await db.update(customers).set({ isDeleted: true, updatedAt: new Date() }).where(eq(customers.id, customer.id))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Deleted', before: customer, after: { isDeleted: true } }))
   return c.json({ id: customer.id, isDeleted: true })
 })

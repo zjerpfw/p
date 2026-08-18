@@ -27,6 +27,7 @@ export const assetUploadStatuses = ['Pending', 'Uploaded', 'Failed', 'Deleted'] 
 export const notificationTypes = ['RenewalReminder'] as const
 export const taskStatuses = ['Open', 'Completed'] as const
 export const taskPriorities = ['Low', 'Normal', 'High'] as const
+export const auditActions = ['Created', 'Updated', 'Deleted', 'Won', 'Renewed'] as const
 
 export const users = sqliteTable(
   'users',
@@ -74,6 +75,24 @@ export const notificationLogs = sqliteTable(
       table.reminderDate,
     ),
     index('notification_logs_reference_idx').on(table.referenceId),
+  ],
+)
+
+export const auditLogs = sqliteTable(
+  'audit_logs',
+  {
+    id: text('id').primaryKey(),
+    actorId: text('actor_id').references(() => users.id),
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    action: text('action', { enum: auditActions }).notNull(),
+    beforeValue: text('before_value'),
+    afterValue: text('after_value'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    index('audit_logs_entity_idx').on(table.entityType, table.entityId, table.createdAt),
+    index('audit_logs_created_at_idx').on(table.createdAt),
   ],
 )
 

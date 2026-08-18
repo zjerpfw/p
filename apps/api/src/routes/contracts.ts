@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 
 export const contractRoutes = new Hono<{ Bindings: Env }>()
 
@@ -125,6 +126,7 @@ contractRoutes.post('/', async (c) => {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '合同编号已存在' }, 409)
     throw error
   }
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Contract', entityId: contract.id, action: 'Created', after: contract }))
   return c.json({ contract }, 201)
 })
 
@@ -138,6 +140,11 @@ contractRoutes.put('/:id', async (c) => {
   const db = createDb(c.env.DB)
   const [authorized] = await db.select({
     id: contracts.id,
+    contractNumber: contracts.contractNumber,
+    title: contracts.title,
+    status: contracts.status,
+    totalAmountCents: contracts.totalAmountCents,
+    signedAt: contracts.signedAt,
     effectiveStartDate: contracts.effectiveStartDate,
     effectiveEndDate: contracts.effectiveEndDate,
   }).from(contracts).innerJoin(customers, eq(contracts.customerId, customers.id))
@@ -168,6 +175,7 @@ contractRoutes.put('/:id', async (c) => {
   }
   try {
     const [contract] = await db.update(contracts).set(updates).where(eq(contracts.id, authorized.id)).returning()
+    c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Contract', entityId: contract.id, action: 'Updated', before: authorized, after: contract }))
     return c.json({ contract })
   } catch (error) {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '合同编号已存在' }, 409)
@@ -179,11 +187,12 @@ contractRoutes.delete('/:id', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
-  const [authorized] = await db.select({ id: contracts.id }).from(contracts).innerJoin(customers, eq(contracts.customerId, customers.id))
+  const [authorized] = await db.select({ id: contracts.id, contractNumber: contracts.contractNumber, title: contracts.title, status: contracts.status, totalAmountCents: contracts.totalAmountCents }).from(contracts).innerJoin(customers, eq(contracts.customerId, customers.id))
     .where(and(eq(contracts.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined)).limit(1)
   if (!authorized) return c.json({ error: '合同不存在或无权删除' }, 404)
   const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(payments).where(eq(payments.contractId, authorized.id))
   if (Number(count) > 0) return c.json({ error: '合同已存在回款记录，不能删除' }, 409)
   await db.delete(contracts).where(eq(contracts.id, authorized.id))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Contract', entityId: authorized.id, action: 'Deleted', before: authorized }))
   return c.json({ id: authorized.id, deleted: true })
 })

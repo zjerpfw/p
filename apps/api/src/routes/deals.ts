@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 
 export const dealRoutes = new Hono<{ Bindings: Env }>()
 
@@ -368,6 +369,7 @@ dealRoutes.post('/', async (c) => {
     createdAt: new Date(),
   }
   await db.insert(deals).values(deal)
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Deal', entityId: deal.id, action: 'Created', after: deal }))
   return c.json({ deal }, 201)
 })
 
@@ -520,6 +522,14 @@ dealRoutes.post('/:id/won', async (c) => {
       .where(and(eq(deals.id, dealId), eq(deals.idempotencyKey, idempotencyKey), ne(deals.stage, 'Won')))
     throw error
   }
+  c.executionCtx.waitUntil(writeAuditLog(c.env, {
+    actorId: actor.id,
+    entityType: 'Deal',
+    entityId: dealId,
+    action: 'Won',
+    before: deal,
+    after: { stage: 'Won', productName: productNameResult.data.product_name, amountCents: deal.amountCents, startDate, expireDate, netProfitCents: body.net_profit_cents },
+  }))
 
   return c.json({ id: dealId, stage: 'Won', splitCount: splits.length })
 })
@@ -570,7 +580,7 @@ dealRoutes.put('/:id', async (c) => {
   }
   const db = createDb(c.env.DB)
   const [authorizedDeal] = await db
-    .select({ id: deals.id, stage: deals.stage })
+    .select({ id: deals.id, stage: deals.stage, productName: deals.productName, amountCents: deals.amountCents, probability: deals.probability, lostReason: deals.lostReason, expectedCloseDate: deals.expectedCloseDate })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, c.req.param('id')), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -602,6 +612,8 @@ dealRoutes.put('/:id', async (c) => {
     .returning()
   if (!deal) return c.json({ error: '商机更新失败' }, 500)
 
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Deal', entityId: deal.id, action: 'Updated', before: authorizedDeal, after: deal }))
+
   return c.json({ deal })
 })
 
@@ -610,7 +622,7 @@ dealRoutes.delete('/:id', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
   const [authorizedDeal] = await db
-    .select({ id: deals.id })
+    .select({ id: deals.id, productName: deals.productName, amountCents: deals.amountCents, stage: deals.stage })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
     .where(and(eq(deals.id, c.req.param('id')), eq(deals.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -623,6 +635,8 @@ dealRoutes.delete('/:id', async (c) => {
     .where(eq(deals.id, authorizedDeal.id))
     .returning({ id: deals.id })
   if (!deal) return c.json({ error: '商机作废失败' }, 500)
+
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Deal', entityId: deal.id, action: 'Deleted', before: authorizedDeal, after: { isDeleted: true} }))
 
   return c.json({ id: deal.id, isDeleted: true })
 })
