@@ -1,7 +1,7 @@
 // apps/api/src/routes/audit-logs.ts
 import { createDb } from '@crm/db/client'
-import { auditLogs, users } from '@crm/db/schema'
-import { asc, desc, eq } from 'drizzle-orm'
+import { auditActions, auditLogs, users } from '@crm/db/schema'
+import { and, asc, count, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
@@ -19,10 +19,20 @@ auditLogRoutes.get('/', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   if (actor.role !== 'admin') return c.json({ error: '仅管理员可以查看审计日志' }, 403)
   const entityType = c.req.query('entity_type')?.trim().slice(0, 50)
+  const action = c.req.query('action')?.trim()
+  if (action && !auditActions.includes(action as (typeof auditActions)[number])) return c.json({ error: '操作类型无效' }, 400)
+  const rawPage = Number.parseInt(c.req.query('page') ?? '', 10)
+  const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 1_000_000) : 1
   const rawLimit = Number.parseInt(c.req.query('limit') ?? '', 10)
-  const limit = Number.isSafeInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 100
+  const limit = Number.isSafeInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50
   const db = createDb(c.env.DB)
-  const logs = await db
+  const filters = [
+    entityType ? eq(auditLogs.entityType, entityType) : undefined,
+    action ? eq(auditLogs.action, action as (typeof auditActions)[number]) : undefined,
+  ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
+  const where = filters.length > 0 ? and(...filters) : undefined
+  const [logs, [{ total }]] = await Promise.all([
+    db
     .select({
       id: auditLogs.id,
       actorId: auditLogs.actorId,
@@ -36,8 +46,11 @@ auditLogRoutes.get('/', async (c) => {
     })
     .from(auditLogs)
     .leftJoin(users, eq(auditLogs.actorId, users.id))
-    .where(entityType ? eq(auditLogs.entityType, entityType) : undefined)
+    .where(where)
     .orderBy(desc(auditLogs.createdAt), asc(auditLogs.id))
     .limit(limit)
-  return c.json({ logs })
+    .offset((page - 1) * limit),
+    db.select({ total: count() }).from(auditLogs).where(where),
+  ])
+  return c.json({ logs, total, page, totalPages: Math.max(1, Math.ceil(total / limit)) })
 })

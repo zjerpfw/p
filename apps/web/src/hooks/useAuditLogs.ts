@@ -16,10 +16,28 @@ export interface AuditLog {
   createdAt: string
 }
 
-export function useAuditLogs(entityType?: string) {
-  const query = entityType ? `?entity_type=${encodeURIComponent(entityType)}` : ''
+export interface AuditLogFilters {
+  entityType?: string
+  action?: AuditAction
+  page?: number
+  limit?: number
+}
+
+export interface AuditLogResponse {
+  logs: AuditLog[]
+  total: number
+  page: number
+  totalPages: number
+}
+
+export function useAuditLogs(filters: AuditLogFilters = {}) {
+  const params = new URLSearchParams()
+  if (filters.entityType) params.set('entity_type', filters.entityType)
+  if (filters.action) params.set('action', filters.action)
+  params.set('page', String(filters.page ?? 1))
+  params.set('limit', String(filters.limit ?? 50))
   return useQuery({
-    queryKey: ['audit-logs', entityType],
-    queryFn: () => apiFetch<{ logs: AuditLog[] }>(`/api/audit-logs${query}`),
+    queryKey: ['audit-logs', filters],
+    queryFn: () => apiFetch<AuditLogResponse>(`/api/audit-logs?${params.toString()}`),
   })
 }
