@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
 import { activities, attachments, contacts, customerTagAssignments, customerTags, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
-import { and, asc, count, desc, eq, inArray, like, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -123,6 +123,32 @@ function optionalText(value: unknown, maxLength: number) {
   return value.trim().slice(0, maxLength) || null
 }
 
+function normalizePhone(value: string | null) {
+  return value?.replaceAll(/[\s\-()]/g, '') || null
+}
+
+async function findDuplicateCustomer(
+  db: ReturnType<typeof createDb>,
+  name: string,
+  contactPhone: string | null,
+) {
+  const normalizedPhone = normalizePhone(contactPhone)
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(
+      eq(customers.isDeleted, false),
+      or(
+        sql`lower(${customers.name}) = lower(${name})`,
+        normalizedPhone
+          ? sql`replace(replace(replace(replace(${customers.contactPhone}, ' ', ''), '-', ''), '(', ''), ')', '') = ${normalizedPhone}`
+          : undefined,
+      ),
+    ))
+    .limit(1)
+  return customer ?? null
+}
+
 customerRoutes.post('/', async (c) => {
   let body: CreateCustomerPayload
 
@@ -155,6 +181,9 @@ customerRoutes.post('/', async (c) => {
     updatedAt: now,
   }
   const db = createDb(c.env.DB)
+  if (await findDuplicateCustomer(db, name, contactPhone)) {
+    return c.json({ error: '客户名称或联系电话已存在，请先搜索确认' }, 409)
+  }
   await db.insert(customers).values(customer)
   c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Created', after: customer }))
 
@@ -189,6 +218,9 @@ customerRoutes.post('/direct-won', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)
+  if (await findDuplicateCustomer(db, parsed.data.name, parsed.data.contact_phone || null)) {
+    return c.json({ error: '客户名称或联系电话已存在，请先搜索确认' }, 409)
+  }
   const splitUserIds = [...new Set(parsed.data.splits.map((split) => split.user_id))]
   if (splitUserIds.length > 0) {
     const splitUsers = await db.select({ id: users.id }).from(users).where(inArray(users.id, splitUserIds))
