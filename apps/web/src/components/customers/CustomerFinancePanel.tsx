@@ -79,6 +79,7 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
                   <div><p className="text-muted-foreground">待回款</p><p className="mt-1 font-semibold text-amber-700">{formatCents(contract.outstanding_amount_cents)}</p></div>
                 </div>
                 <p className="text-xs text-muted-foreground">生效期：{formatDate(contract.effective_start_date)} 至 {formatDate(contract.effective_end_date)}</p>
+                <p className={contract.payment_due_at && new Date(contract.payment_due_at) < new Date() && contract.outstanding_amount_cents > 0 ? 'text-xs font-medium text-rose-700' : 'text-xs text-muted-foreground'}>回款截止日：{formatDate(contract.payment_due_at)}</p>
               </div>
 
               <div className="border-t border-slate-100 bg-slate-50/70 px-3 py-2.5">

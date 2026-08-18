@@ -1,0 +1,1 @@
+ALTER TABLE `contracts` ADD `payment_due_at` integer;

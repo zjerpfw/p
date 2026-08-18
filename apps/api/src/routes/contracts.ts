@@ -28,6 +28,7 @@ const contractPayloadSchema = z.object({
   signed_at: optionalDateSchema,
   effective_start_date: optionalDateSchema,
   effective_end_date: optionalDateSchema,
+  payment_due_at: optionalDateSchema,
 })
 const updateContractPayloadSchema = contractPayloadSchema.omit({ customer_id: true, deal_id: true }).partial()
 
@@ -69,6 +70,7 @@ contractRoutes.get('/', async (c) => {
     signedAt: contracts.signedAt,
     effectiveStartDate: contracts.effectiveStartDate,
     effectiveEndDate: contracts.effectiveEndDate,
+    paymentDueAt: contracts.paymentDueAt,
     createdAt: contracts.createdAt,
     updatedAt: contracts.updatedAt,
   }).from(contracts)
@@ -95,7 +97,7 @@ contractRoutes.get('/:id', async (c) => {
     contractNumber: contracts.contractNumber, title: contracts.title, status: contracts.status,
     totalAmountCents: contracts.totalAmountCents,
     receivedAmountCents: sql<number>`coalesce(sum(case when ${payments.status} = 'Received' then ${payments.amountCents} else 0 end), 0)`,
-    signedAt: contracts.signedAt, effectiveStartDate: contracts.effectiveStartDate, effectiveEndDate: contracts.effectiveEndDate,
+    signedAt: contracts.signedAt, effectiveStartDate: contracts.effectiveStartDate, effectiveEndDate: contracts.effectiveEndDate, paymentDueAt: contracts.paymentDueAt,
     createdAt: contracts.createdAt, updatedAt: contracts.updatedAt,
   }).from(contracts).innerJoin(customers, eq(contracts.customerId, customers.id)).leftJoin(payments, eq(payments.contractId, contracts.id))
     .where(and(eq(contracts.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
@@ -112,7 +114,8 @@ contractRoutes.post('/', async (c) => {
   const signedAt = parseOptionalDate(parsed.data.signed_at)
   const effectiveStartDate = parseOptionalDate(parsed.data.effective_start_date)
   const effectiveEndDate = parseOptionalDate(parsed.data.effective_end_date)
-  if (signedAt === undefined || effectiveStartDate === undefined || effectiveEndDate === undefined) return c.json({ error: '合同日期格式无效' }, 400)
+  const paymentDueAt = parseOptionalDate(parsed.data.payment_due_at)
+  if (signedAt === undefined || effectiveStartDate === undefined || effectiveEndDate === undefined || paymentDueAt === undefined) return c.json({ error: '合同日期格式无效' }, 400)
   if (effectiveStartDate && effectiveEndDate && effectiveStartDate > effectiveEndDate) return c.json({ error: '合同生效结束日不能早于开始日' }, 400)
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
@@ -121,7 +124,7 @@ contractRoutes.post('/', async (c) => {
     .where(and(eq(deals.id, parsed.data.deal_id), eq(deals.customerId, parsed.data.customer_id), eq(deals.isDeleted, false), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined)).limit(1)
   if (!deal) return c.json({ error: '商机不存在、客户不匹配或无权创建合同' }, 404)
   const now = new Date()
-  const contract = { id: crypto.randomUUID(), customerId: parsed.data.customer_id, dealId: deal.id, contractNumber: parsed.data.contract_number, title: parsed.data.title, status: parsed.data.status, totalAmountCents: parsed.data.total_amount_cents, signedAt, effectiveStartDate, effectiveEndDate, createdBy: actor.id, createdAt: now, updatedAt: now }
+  const contract = { id: crypto.randomUUID(), customerId: parsed.data.customer_id, dealId: deal.id, contractNumber: parsed.data.contract_number, title: parsed.data.title, status: parsed.data.status, totalAmountCents: parsed.data.total_amount_cents, signedAt, effectiveStartDate, effectiveEndDate, paymentDueAt, createdBy: actor.id, createdAt: now, updatedAt: now }
   try { await db.insert(contracts).values(contract) } catch (error) {
     if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '合同编号已存在' }, 409)
     throw error
@@ -147,13 +150,15 @@ contractRoutes.put('/:id', async (c) => {
     signedAt: contracts.signedAt,
     effectiveStartDate: contracts.effectiveStartDate,
     effectiveEndDate: contracts.effectiveEndDate,
+    paymentDueAt: contracts.paymentDueAt,
   }).from(contracts).innerJoin(customers, eq(contracts.customerId, customers.id))
     .where(and(eq(contracts.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined)).limit(1)
   if (!authorized) return c.json({ error: '合同不存在或无权编辑' }, 404)
   const signedAt = parseOptionalDate(parsed.data.signed_at)
   const effectiveStartDate = parseOptionalDate(parsed.data.effective_start_date)
   const effectiveEndDate = parseOptionalDate(parsed.data.effective_end_date)
-  if (signedAt === undefined || effectiveStartDate === undefined || effectiveEndDate === undefined) return c.json({ error: '合同日期格式无效' }, 400)
+  const paymentDueAt = parseOptionalDate(parsed.data.payment_due_at)
+  if (signedAt === undefined || effectiveStartDate === undefined || effectiveEndDate === undefined || paymentDueAt === undefined) return c.json({ error: '合同日期格式无效' }, 400)
   const nextEffectiveStartDate = parsed.data.effective_start_date === undefined
     ? authorized.effectiveStartDate
     : effectiveStartDate
@@ -171,6 +176,7 @@ contractRoutes.put('/:id', async (c) => {
     ...(parsed.data.signed_at !== undefined ? { signedAt } : {}),
     ...(parsed.data.effective_start_date !== undefined ? { effectiveStartDate } : {}),
     ...(parsed.data.effective_end_date !== undefined ? { effectiveEndDate } : {}),
+    ...(parsed.data.payment_due_at !== undefined ? { paymentDueAt } : {}),
     updatedAt: new Date(),
   }
   try {

@@ -41,6 +41,7 @@ const createContractFormSchema = z.object({
   signed_at: dateFieldSchema,
   effective_start_date: dateFieldSchema,
   effective_end_date: dateFieldSchema,
+  payment_due_at: dateFieldSchema,
 }).refine(
   (values) => !values.effective_start_date || !values.effective_end_date || values.effective_start_date <= values.effective_end_date,
   { message: '合同生效结束日不能早于开始日', path: ['effective_end_date'] },
@@ -71,6 +72,7 @@ const defaultValues: CreateContractFormValues = {
   signed_at: '',
   effective_start_date: '',
   effective_end_date: '',
+  payment_due_at: '',
 }
 
 export function CreateContractSheet({ customerId, customerName, deals, open, onOpenChange }: CreateContractSheetProps) {
@@ -107,6 +109,7 @@ export function CreateContractSheet({ customerId, customerName, deals, open, onO
         signed_at: values.signed_at || null,
         effective_start_date: values.effective_start_date || null,
         effective_end_date: values.effective_end_date || null,
+        payment_due_at: values.payment_due_at || null,
       })
       setCreatedContract(contract)
       toast.success('合同已创建，可继续上传合同文件')
@@ -139,6 +142,7 @@ export function CreateContractSheet({ customerId, customerName, deals, open, onO
         <div className="space-y-1.5"><Label htmlFor="contract-status">合同状态</Label><select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm md:h-9" id="contract-status" {...form.register('status')}>{contractStatusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="contract-signed-at">签署日期</Label><Input id="contract-signed-at" type="date" {...form.register('signed_at')} /></div><div className="space-y-1.5"><Label htmlFor="contract-start-date">生效开始日</Label><Input id="contract-start-date" type="date" {...form.register('effective_start_date')} /></div></div>
         <div className="space-y-1.5"><Label htmlFor="contract-end-date">生效结束日</Label><Input id="contract-end-date" type="date" {...form.register('effective_end_date')} />{form.formState.errors.effective_end_date && <p className="text-sm text-destructive">{form.formState.errors.effective_end_date.message}</p>}</div>
+        <div className="space-y-1.5"><Label htmlFor="contract-payment-due-at">回款截止日</Label><Input id="contract-payment-due-at" type="date" {...form.register('payment_due_at')} /><p className="text-xs text-muted-foreground">用于逾期应收提醒，可稍后补充。</p>{form.formState.errors.payment_due_at && <p className="text-sm text-destructive">{form.formState.errors.payment_due_at.message}</p>}</div>
       </div>
     </form>
   )

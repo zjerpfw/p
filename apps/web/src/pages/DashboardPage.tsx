@@ -123,6 +123,21 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
       </div>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="flex flex-row items-center gap-2 border-b border-border px-5 py-4">
+          <CircleAlert aria-hidden="true" className="size-5 text-rose-600" />
+          <div><CardTitle>逾期应收</CardTitle><p className="mt-1 text-xs text-muted-foreground">仅统计已登记回款截止日、且尚有未回款余额的生效合同。</p></div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>客户</TableHead><TableHead>合同</TableHead><TableHead>回款截止日</TableHead><TableHead>逾期天数</TableHead><TableHead className="text-right">待回款</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {data?.overdueReceivables.map((contract) => <TableRow key={contract.id}><TableCell className="font-medium">{contract.customerName}</TableCell><TableCell><p className="font-medium text-slate-800">{contract.contractNumber}</p><p className="mt-1 text-xs text-muted-foreground">{contract.title}</p></TableCell><TableCell>{format(new Date(contract.paymentDueAt), 'yyyy-MM-dd')}</TableCell><TableCell><Badge tone="danger">{contract.overdueDays} 天</Badge></TableCell><TableCell className="text-right font-semibold text-rose-700">{formatCents(contract.outstandingAmountCents)}</TableCell></TableRow>)}
+              {data?.overdueReceivables.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>暂无逾期应收合同</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
       <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
     </section>
   )

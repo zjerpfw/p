@@ -21,6 +21,7 @@ export interface ContractDto {
   signed_at: string | null
   effective_start_date: string | null
   effective_end_date: string | null
+  payment_due_at: string | null
   created_at: string
   updated_at: string
 }
@@ -95,6 +96,7 @@ export interface ContractPayload {
   signed_at?: string | number | null
   effective_start_date?: string | number | null
   effective_end_date?: string | number | null
+  payment_due_at?: string | number | null
 }
 
 export type UpdateContractPayload = Partial<Omit<ContractPayload, 'customer_id' | 'deal_id'>>
@@ -167,7 +169,7 @@ export interface ConfirmUploadResponse {
 interface ContractApiRecord {
   id: string; customerId: string; customerName: string; dealId: string; contractNumber: string; title: string
   status: ContractStatus; totalAmountCents: number; receivedAmountCents: number; outstandingAmountCents: number
-  signedAt: string | null; effectiveStartDate: string | null; effectiveEndDate: string | null; createdAt: string; updatedAt: string
+  signedAt: string | null; effectiveStartDate: string | null; effectiveEndDate: string | null; paymentDueAt: string | null; createdAt: string; updatedAt: string
 }
 
 interface InvoiceApiRecord {
@@ -188,7 +190,7 @@ function toContractDto(record: ContractApiRecord): ContractDto {
     contract_number: record.contractNumber, title: record.title, status: record.status,
     total_amount_cents: record.totalAmountCents, received_amount_cents: record.receivedAmountCents,
     outstanding_amount_cents: record.outstandingAmountCents, signed_at: record.signedAt,
-    effective_start_date: record.effectiveStartDate, effective_end_date: record.effectiveEndDate,
+    effective_start_date: record.effectiveStartDate, effective_end_date: record.effectiveEndDate, payment_due_at: record.paymentDueAt,
     created_at: record.createdAt, updated_at: record.updatedAt,
   }
 }

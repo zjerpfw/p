@@ -20,6 +20,18 @@ export interface DashboardData {
     expireDate: string
     amountCents: number
   }>
+  overdueReceivables: Array<{
+    id: string
+    customerId: string
+    customerName: string
+    contractNumber: string
+    title: string
+    paymentDueAt: string
+    totalAmountCents: number
+    receivedAmountCents: number
+    outstandingAmountCents: number
+    overdueDays: number
+  }>
 }
 
 export function useDashboard() {

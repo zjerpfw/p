@@ -1,6 +1,6 @@
 // apps/api/src/routes/dashboard.ts
 import { createDb } from '@crm/db/client'
-import { customers, deals } from '@crm/db/schema'
+import { contracts, customers, deals, payments } from '@crm/db/schema'
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lte, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -34,7 +34,7 @@ dashboardRoutes.get('/', async (c) => {
   const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers] = await Promise.all([
+  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers, overdueReceivables] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -74,6 +74,31 @@ dashboardRoutes.get('/', async (c) => {
         ownerFilter,
       ))
       .orderBy(asc(customers.saasExpireDate)),
+    db
+      .select({
+        id: contracts.id,
+        customerId: contracts.customerId,
+        customerName: customers.name,
+        contractNumber: contracts.contractNumber,
+        title: contracts.title,
+        paymentDueAt: contracts.paymentDueAt,
+        totalAmountCents: contracts.totalAmountCents,
+        receivedAmountCents: sql<number>`coalesce(sum(case when ${payments.status} = 'Received' then ${payments.amountCents} else 0 end), 0)`,
+      })
+      .from(contracts)
+      .innerJoin(customers, eq(contracts.customerId, customers.id))
+      .leftJoin(payments, eq(payments.contractId, contracts.id))
+      .where(and(
+        eq(contracts.status, 'Active'),
+        eq(customers.isDeleted, false),
+        isNotNull(contracts.paymentDueAt),
+        lt(contracts.paymentDueAt, now),
+        ownerFilter,
+      ))
+      .groupBy(contracts.id)
+      .having(sql`coalesce(sum(case when ${payments.status} = 'Received' then ${payments.amountCents} else 0 end), 0) < ${contracts.totalAmountCents}`)
+      .orderBy(asc(contracts.paymentDueAt))
+      .limit(20),
   ])
 
   const renewalCustomerIds = renewalCustomers.map((customer) => customer.customerId)
@@ -125,6 +150,15 @@ dashboardRoutes.get('/', async (c) => {
         customerId: customer.customerId,
         customerName: customer.customerName,
         expireDate: customer.expireDate.toISOString(),
+      }]
+    }),
+    overdueReceivables: overdueReceivables.flatMap((contract) => {
+      if (!contract.paymentDueAt) return []
+      const outstandingAmountCents = contract.totalAmountCents - Number(contract.receivedAmountCents)
+      return [{
+        ...contract,
+        outstandingAmountCents,
+        overdueDays: Math.max(0, Math.floor((now.getTime() - contract.paymentDueAt.getTime()) / 86_400_000)),
       }]
     }),
   })

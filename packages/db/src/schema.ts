@@ -311,6 +311,7 @@ export const contracts = sqliteTable(
     signedAt: integer('signed_at', { mode: 'timestamp' }),
     effectiveStartDate: integer('effective_start_date', { mode: 'timestamp' }),
     effectiveEndDate: integer('effective_end_date', { mode: 'timestamp' }),
+    paymentDueAt: integer('payment_due_at', { mode: 'timestamp' }),
     createdBy: text('created_by').notNull().references(() => users.id),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
