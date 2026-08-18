@@ -18,6 +18,13 @@ const stageLabels: Record<string, string> = {
   Lost: '遗憾输单',
 }
 
+export class DashboardQueryError extends Error {
+  constructor(public readonly operation: string, cause: unknown) {
+    super(`Dashboard query failed: ${operation}`, { cause })
+    this.name = 'DashboardQueryError'
+  }
+}
+
 async function runDashboardQuery<T>(name: string, query: () => Promise<T>): Promise<T> {
   try {
     return await query()
@@ -26,7 +33,7 @@ async function runDashboardQuery<T>(name: string, query: () => Promise<T>): Prom
       query: name,
       error: error instanceof Error ? error.message : String(error),
     })
-    throw error
+    throw new DashboardQueryError(name, error)
   }
 }
 
@@ -36,6 +43,8 @@ dashboardRoutes.use('*', async (c, next) => {
 })
 
 dashboardRoutes.get('/', async (c) => {
+  let operation = 'initialization'
+  try {
   const now = new Date()
   const todayStart = todayInShanghai(now)
   const renewalDeadline = new Date(now)
@@ -54,6 +63,7 @@ dashboardRoutes.get('/', async (c) => {
 
   // D1 queries are deliberately serialized. Concurrent dashboard aggregates can exhaust the
   // subrequest resources available to a single Worker invocation and turn the whole page into a 500.
+  operation = 'dashboard-queries'
   const [newLead] = await runDashboardQuery('new-leads', () => db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -118,14 +128,21 @@ dashboardRoutes.get('/', async (c) => {
       .having(sql`coalesce(sum(case when ${payments.status} = 'Received' then ${payments.amountCents} else 0 end), 0) < ${contracts.totalAmountCents}`)
       .orderBy(asc(contracts.paymentDueAt))
       .limit(20))
-  const [taskSummary] = await runDashboardQuery('task-summary', () => db
-      .select({
-        openCount: sql<number>`count(*)`,
-        overdueCount: sql<number>`coalesce(sum(case when ${tasks.dueAt} < ${todayStart} then 1 else 0 end), 0)`,
-      })
+  const [openTaskSummary] = await runDashboardQuery('open-task-summary', () => db
+      .select({ openCount: sql<number>`count(*)` })
       .from(tasks)
       .innerJoin(customers, eq(tasks.customerId, customers.id))
       .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), taskVisibilityFilter)))
+  const [overdueTaskSummary] = await runDashboardQuery('overdue-task-summary', () => db
+      .select({ overdueCount: sql<number>`count(*)` })
+      .from(tasks)
+      .innerJoin(customers, eq(tasks.customerId, customers.id))
+      .where(and(
+        eq(tasks.status, 'Open'),
+        eq(customers.isDeleted, false),
+        lt(tasks.dueAt, todayStart),
+        taskVisibilityFilter,
+      )))
   const overdueTasks = await runDashboardQuery('overdue-tasks', () => db
       .select({
         id: tasks.id,
@@ -142,14 +159,16 @@ dashboardRoutes.get('/', async (c) => {
       .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, todayStart), taskVisibilityFilter))
       .orderBy(asc(tasks.dueAt))
       .limit(10))
-  const [staleFollowUpSummary] = await runDashboardQuery('stale-follow-up-summary', () => db
-      .select({ count: sql<number>`count(*)` })
+  const staleFollowUpSummary = await runDashboardQuery('stale-follow-up-summary', () => db
+      .select({ customerId: customers.id })
       .from(customers)
-      .where(and(
-        eq(customers.isDeleted, false),
-        ownerFilter,
-        sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})`,
-      )))
+      .leftJoin(activities, and(
+        eq(activities.customerId, customers.id),
+        gte(activities.createdAt, staleFollowUpAt),
+      ))
+      .where(and(eq(customers.isDeleted, false), ownerFilter))
+      .groupBy(customers.id)
+      .having(sql`count(${activities.id}) = 0`))
   const staleFollowUps = await runDashboardQuery('stale-follow-ups', () => db
       .select({
         customerId: customers.id,
@@ -159,14 +178,17 @@ dashboardRoutes.get('/', async (c) => {
       })
       .from(customers)
       .leftJoin(users, eq(customers.ownerId, users.id))
-      .where(and(
-        eq(customers.isDeleted, false),
-        ownerFilter,
-        sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})`,
+      .leftJoin(activities, and(
+        eq(activities.customerId, customers.id),
+        gte(activities.createdAt, staleFollowUpAt),
       ))
+      .where(and(eq(customers.isDeleted, false), ownerFilter))
+      .groupBy(customers.id)
+      .having(sql`count(${activities.id}) = 0`)
       .orderBy(asc(sql`coalesce((select max(${activities.createdAt}) from ${activities} where ${activities.customerId} = ${customers.id}), 0)`))
       .limit(10))
 
+  operation = 'renewal-deals'
   const renewalCustomerIds = renewalCustomers.map((customer) => customer.customerId)
   const renewalDealRows = renewalCustomerIds.length > 0
     ? await db
@@ -192,18 +214,23 @@ dashboardRoutes.get('/', async (c) => {
     if (!latestDealByCustomer.has(deal.customerId)) latestDealByCustomer.set(deal.customerId, deal)
   }
 
+  operation = 'result-transform'
   const normalizedStageDistribution = stageDistribution.map((item) => ({
     stage: item.stage,
     count: Number(item.count),
   }))
 
+  operation = 'response-serialization'
   return c.json({
     month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     newLeads: Number(newLead?.count ?? 0),
     wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
     weightedForecastCents: Number(weightedForecast?.totalCents ?? 0),
-    taskSummary: { openCount: Number(taskSummary?.openCount ?? 0), overdueCount: Number(taskSummary?.overdueCount ?? 0) },
-    staleFollowUpCount: Number(staleFollowUpSummary?.count ?? 0),
+    taskSummary: {
+      openCount: Number(openTaskSummary?.openCount ?? 0),
+      overdueCount: Number(overdueTaskSummary?.overdueCount ?? 0),
+    },
+    staleFollowUpCount: staleFollowUpSummary.length,
     stageDistribution: normalizedStageDistribution,
     funnelDistribution: normalizedStageDistribution.map((item) => ({
       name: stageLabels[item.stage] ?? item.stage,
@@ -238,4 +265,14 @@ dashboardRoutes.get('/', async (c) => {
       lastActivityAt: customer.lastActivityAt ? new Date(customer.lastActivityAt).toISOString() : null,
     })),
   })
+  } catch (error) {
+    if (error instanceof DashboardQueryError) operation = error.operation
+    const requestId = crypto.randomUUID()
+    console.error('Dashboard request failed', {
+      requestId,
+      operation,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return c.json({ error: '仪表盘数据加载失败，请稍后重试', requestId, operation }, 500)
+  }
 })

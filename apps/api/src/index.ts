@@ -1,6 +1,7 @@
 // apps/api/src/index.ts
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
 import { createDb } from '@crm/db/client'
 import { systemConfigs } from '@crm/db/schema'
 import { eq } from 'drizzle-orm'
@@ -10,7 +11,7 @@ import { auth } from './routes/auth'
 import { configRoutes } from './routes/configs'
 import { contractRoutes } from './routes/contracts'
 import { customerRoutes } from './routes/customers'
-import { dashboardRoutes } from './routes/dashboard'
+import { DashboardQueryError, dashboardRoutes } from './routes/dashboard'
 import { dealRoutes } from './routes/deals'
 import { financeRoutes } from './routes/finance'
 import { invoiceRoutes } from './routes/invoices'
@@ -27,6 +28,10 @@ export type { Env } from './env'
 const app = new Hono<{ Bindings: Env }>()
 
 app.onError((error, c) => {
+  if (error instanceof HTTPException) {
+    return error.getResponse()
+  }
+
   const requestId = crypto.randomUUID()
   console.error('Unhandled API error', {
     requestId,
@@ -34,7 +39,8 @@ app.onError((error, c) => {
     path: new URL(c.req.url).pathname,
     error: error instanceof Error ? error.message : String(error),
   })
-  return c.json({ error: '服务器处理请求失败，请稍后重试', requestId }, 500)
+  const operation = error instanceof DashboardQueryError ? error.operation : undefined
+  return c.json({ error: '服务器处理请求失败，请稍后重试', requestId, operation }, 500)
 })
 
 const LOCAL_DEVELOPMENT_ORIGINS = new Set([
