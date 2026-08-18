@@ -87,8 +87,9 @@ export default function CustomerDetailPage() {
   const customerContracts = useContracts({ customer_id: assetCustomerId, limit: 100, enabled: Boolean(assetCustomerId) })
   const customerInvoices = useInvoices({ customer_id: assetCustomerId, limit: 100, enabled: Boolean(assetCustomerId) })
   useEffect(() => {
-    if (location.hash !== '#finance' || !customer?.id) return
-    const frame = window.requestAnimationFrame(() => document.getElementById('finance')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    const targetId = location.hash === '#finance' || location.hash === '#tasks' ? location.hash.slice(1) : null
+    if (!targetId || !customer?.id) return
+    const frame = window.requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     return () => window.cancelAnimationFrame(frame)
   }, [customer?.id, location.hash])
 
@@ -310,7 +311,7 @@ export default function CustomerDetailPage() {
               {data?.contacts.length === 0 && <div className="px-5 py-6 text-sm text-muted-foreground"><p>暂无联系人</p><Button className="mt-3" onClick={openCreateContact} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />添加首位联系人</Button></div>}
             </CardContent>
           </Card>
-          <Card className="gap-0 overflow-hidden py-0">
+          <Card className="gap-0 overflow-hidden py-0" id="tasks">
             <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-4"><CardTitle>跟进任务</CardTitle><Button aria-label="新建跟进任务" onClick={() => setTaskSheetOpen(true)} size="icon-sm" type="button" variant="ghost"><Plus aria-hidden="true" /></Button></CardHeader>
             <CardContent className="divide-y divide-border p-0">
               {data?.tasks.map((task) => <article className="flex items-start gap-3 px-5 py-4" key={task.id}><button aria-label={task.status === 'Completed' ? `任务 ${task.title} 已完成` : `完成任务 ${task.title}`} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" disabled={task.status === 'Completed' || updateTask.isPending} onClick={() => updateTask.mutate(task.id)} type="button">{task.status === 'Completed' ? <Check aria-hidden="true" className="size-4 text-emerald-600" /> : <Square aria-hidden="true" className="size-4" />}</button><div className="min-w-0 flex-1"><p className={`text-sm font-medium ${task.status === 'Completed' ? 'text-muted-foreground line-through' : 'text-slate-800'}`}>{task.title}</p><p className="mt-1 text-xs text-muted-foreground">{task.status === 'Completed' ? '已完成' : `截止 ${format(new Date(task.dueAt), 'MM-dd HH:mm')}`}{task.priority === 'High' && task.status !== 'Completed' ? ' · 高优先级' : ''}</p>{task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}</div><Button aria-label={`编辑任务 ${task.title}`} onClick={() => setEditingTask(task)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></article>)}

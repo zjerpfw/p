@@ -156,7 +156,7 @@ export default function DashboardPage() {
           <Table>
             <TableHeader><TableRow><TableHead>客户</TableHead><TableHead>任务</TableHead><TableHead>负责人</TableHead><TableHead>截止时间</TableHead><TableHead>逾期天数</TableHead></TableRow></TableHeader>
             <TableBody>
-              {data?.overdueTasks.map((task) => <TableRow key={task.id}><TableCell className="font-medium"><Link className="hover:text-primary hover:underline" to={`/customers/${task.customerId}`}>{task.customerName}</Link></TableCell><TableCell><p className="font-medium text-slate-800">{task.title}</p>{task.priority === 'High' && <Badge className="mt-1" tone="danger">高优先级</Badge>}</TableCell><TableCell>{task.assigneeName}</TableCell><TableCell>{format(new Date(task.dueAt), 'yyyy-MM-dd HH:mm')}</TableCell><TableCell><Badge tone="danger">{task.overdueDays} 天</Badge></TableCell></TableRow>)}
+              {data?.overdueTasks.map((task) => <TableRow key={task.id}><TableCell className="font-medium"><Link className="hover:text-primary hover:underline" to={`/customers/${task.customerId}#tasks`}>{task.customerName}</Link></TableCell><TableCell><p className="font-medium text-slate-800">{task.title}</p>{task.priority === 'High' && <Badge className="mt-1" tone="danger">高优先级</Badge>}</TableCell><TableCell>{task.assigneeName}</TableCell><TableCell>{format(new Date(task.dueAt), 'yyyy-MM-dd HH:mm')}</TableCell><TableCell><Badge tone="danger">{task.overdueDays} 天</Badge></TableCell></TableRow>)}
               {data?.overdueTasks.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>暂无逾期跟进任务</TableCell></TableRow>}
             </TableBody>
           </Table>
