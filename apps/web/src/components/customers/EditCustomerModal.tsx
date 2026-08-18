@@ -23,6 +23,7 @@ export function EditCustomerModal({ customer, onOpenChange }: EditCustomerModalP
   const [province, setProvince] = useState('')
   const [city, setCity] = useState('')
   const [address, setAddress] = useState('')
+  const [saasExpireDate, setSaasExpireDate] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const isAdmin = getCurrentUserRole() === 'admin'
   const usersQuery = useUsers()
@@ -36,6 +37,7 @@ export function EditCustomerModal({ customer, onOpenChange }: EditCustomerModalP
     setProvince(customer.province ?? '')
     setCity(customer.city ?? '')
     setAddress(customer.address ?? '')
+    setSaasExpireDate(customer.saasExpireDate?.slice(0, 10) ?? '')
     setOwnerId(customer.ownerId)
   }, [customer])
 
@@ -43,7 +45,7 @@ export function EditCustomerModal({ customer, onOpenChange }: EditCustomerModalP
     mutationFn: () => apiFetch(`/api/customers/${customer?.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, contact_phone: contactPhone, status, province, city, address, ...(isAdmin ? { owner_id: ownerId } : {}) }),
+      body: JSON.stringify({ name, contact_phone: contactPhone, status, province, city, address, saas_expire_date: saasExpireDate, ...(isAdmin ? { owner_id: ownerId } : {}) }),
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['customers'] })
@@ -60,7 +62,7 @@ export function EditCustomerModal({ customer, onOpenChange }: EditCustomerModalP
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>编辑客户</DialogTitle>
-          <DialogDescription>更新客户联系人、状态与公司地址。</DialogDescription>
+          <DialogDescription>更新客户联系人、地域、服务期限与公司地址；清空到期日即可移除错误记录。</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5"><Label htmlFor="edit-customer-name">客户名称</Label><Input id="edit-customer-name" onChange={(event) => setName(event.target.value)} value={name} /></div>
@@ -69,6 +71,7 @@ export function EditCustomerModal({ customer, onOpenChange }: EditCustomerModalP
           {isAdmin && <div className="space-y-1.5"><Label htmlFor="edit-customer-owner">客户负责人</Label><select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="edit-customer-owner" onChange={(event) => setOwnerId(event.target.value)} value={ownerId}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}{user.role === 'admin' ? ' · 管理员' : ''}</option>)}</select></div>}
           <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="edit-customer-province">省份</Label><Input id="edit-customer-province" onChange={(event) => setProvince(event.target.value)} value={province} /></div><div className="space-y-1.5"><Label htmlFor="edit-customer-city">城市</Label><Input id="edit-customer-city" onChange={(event) => setCity(event.target.value)} value={city} /></div></div>
           <div className="space-y-1.5"><Label htmlFor="edit-customer-address">公司地址</Label><Input id="edit-customer-address" onChange={(event) => setAddress(event.target.value)} value={address} /></div>
+          <div className="space-y-1.5"><Label htmlFor="edit-customer-saas-expire-date">SaaS 服务到期日</Label><Input id="edit-customer-saas-expire-date" onChange={(event) => setSaasExpireDate(event.target.value)} type="date" value={saasExpireDate} /><p className="text-xs text-muted-foreground">日期填写错误时可直接修改；没有服务期限可清空此字段。</p></div>
         </div>
         <DialogFooter><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!name.trim() || updateCustomer.isPending} onClick={() => updateCustomer.mutate()} type="button">{updateCustomer.isPending ? '正在保存' : '保存修改'}</Button></DialogFooter>
       </DialogContent>

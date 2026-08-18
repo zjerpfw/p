@@ -40,6 +40,7 @@ interface UpdateCustomerPayload {
   city?: unknown
   address?: unknown
   owner_id?: unknown
+  saas_expire_date?: unknown
 }
 
 const tagNameSchema = z.string().trim().min(1, '请填写标签名称').max(40, '标签名称不能超过 40 个字符')
@@ -1157,8 +1158,18 @@ customerRoutes.put('/:id', async (c) => {
   const city = body.city === undefined ? undefined : optionalText(body.city, 50)
   const address = body.address === undefined ? undefined : optionalText(body.address, 500)
   const ownerIdResult = body.owner_id === undefined ? undefined : optionalText(body.owner_id, 128)
+  const expireDate = body.saas_expire_date === undefined
+    ? undefined
+    : body.saas_expire_date === null || body.saas_expire_date === ''
+      ? null
+      : typeof body.saas_expire_date === 'string' || typeof body.saas_expire_date === 'number'
+        ? new Date(body.saas_expire_date)
+        : undefined
   if (name === undefined || name === null || contactPhone === undefined || province === undefined || city === undefined || address === undefined) {
     return c.json({ error: '客户资料格式无效' }, 400)
+  }
+  if (expireDate !== undefined && (expireDate === null ? false : Number.isNaN(expireDate.getTime()))) {
+    return c.json({ error: 'SaaS 到期日格式无效' }, 400)
   }
   if (statusResult && !statusResult.success) return c.json({ error: '客户状态无效' }, 400)
   if (body.owner_id !== undefined && actor.role !== 'admin') return c.json({ error: '仅管理员可以转交客户' }, 403)
@@ -1179,6 +1190,7 @@ customerRoutes.put('/:id', async (c) => {
     ...(city !== undefined ? { city } : {}),
     ...(address !== undefined ? { address } : {}),
     ...(ownerId !== undefined ? { ownerId } : {}),
+    ...(expireDate !== undefined ? { saasExpireDate: expireDate } : {}),
     updatedAt: new Date(),
   }
   const [beforeCustomer] = await db
