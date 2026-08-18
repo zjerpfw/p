@@ -143,6 +143,14 @@ export interface PaginatedAssetResponse<T> {
   total_pages: number
 }
 
+export interface FinanceSummaryDto {
+  contract_count: number
+  contract_amount_cents: number
+  received_amount_cents: number
+  outstanding_amount_cents: number
+  issued_invoice_amount_cents: number
+}
+
 export interface PresignedUploadRequest {
   asset_type: AttachmentAssetType
   parent_id: string
@@ -235,6 +243,11 @@ function toPaginatedResponse<TSource, TTarget>(
 export async function listContracts(filters?: AssetListFilters) {
   const response = await apiFetch<{ data: ContractApiRecord[]; total: number; page: number; totalPages: number }>(`/api/contracts?${queryString(filters)}`)
   return toPaginatedResponse(response, toContractDto)
+}
+
+export async function getFinanceSummary(): Promise<FinanceSummaryDto> {
+  const response = await apiFetch<{ contractCount: number; contractAmountCents: number; receivedAmountCents: number; outstandingAmountCents: number; issuedInvoiceAmountCents: number }>('/api/finance/summary')
+  return { contract_count: response.contractCount, contract_amount_cents: response.contractAmountCents, received_amount_cents: response.receivedAmountCents, outstanding_amount_cents: response.outstandingAmountCents, issued_invoice_amount_cents: response.issuedInvoiceAmountCents }
 }
 
 export async function getContract(id: string) {

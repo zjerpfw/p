@@ -8,6 +8,7 @@ import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
 import DashboardPage from './pages/DashboardPage'
 import DealsPage from './pages/DealsPage'
+import FinancePage from './pages/FinancePage'
 import LoginPage from './pages/LoginPage'
 import MyWorkPage from './pages/MyWorkPage'
 import SettingsPage from './pages/SettingsPage'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/deals" element={<DealsPage />} />
           <Route path="/my-work" element={<MyWorkPage />} />
+          <Route path="/finance" element={<FinancePage />} />
           <Route element={<AdminRoute />}><Route path="/settings" element={<SettingsPage />} /><Route path="/users" element={<UsersPage />} /><Route path="/audit-logs" element={<AuditLogsPage />} /></Route>
         </Route>
       </Route>

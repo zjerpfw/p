@@ -12,6 +12,7 @@ import { contractRoutes } from './routes/contracts'
 import { customerRoutes } from './routes/customers'
 import { dashboardRoutes } from './routes/dashboard'
 import { dealRoutes } from './routes/deals'
+import { financeRoutes } from './routes/finance'
 import { invoiceRoutes } from './routes/invoices'
 import { paymentRoutes } from './routes/payments'
 import { storage } from './routes/storage'
@@ -90,6 +91,7 @@ app.route('/api/configs', configRoutes)
 app.route('/api/contracts', contractRoutes)
 app.route('/api/invoices', invoiceRoutes)
 app.route('/api/payments', paymentRoutes)
+app.route('/api/finance', financeRoutes)
 app.route('/api/dashboard', dashboardRoutes)
 app.route('/api/customers', customerRoutes)
 app.route('/api/deals', dealRoutes)

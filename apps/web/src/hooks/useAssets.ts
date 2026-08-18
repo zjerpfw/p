@@ -9,6 +9,7 @@ import {
   deleteInvoice,
   deletePayment,
   getContract,
+  getFinanceSummary,
   getInvoice,
   getPayment,
   listContracts,
@@ -36,11 +37,16 @@ function useInvalidateAssetQueries() {
     queryClient.invalidateQueries({ queryKey: ['payments'] }),
     queryClient.invalidateQueries({ queryKey: ['customers'] }),
     queryClient.invalidateQueries({ queryKey: ['customer-detail'] }),
+    queryClient.invalidateQueries({ queryKey: ['finance'] }),
   ])
 }
 
 export function useContracts(filters: AssetListFilters = {}) {
   return useQuery({ queryKey: ['contracts', filters], queryFn: () => listContracts(filters), enabled: filters.enabled ?? true })
+}
+
+export function useFinanceSummary() {
+  return useQuery({ queryKey: ['finance', 'summary'], queryFn: getFinanceSummary })
 }
 
 export function useContract(id: string | undefined) {
