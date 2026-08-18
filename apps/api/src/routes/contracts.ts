@@ -9,6 +9,7 @@ import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
 import { parseShanghaiDateRange } from '../lib/date-range'
+import { resolveCustomerOwnerFilter } from '../lib/owner-filter'
 
 export const contractRoutes = new Hono<{ Bindings: Env }>()
 
@@ -57,13 +58,15 @@ contractRoutes.get('/', async (c) => {
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
+  const ownerResult = await resolveCustomerOwnerFilter(db, actor, c.req.query('owner_id')?.trim() || undefined)
+  if (ownerResult.error) return c.json({ error: ownerResult.error }, 400)
   const filters = [
     eq(customers.isDeleted, false),
     customerId ? eq(contracts.customerId, customerId) : undefined,
     status ? eq(contracts.status, status) : undefined,
     dateRange.from ? gte(contracts.signedAt, dateRange.from) : undefined,
     dateRange.toExclusive ? lt(contracts.signedAt, dateRange.toExclusive) : undefined,
-    actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ownerResult.filter,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)
   const data = await db.select({

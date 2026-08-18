@@ -131,6 +131,7 @@ export interface AssetListFilters {
   customer_id?: string
   contract_id?: string
   invoice_id?: string
+  owner_id?: string
   status?: ContractStatus | InvoiceStatus | PaymentStatus
   date_from?: string
   date_to?: string
@@ -231,6 +232,7 @@ function queryString(filters: AssetListFilters = {}) {
   if (filters.customer_id) params.set('customer_id', filters.customer_id)
   if (filters.contract_id) params.set('contract_id', filters.contract_id)
   if (filters.invoice_id) params.set('invoice_id', filters.invoice_id)
+  if (filters.owner_id) params.set('owner_id', filters.owner_id)
   if (filters.status) params.set('status', filters.status)
   if (filters.date_from) params.set('date_from', filters.date_from)
   if (filters.date_to) params.set('date_to', filters.date_to)
@@ -251,8 +253,9 @@ export async function listContracts(filters?: AssetListFilters) {
   return toPaginatedResponse(response, toContractDto)
 }
 
-export async function getFinanceSummary(): Promise<FinanceSummaryDto> {
-  const response = await apiFetch<{ contractCount: number; contractAmountCents: number; receivedAmountCents: number; outstandingAmountCents: number; issuedInvoiceAmountCents: number }>('/api/finance/summary')
+export async function getFinanceSummary(ownerId?: string): Promise<FinanceSummaryDto> {
+  const query = ownerId ? `?owner_id=${encodeURIComponent(ownerId)}` : ''
+  const response = await apiFetch<{ contractCount: number; contractAmountCents: number; receivedAmountCents: number; outstandingAmountCents: number; issuedInvoiceAmountCents: number }>(`/api/finance/summary${query}`)
   return { contract_count: response.contractCount, contract_amount_cents: response.contractAmountCents, received_amount_cents: response.receivedAmountCents, outstanding_amount_cents: response.outstandingAmountCents, issued_invoice_amount_cents: response.issuedInvoiceAmountCents }
 }
 

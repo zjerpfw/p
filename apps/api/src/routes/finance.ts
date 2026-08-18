@@ -8,6 +8,7 @@ import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { csvResponse } from '../lib/csv'
 import { parseShanghaiDateRange } from '../lib/date-range'
+import { resolveCustomerOwnerFilter } from '../lib/owner-filter'
 
 export const financeRoutes = new Hono<{ Bindings: Env }>()
 
@@ -21,7 +22,9 @@ financeRoutes.get('/summary', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
   const db = createDb(c.env.DB)
-  const ownerFilter = actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)
+  const ownerResult = await resolveCustomerOwnerFilter(db, actor, c.req.query('owner_id')?.trim() || undefined)
+  if (ownerResult.error) return c.json({ error: ownerResult.error }, 400)
+  const ownerFilter = ownerResult.filter
   const contractFilters = [eq(customers.isDeleted, false), ne(contracts.status, 'Void'), ownerFilter]
     .filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const paymentFilters = [eq(customers.isDeleted, false), ne(contracts.status, 'Void'), eq(payments.status, 'Received'), ownerFilter]
@@ -69,7 +72,9 @@ financeRoutes.get('/export/csv', async (c) => {
   if (!dateRange) return c.json({ error: '日期范围无效，请使用 YYYY-MM-DD 且结束日期不早于开始日期' }, 400)
 
   const db = createDb(c.env.DB)
-  const ownerFilter = actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)
+  const ownerResult = await resolveCustomerOwnerFilter(db, actor, c.req.query('owner_id')?.trim() || undefined)
+  if (ownerResult.error) return c.json({ error: ownerResult.error }, 400)
+  const ownerFilter = ownerResult.filter
   const dateValue = (value: Date | null) => value ? value.toISOString().slice(0, 10) : ''
   const yuan = (value: number) => (value / 100).toFixed(2)
 

@@ -45,8 +45,8 @@ export function useContracts(filters: AssetListFilters = {}) {
   return useQuery({ queryKey: ['contracts', filters], queryFn: () => listContracts(filters), enabled: filters.enabled ?? true })
 }
 
-export function useFinanceSummary() {
-  return useQuery({ queryKey: ['finance', 'summary'], queryFn: getFinanceSummary })
+export function useFinanceSummary(ownerId?: string) {
+  return useQuery({ queryKey: ['finance', 'summary', ownerId], queryFn: () => getFinanceSummary(ownerId) })
 }
 
 export function useContract(id: string | undefined) {

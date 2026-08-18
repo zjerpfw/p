@@ -9,6 +9,7 @@ import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
 import { parseShanghaiDateRange } from '../lib/date-range'
+import { resolveCustomerOwnerFilter } from '../lib/owner-filter'
 
 export const paymentRoutes = new Hono<{ Bindings: Env }>()
 
@@ -32,6 +33,10 @@ const paymentPayloadSchema = z.object({
 })
 const updatePaymentPayloadSchema = paymentPayloadSchema.omit({ contract_id: true }).partial()
 
+function ownershipFilter(actor: NonNullable<ReturnType<typeof getAuthenticatedActor>>) {
+  return actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)
+}
+
 function parseOptionalDate(value: string | number | null | undefined): Date | null | undefined {
   if (value === undefined) return undefined
   if (value === null || value === '') return null
@@ -42,10 +47,6 @@ function parseOptionalDate(value: string | number | null | undefined): Date | nu
 function parsePagination(value: string | undefined, fallback: number, max: number) {
   const parsed = Number.parseInt(value ?? '', 10)
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback
-}
-
-function ownershipFilter(actor: NonNullable<ReturnType<typeof getAuthenticatedActor>>) {
-  return actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)
 }
 
 async function findAuthorizedContract(
@@ -59,7 +60,7 @@ async function findAuthorizedContract(
     dealId: contracts.dealId,
   }).from(contracts)
     .innerJoin(customers, eq(contracts.customerId, customers.id))
-    .where(and(eq(contracts.id, contractId), eq(customers.isDeleted, false), ownershipFilter(actor)))
+    .where(and(eq(contracts.id, contractId), eq(customers.isDeleted, false), actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)))
     .limit(1)
   return contract ?? null
 }
@@ -100,6 +101,8 @@ paymentRoutes.get('/', async (c) => {
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
+  const ownerResult = await resolveCustomerOwnerFilter(db, actor, c.req.query('owner_id')?.trim() || undefined)
+  if (ownerResult.error) return c.json({ error: ownerResult.error }, 400)
   const filters = [
     eq(customers.isDeleted, false),
     customerId ? eq(payments.customerId, customerId) : undefined,
@@ -108,7 +111,7 @@ paymentRoutes.get('/', async (c) => {
     status ? eq(payments.status, status) : undefined,
     dateRange.from ? gte(payments.paidAt, dateRange.from) : undefined,
     dateRange.toExclusive ? lt(payments.paidAt, dateRange.toExclusive) : undefined,
-    ownershipFilter(actor),
+    ownerResult.filter,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)
   const data = await db.select({
