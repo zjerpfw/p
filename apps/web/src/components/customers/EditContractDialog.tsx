@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/EditContractSheet.tsx
+// apps/web/src/components/customers/EditContractDialog.tsx
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
@@ -7,9 +7,8 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useUpdateContract } from '@/hooks/useAssets'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import type { ContractDto, ContractStatus } from '@/lib/assets'
 import { centsToYuanInput, yuanToCents } from '@/lib/money'
 
@@ -48,7 +47,7 @@ const editContractFormSchema = z.object({
 
 type EditContractFormValues = z.infer<typeof editContractFormSchema>
 
-interface EditContractSheetProps {
+interface EditContractDialogProps {
   contract: ContractDto | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,8 +70,7 @@ function getDefaultValues(contract: ContractDto | null): EditContractFormValues 
   }
 }
 
-export function EditContractSheet({ contract, open, onOpenChange }: EditContractSheetProps) {
-  const isMobile = useIsMobile()
+export function EditContractDialog({ contract, open, onOpenChange }: EditContractDialogProps) {
   const updateContract = useUpdateContract()
   const form = useForm<EditContractFormValues>({
     resolver: zodResolver(editContractFormSchema),
@@ -112,16 +110,16 @@ export function EditContractSheet({ contract, open, onOpenChange }: EditContract
     }
   }
 
-  function closeSheet() {
+  function closeDialog() {
     if (!updateContract.isPending) onOpenChange(false)
   }
 
   const content = (
     <>
-      <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
-        <SheetTitle>编辑合同</SheetTitle>
-        <SheetDescription>补充回款截止日后，逾期应收会自动纳入仪表盘。</SheetDescription>
-      </SheetHeader>
+      <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+        <DialogTitle>编辑合同</DialogTitle>
+        <DialogDescription>补充回款截止日后，逾期应收会自动纳入仪表盘。</DialogDescription>
+      </DialogHeader>
       <form className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6" onSubmit={form.handleSubmit(submit)}>
         <div className="space-y-4 rounded-lg bg-slate-50 p-4">
           <div className="space-y-1.5"><Label htmlFor="edit-contract-number"><span className="text-rose-500">*</span> 合同编号</Label><Input id="edit-contract-number" {...form.register('contract_number')} />{form.formState.errors.contract_number && <p className="text-sm text-destructive">{form.formState.errors.contract_number.message}</p>}</div>
@@ -133,13 +131,12 @@ export function EditContractSheet({ contract, open, onOpenChange }: EditContract
           <div className="space-y-1.5"><Label htmlFor="edit-contract-payment-due-at">回款截止日</Label><Input id="edit-contract-payment-due-at" type="date" {...form.register('payment_due_at')} /><p className="text-xs text-muted-foreground">用于逾期应收提醒，留空表示暂不计入逾期统计。</p>{form.formState.errors.payment_due_at && <p className="text-sm text-destructive">{form.formState.errors.payment_due_at.message}</p>}</div>
         </div>
       </form>
-      <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
-        <Button disabled={updateContract.isPending} onClick={closeSheet} type="button" variant="outline">取消</Button>
+      <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
+        <Button disabled={updateContract.isPending} onClick={closeDialog} type="button" variant="outline">取消</Button>
         <Button disabled={updateContract.isPending || !contract} onClick={form.handleSubmit(submit)} type="button">{updateContract.isPending ? '正在保存' : '保存变更'}</Button>
-      </SheetFooter>
+      </DialogFooter>
     </>
   )
 
-  if (isMobile) return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
-  return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
+  return <Dialog onOpenChange={onOpenChange} open={open}><DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">{content}</DialogContent></Dialog>
 }

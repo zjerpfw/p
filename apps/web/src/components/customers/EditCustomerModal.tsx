@@ -57,7 +57,7 @@ export function EditCustomerModal({ customer, onOpenChange }: EditCustomerModalP
 
   return (
     <Dialog onOpenChange={onOpenChange} open={Boolean(customer)}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>编辑客户</DialogTitle>
           <DialogDescription>更新客户联系人、状态与公司地址。</DialogDescription>

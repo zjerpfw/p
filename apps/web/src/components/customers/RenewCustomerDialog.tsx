@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/RenewCustomerSheet.tsx
+// apps/web/src/components/customers/RenewCustomerDialog.tsx
 import { addYears, format, isBefore, startOfDay } from 'date-fns'
 import { CalendarSync } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -7,8 +7,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { useIsMobile } from '@/hooks/useIsMobile'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiFetch } from '@/lib/api'
 import { yuanToCents } from '@/lib/money'
 
@@ -20,7 +19,7 @@ export interface RenewCustomerTarget {
   channel?: string | null
 }
 
-interface RenewCustomerSheetProps {
+interface RenewCustomerDialogProps {
   target: RenewCustomerTarget | null
   onOpenChange: (open: boolean) => void
 }
@@ -39,8 +38,7 @@ function getRenewalPreview(currentExpireDate: string, years: number) {
   }
 }
 
-export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetProps) {
-  const isMobile = useIsMobile()
+export function RenewCustomerDialog({ target, onOpenChange }: RenewCustomerDialogProps) {
   const queryClient = useQueryClient()
   const [product, setProduct] = useState('')
   const [years, setYears] = useState(1)
@@ -85,10 +83,10 @@ export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetP
   })
 
   const content = <>
-    <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
-      <SheetTitle className="flex items-center gap-2"><CalendarSync aria-hidden="true" className="size-5 text-emerald-600" />一键续费</SheetTitle>
-      <SheetDescription>生成一笔续费赢单，并同步更新客户当前 SaaS 到期日。</SheetDescription>
-    </SheetHeader>
+    <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+      <DialogTitle className="flex items-center gap-2"><CalendarSync aria-hidden="true" className="size-5 text-emerald-600" />一键续费</DialogTitle>
+      <DialogDescription>生成一笔续费赢单，并同步更新客户当前 SaaS 到期日。</DialogDescription>
+    </DialogHeader>
     <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-6">
       <section className="space-y-3 rounded-lg bg-slate-50 p-4">
         <div><p className="text-xs font-medium text-slate-500">客户名称</p><p className="mt-1 font-semibold text-slate-900">{target?.customerName}</p></div>
@@ -104,9 +102,8 @@ export function RenewCustomerSheet({ target, onOpenChange }: RenewCustomerSheetP
         <p className={`mt-2 text-base font-bold ${renewalPreview?.isExpired ? 'text-amber-700' : 'text-emerald-700'}`}>续费后新到期日：{renewalPreview ? format(renewalPreview.newExpireDate, 'yyyy-MM-dd') : '-'}{renewalPreview && <span className="ml-1 text-sm font-medium">（{renewalPreview.reason}）</span>}</p>
       </section>
     </div>
-    <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button className="bg-emerald-600 hover:bg-emerald-700" disabled={!canSubmit || renewCustomer.isPending} onClick={() => renewCustomer.mutate()} type="button">{renewCustomer.isPending ? '正在续费' : '确认续费'}</Button></SheetFooter>
+    <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button className="bg-emerald-600 hover:bg-emerald-700" disabled={!canSubmit || renewCustomer.isPending} onClick={() => renewCustomer.mutate()} type="button">{renewCustomer.isPending ? '正在续费' : '确认续费'}</Button></DialogFooter>
   </>
 
-  if (isMobile) return <Sheet onOpenChange={onOpenChange} open={Boolean(target)}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
-  return <Sheet onOpenChange={onOpenChange} open={Boolean(target)}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
+  return <Dialog onOpenChange={onOpenChange} open={Boolean(target)}><DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">{content}</DialogContent></Dialog>
 }

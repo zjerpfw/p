@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useUsers } from '@/hooks/useUsers'
@@ -33,7 +33,7 @@ function toInteger(value: string) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0
 }
 
-export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomerModalProps) {
+export function DirectWonCustomerModal({ open, onOpenChange }: DirectWonCustomerModalProps) {
   const queryClient = useQueryClient()
   const { data: usersData, isLoading: isLoadingUsers } = useUsers()
   const [name, setName] = useState('')
@@ -142,12 +142,12 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
   const canSubmit = name.trim() && productName.trim() && expireDate && netProfitCents >= 0 && isSplitValid
 
   return (
-    <Sheet onOpenChange={onOpenChange} open={open}>
-      <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-[600px]">
-        <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
-          <SheetTitle>直接录入成交客户</SheetTitle>
-          <SheetDescription>一次完成客户建档、SaaS 赢单、服务期限、利润核算与业绩分成。</SheetDescription>
-        </SheetHeader>
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">
+        <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+          <DialogTitle>直接录入成交客户</DialogTitle>
+          <DialogDescription>一次完成客户建档、SaaS 赢单、服务期限、利润核算与业绩分成。</DialogDescription>
+        </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-6">
           <section className="space-y-3 rounded-lg bg-slate-50 p-4">
             <h3 className="text-sm font-semibold">客户资料</h3>
@@ -184,10 +184,8 @@ export function DirectWonCustomerSheet({ open, onOpenChange }: DirectWonCustomer
             <p className={isSplitValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>已分成 {formatCents(totalSplitAmountCents)}，实际利润 {formatCents(netProfitCents)}。</p>
           </section>
         </div>
-        <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!canSubmit || directWon.isPending} onClick={() => directWon.mutate()} type="button">{directWon.isPending ? '正在录入' : '确认录入成交客户'}</Button></SheetFooter>
-      </SheetContent>
-    </Sheet>
+        <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!canSubmit || directWon.isPending} onClick={() => directWon.mutate()} type="button">{directWon.isPending ? '正在录入' : '确认录入成交客户'}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
-
-export { DirectWonCustomerSheet as DirectWonCustomerModal }

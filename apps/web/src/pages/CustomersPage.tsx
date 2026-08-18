@@ -9,9 +9,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { PaginationControls } from '@/components/PaginationControls'
 import { CreateCustomerModal } from '@/components/customers/CreateCustomerModal'
 import { DirectWonCustomerModal } from '@/components/customers/DirectWonCustomerModal'
-import { BatchTaskSheet } from '@/components/customers/BatchTaskSheet'
-import { BatchTransferCustomersSheet } from '@/components/customers/BatchTransferCustomersSheet'
-import { CustomerImportSheet } from '@/components/customers/CustomerImportSheet'
+import { BatchTaskDialog } from '@/components/customers/BatchTaskDialog'
+import { BatchTransferCustomersDialog } from '@/components/customers/BatchTransferCustomersDialog'
+import { CustomerImportDialog } from '@/components/customers/CustomerImportDialog'
 import { Input } from '@/components/ui/input'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -181,9 +181,9 @@ export default function CustomersPage() {
       </div>}
       <CreateCustomerModal onOpenChange={setCreateDialogOpen} open={createDialogOpen} />
       <DirectWonCustomerModal onOpenChange={setDirectWonDialogOpen} open={directWonDialogOpen} />
-      <CustomerImportSheet onOpenChange={setCustomerImportOpen} open={customerImportOpen} />
-      <BatchTaskSheet customers={selectedCustomers} onCreated={() => setSelectedCustomerIds(new Set())} onOpenChange={setBatchTaskOpen} open={batchTaskOpen} />
-      <BatchTransferCustomersSheet customers={selectedCustomers} onOpenChange={setBatchTransferOpen} onTransferred={() => setSelectedCustomerIds(new Set())} open={batchTransferOpen} />
+      <CustomerImportDialog onOpenChange={setCustomerImportOpen} open={customerImportOpen} />
+      <BatchTaskDialog customers={selectedCustomers} onCreated={() => setSelectedCustomerIds(new Set())} onOpenChange={setBatchTaskOpen} open={batchTaskOpen} />
+      <BatchTransferCustomersDialog customers={selectedCustomers} onOpenChange={setBatchTransferOpen} onTransferred={() => setSelectedCustomerIds(new Set())} open={batchTransferOpen} />
     </section>
   )
 }

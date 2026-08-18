@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { customerDetailQueryKey, type Contact } from '@/hooks/useCustomerDetail'
 import { apiFetch } from '@/lib/api'
@@ -35,14 +35,14 @@ const defaultValues: ContactFormValues = {
   notes: '',
 }
 
-interface ContactSheetProps {
+interface ContactDialogProps {
   contact: Contact | null
   customerId: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function ContactSheet({ contact, customerId, open, onOpenChange }: ContactSheetProps) {
+export function ContactDialog({ contact, customerId, open, onOpenChange }: ContactDialogProps) {
   const queryClient = useQueryClient()
   const form = useForm<ContactFormValues>({ resolver: zodResolver(contactFormSchema), defaultValues })
   const isEditing = Boolean(contact)
@@ -76,12 +76,12 @@ export function ContactSheet({ contact, customerId, open, onOpenChange }: Contac
     onError: (error) => toast.error(error instanceof Error ? error.message : '联系人保存失败'),
   })
 
-  return <Sheet onOpenChange={onOpenChange} open={open}>
-    <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">
-      <SheetHeader className="border-b border-border px-5 py-5">
-        <SheetTitle>{isEditing ? '编辑联系人' : '添加联系人'}</SheetTitle>
-        <SheetDescription>维护客户关键联系人与沟通方式。</SheetDescription>
-      </SheetHeader>
+  return <Dialog onOpenChange={onOpenChange} open={open}>
+    <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+      <DialogHeader className="border-b border-border px-5 py-5">
+        <DialogTitle>{isEditing ? '编辑联系人' : '添加联系人'}</DialogTitle>
+        <DialogDescription>维护客户关键联系人与沟通方式。</DialogDescription>
+      </DialogHeader>
       <form className="min-h-0 flex-1 overflow-y-auto p-5" onSubmit={form.handleSubmit((values) => saveContact.mutate(values))}>
         <div className="space-y-4">
           <div className="space-y-2"><Label htmlFor="contact-name"><span className="text-rose-500">*</span> 姓名</Label><div className="relative"><UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" id="contact-name" {...form.register('name')} placeholder="联系人姓名" /></div>{form.formState.errors.name && <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>}</div>
@@ -92,7 +92,7 @@ export function ContactSheet({ contact, customerId, open, onOpenChange }: Contac
           <div className="space-y-2"><Label htmlFor="contact-notes">备注</Label><Textarea id="contact-notes" {...form.register('notes')} placeholder="例如决策偏好、负责范围、沟通注意事项" /></div>
         </div>
       </form>
-      <SheetFooter className="border-t border-border bg-background px-5 py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={saveContact.isPending} onClick={form.handleSubmit((values) => saveContact.mutate(values))} type="button">{isEditing ? <Save aria-hidden="true" /> : <Plus aria-hidden="true" />}{saveContact.isPending ? '正在保存' : isEditing ? '保存修改' : '添加联系人'}</Button></SheetFooter>
-    </SheetContent>
-  </Sheet>
+      <DialogFooter className="shrink-0 border-t border-border bg-background px-5 py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={saveContact.isPending} onClick={form.handleSubmit((values) => saveContact.mutate(values))} type="button">{isEditing ? <Save aria-hidden="true" /> : <Plus aria-hidden="true" />}{saveContact.isPending ? '正在保存' : isEditing ? '保存修改' : '添加联系人'}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>
 }

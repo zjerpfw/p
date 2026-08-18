@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/CreatePaymentSheet.tsx
+// apps/web/src/components/customers/CreatePaymentDialog.tsx
 import { zodResolver } from '@hookform/resolvers/zod'
 import { BadgeCheck, FileUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -10,9 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useCreatePayment } from '@/hooks/useAssets'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import { yuanToCents } from '@/lib/money'
 import type { ContractDto, InvoiceDto, PaymentDto } from '@/lib/assets'
 
@@ -40,7 +39,7 @@ const createPaymentFormSchema = z.object({
 
 type CreatePaymentFormValues = z.infer<typeof createPaymentFormSchema>
 
-interface CreatePaymentSheetProps {
+interface CreatePaymentDialogProps {
   customerId: string
   customerName: string
   contracts: ContractDto[]
@@ -58,8 +57,7 @@ const defaultValues: CreatePaymentFormValues = {
   note: '',
 }
 
-export function CreatePaymentSheet({ customerId, customerName, contracts, invoices, open, onOpenChange }: CreatePaymentSheetProps) {
-  const isMobile = useIsMobile()
+export function CreatePaymentDialog({ customerId, customerName, contracts, invoices, open, onOpenChange }: CreatePaymentDialogProps) {
   const createPayment = useCreatePayment()
   const [createdPayment, setCreatedPayment] = useState<PaymentDto | null>(null)
   const form = useForm<CreatePaymentFormValues>({
@@ -110,7 +108,7 @@ export function CreatePaymentSheet({ customerId, customerName, contracts, invoic
     }
   }
 
-  function closeSheet() {
+  function closeDialog() {
     if (!createPayment.isPending) onOpenChange(false)
   }
 
@@ -151,11 +149,10 @@ export function CreatePaymentSheet({ customerId, customerName, contracts, invoic
   )
 
   const content = <>
-    <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><SheetTitle>{createdPayment ? '上传打款凭证' : '登记回款'}</SheetTitle><SheetDescription>{createdPayment ? '回款已保存，可选上传打款凭证。' : '保存后可继续上传银行回单或打款截图。'}</SheetDescription></SheetHeader>
+    <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>{createdPayment ? '上传打款凭证' : '登记回款'}</DialogTitle><DialogDescription>{createdPayment ? '回款已保存，可选上传打款凭证。' : '保存后可继续上传银行回单或打款截图。'}</DialogDescription></DialogHeader>
     {createdPayment ? uploadContent : formContent}
-    <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={closeSheet} type="button" variant="outline">{createdPayment ? '跳过凭证并关闭' : '取消'}</Button>{!createdPayment && <Button disabled={createPayment.isPending || contracts.length === 0} onClick={form.handleSubmit(submit)} type="button">{createPayment.isPending ? '正在保存' : '保存回款'}</Button>}</SheetFooter>
+    <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={closeDialog} type="button" variant="outline">{createdPayment ? '跳过凭证并关闭' : '取消'}</Button>{!createdPayment && <Button disabled={createPayment.isPending || contracts.length === 0} onClick={form.handleSubmit(submit)} type="button">{createPayment.isPending ? '正在保存' : '保存回款'}</Button>}</DialogFooter>
   </>
 
-  if (isMobile) return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
-  return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
+  return <Dialog onOpenChange={onOpenChange} open={open}><DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">{content}</DialogContent></Dialog>
 }

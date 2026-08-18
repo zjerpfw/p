@@ -1,4 +1,4 @@
-// apps/web/src/components/activities/CreateActivitySheet.tsx
+// apps/web/src/components/activities/CreateActivityDialog.tsx
 import { MapPin, Paperclip, Send } from 'lucide-react'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { useAMapLocation } from '@/hooks/useAMapLocation'
 import { apiFetch } from '@/lib/api'
@@ -19,7 +19,7 @@ type ActivityType = 'Call' | 'Meeting' | 'Email'
 interface CreatedActivityResponse { activity: { id: string } }
 interface PresignResponse { uploadUrl: string; objectKey: string }
 
-interface CreateActivitySheetProps {
+interface CreateActivityDialogProps {
   customerId: string
   deals: Array<Pick<Deal, 'id' | 'stage' | 'productName'>>
   open: boolean
@@ -27,7 +27,7 @@ interface CreateActivitySheetProps {
   onCreated: () => Promise<void>
 }
 
-export function CreateActivitySheet({ customerId, deals, open, onOpenChange, onCreated }: CreateActivitySheetProps) {
+export function CreateActivityDialog({ customerId, deals, open, onOpenChange, onCreated }: CreateActivityDialogProps) {
   const [notes, setNotes] = useState('')
   const [type, setType] = useState<ActivityType>('Meeting')
   const [dealId, setDealId] = useState('')
@@ -70,16 +70,16 @@ export function CreateActivitySheet({ customerId, deals, open, onOpenChange, onC
     try { const result = await getLocation(); setLocation({ lng: result.lng, lat: result.lat, address: result.formattedAddress }) } catch { /* Hook exposes the error. */ }
   }
 
-  return <Sheet onOpenChange={onOpenChange} open={open}>
-    <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">
-      <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><SheetTitle>完整跟进记录</SheetTitle><SheetDescription>记录沟通详情、定位打卡并可将附件关联到本次跟进。</SheetDescription></SheetHeader>
+  return <Dialog onOpenChange={onOpenChange} open={open}>
+    <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+      <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>完整跟进记录</DialogTitle><DialogDescription>记录沟通详情、定位打卡并可将附件关联到本次跟进。</DialogDescription></DialogHeader>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-6">
         <div className="space-y-2"><Label htmlFor="activity-notes"><span className="text-rose-500">*</span> 详细沟通内容</Label><Textarea autoFocus id="activity-notes" onChange={(event) => setNotes(event.target.value)} placeholder="请记录沟通结论、客户需求与下一步计划" value={notes} /></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>跟进方式</Label><Select onValueChange={(value) => setType(value as ActivityType)} value={type}><SelectTrigger><SelectValue placeholder="选择跟进方式" /></SelectTrigger><SelectContent>{Object.entries(activityTypeLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>关联商机</Label><Select onValueChange={(value) => setDealId(value === 'none' ? '' : value)} value={dealId}><SelectTrigger><SelectValue placeholder="客户级跟进（可选）" /></SelectTrigger><SelectContent><SelectItem value="none">不关联商机</SelectItem>{deals.map((deal) => <SelectItem key={deal.id} value={deal.id}>{dealStageLabels[deal.stage]} · {deal.productName}</SelectItem>)}</SelectContent></Select></div></div>
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-sm font-semibold">高德地图定位打卡</p><p className="mt-1 break-words text-xs text-muted-foreground">{location?.address ?? locationError ?? '尚未获取定位'}</p></div><Button className="w-full sm:w-auto" disabled={isLocating || isConfigLoading || !isConfigured} onClick={locate} size="sm" type="button" variant="outline"><MapPin aria-hidden="true" />{isLocating ? '正在定位' : '获取位置'}</Button></div>{!isConfigured && !isConfigLoading && <p className="text-xs text-destructive">系统未配置地图密钥，请联系管理员。</p>}</div>
         <div className="space-y-2"><Label htmlFor="activity-attachment">附件</Label><Input accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt" id="activity-attachment" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} type="file" />{attachment && <p className="flex items-center gap-1 text-xs text-muted-foreground"><Paperclip aria-hidden="true" className="size-3" />{attachment.name}</p>}</div>
       </div>
-      <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!notes.trim() || !type || createActivity.isPending} onClick={() => createActivity.mutate()} type="button"><Send aria-hidden="true" />{createActivity.isPending ? '正在保存' : '保存跟进记录'}</Button></SheetFooter>
-    </SheetContent>
-  </Sheet>
+      <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!notes.trim() || !type || createActivity.isPending} onClick={() => createActivity.mutate()} type="button"><Send aria-hidden="true" />{createActivity.isPending ? '正在保存' : '保存跟进记录'}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>
 }

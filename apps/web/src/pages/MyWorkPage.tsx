@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EditTaskSheet, type EditableTask } from '@/components/customers/EditTaskSheet'
+import { EditTaskDialog, type EditableTask } from '@/components/customers/EditTaskDialog'
 import { useActivities } from '@/hooks/useActivities'
 import { useDeals } from '@/hooks/useDeals'
 import { useTasks, type TaskStatus } from '@/hooks/useTasks'
@@ -88,7 +88,7 @@ export default function MyWorkPage() {
           {!dealsQuery.isLoading && !dealsQuery.isError && dealsQuery.data?.data.length === 0 && <p className="p-5 text-sm text-muted-foreground">暂无待推进商机</p>}
         </CardContent></Card>
       </div>
-      <EditTaskSheet onOpenChange={(open) => { if (!open) setEditingTask(null) }} open={Boolean(editingTask)} task={editingTask} />
+      <EditTaskDialog onOpenChange={(open) => { if (!open) setEditingTask(null) }} open={Boolean(editingTask)} task={editingTask} />
     </section>
   )
 }

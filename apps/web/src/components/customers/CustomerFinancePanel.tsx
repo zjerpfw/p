@@ -5,9 +5,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EditContractSheet } from '@/components/customers/EditContractSheet'
-import { EditInvoiceSheet } from '@/components/customers/EditInvoiceSheet'
-import { EditPaymentSheet } from '@/components/customers/EditPaymentSheet'
+import { EditContractDialog } from '@/components/customers/EditContractDialog'
+import { EditInvoiceDialog } from '@/components/customers/EditInvoiceDialog'
+import { EditPaymentDialog } from '@/components/customers/EditPaymentDialog'
 import { useContracts, useInvoices, usePayments } from '@/hooks/useAssets'
 import type { ContractDto, InvoiceDto, PaymentDto } from '@/lib/assets'
 import { formatCents } from '@/lib/money'
@@ -104,9 +104,9 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
         })}
         {!isLoading && !error && contracts.length === 0 && <div className="py-5 text-center text-sm text-muted-foreground"><FileText className="mx-auto mb-2 size-5" />暂无合同与财务记录</div>}
       </CardContent>
-      <EditContractSheet contract={editingContract} onOpenChange={(open) => { if (!open) setEditingContract(null) }} open={Boolean(editingContract)} />
-      <EditInvoiceSheet invoice={editingInvoice} onOpenChange={(open) => { if (!open) setEditingInvoice(null) }} open={Boolean(editingInvoice)} />
-      <EditPaymentSheet invoices={invoices} onOpenChange={(open) => { if (!open) setEditingPayment(null) }} open={Boolean(editingPayment)} payment={editingPayment} />
+      <EditContractDialog contract={editingContract} onOpenChange={(open) => { if (!open) setEditingContract(null) }} open={Boolean(editingContract)} />
+      <EditInvoiceDialog invoice={editingInvoice} onOpenChange={(open) => { if (!open) setEditingInvoice(null) }} open={Boolean(editingInvoice)} />
+      <EditPaymentDialog invoices={invoices} onOpenChange={(open) => { if (!open) setEditingPayment(null) }} open={Boolean(editingPayment)} payment={editingPayment} />
     </Card>
   )
 }

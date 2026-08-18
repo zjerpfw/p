@@ -12,7 +12,7 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { dealStages } from '@/hooks/useDeals'
 import { dealStageLabels } from '@/lib/presentation'
 import { formatCents } from '@/lib/money'
-import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
+import { RenewCustomerDialog, type RenewCustomerTarget } from '@/components/customers/RenewCustomerDialog'
 
 const funnelColors = ['#64748b', '#0ea5e9', '#f59e0b', '#10b981', '#f43f5e']
 
@@ -187,7 +187,7 @@ export default function DashboardPage() {
           </Table>
         </CardContent>
       </Card>
-      <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
+      <RenewCustomerDialog onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
     </section>
   )
 }

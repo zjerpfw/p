@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/EditInvoiceSheet.tsx
+// apps/web/src/components/customers/EditInvoiceDialog.tsx
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
@@ -7,9 +7,8 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useUpdateInvoice } from '@/hooks/useAssets'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import type { InvoiceDto, InvoiceStatus } from '@/lib/assets'
 import { centsToYuanInput, yuanToCents } from '@/lib/money'
 
@@ -36,7 +35,7 @@ const editInvoiceFormSchema = z.object({
 
 type EditInvoiceFormValues = z.infer<typeof editInvoiceFormSchema>
 
-interface EditInvoiceSheetProps {
+interface EditInvoiceDialogProps {
   invoice: InvoiceDto | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -54,8 +53,7 @@ function defaultValues(invoice: InvoiceDto | null): EditInvoiceFormValues {
   }
 }
 
-export function EditInvoiceSheet({ invoice, open, onOpenChange }: EditInvoiceSheetProps) {
-  const isMobile = useIsMobile()
+export function EditInvoiceDialog({ invoice, open, onOpenChange }: EditInvoiceDialogProps) {
   const updateInvoice = useUpdateInvoice()
   const form = useForm<EditInvoiceFormValues>({ resolver: zodResolver(editInvoiceFormSchema), defaultValues: defaultValues(invoice) })
 
@@ -86,7 +84,7 @@ export function EditInvoiceSheet({ invoice, open, onOpenChange }: EditInvoiceShe
   }
 
   const content = <>
-    <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><SheetTitle>编辑发票</SheetTitle><SheetDescription>可更正发票状态、金额及正式开票信息。</SheetDescription></SheetHeader>
+    <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>编辑发票</DialogTitle><DialogDescription>可更正发票状态、金额及正式开票信息。</DialogDescription></DialogHeader>
     <form className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6" onSubmit={form.handleSubmit(submit)}>
       <div className="space-y-4 rounded-lg bg-slate-50 p-4">
         <div className="space-y-1.5"><Label htmlFor="edit-invoice-number">发票号码</Label><Input id="edit-invoice-number" {...form.register('invoice_number')} />{form.formState.errors.invoice_number && <p className="text-sm text-destructive">{form.formState.errors.invoice_number.message}</p>}</div>
@@ -97,9 +95,8 @@ export function EditInvoiceSheet({ invoice, open, onOpenChange }: EditInvoiceShe
         <div className="space-y-1.5"><Label htmlFor="edit-invoice-issued-at">开票日期</Label><Input id="edit-invoice-issued-at" type="date" {...form.register('issued_at')} />{form.formState.errors.issued_at && <p className="text-sm text-destructive">{form.formState.errors.issued_at.message}</p>}</div>
       </div>
     </form>
-    <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button disabled={updateInvoice.isPending} onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={updateInvoice.isPending || !invoice} onClick={form.handleSubmit(submit)} type="button">{updateInvoice.isPending ? '正在保存' : '保存变更'}</Button></SheetFooter>
+    <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button disabled={updateInvoice.isPending} onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={updateInvoice.isPending || !invoice} onClick={form.handleSubmit(submit)} type="button">{updateInvoice.isPending ? '正在保存' : '保存变更'}</Button></DialogFooter>
   </>
 
-  if (isMobile) return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
-  return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
+  return <Dialog onOpenChange={onOpenChange} open={open}><DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">{content}</DialogContent></Dialog>
 }

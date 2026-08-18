@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/CreateContractSheet.tsx
+// apps/web/src/components/customers/CreateContractDialog.tsx
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FileCheck2, FileUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -10,9 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useCreateContract } from '@/hooks/useAssets'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import { yuanToCents } from '@/lib/money'
 import type { ContractDto } from '@/lib/assets'
 
@@ -55,7 +54,7 @@ export interface ContractDealOption {
   amountCents: number
 }
 
-interface CreateContractSheetProps {
+interface CreateContractDialogProps {
   customerId: string
   customerName: string
   deals: ContractDealOption[]
@@ -75,8 +74,7 @@ const defaultValues: CreateContractFormValues = {
   payment_due_at: '',
 }
 
-export function CreateContractSheet({ customerId, customerName, deals, open, onOpenChange }: CreateContractSheetProps) {
-  const isMobile = useIsMobile()
+export function CreateContractDialog({ customerId, customerName, deals, open, onOpenChange }: CreateContractDialogProps) {
   const createContract = useCreateContract()
   const [createdContract, setCreatedContract] = useState<ContractDto | null>(null)
   const form = useForm<CreateContractFormValues>({
@@ -118,7 +116,7 @@ export function CreateContractSheet({ customerId, customerName, deals, open, onO
     }
   }
 
-  function closeSheet() {
+  function closeDialog() {
     if (createContract.isPending) return
     onOpenChange(false)
   }
@@ -171,18 +169,17 @@ export function CreateContractSheet({ customerId, customerName, deals, open, onO
 
   const content = (
     <>
-      <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
-        <SheetTitle>{createdContract ? '上传合同文件' : '新建合同'}</SheetTitle>
-        <SheetDescription>{createdContract ? '合同已创建，可选上传扫描件或电子合同。' : '保存后可继续上传合同扫描件或电子合同。'}</SheetDescription>
-      </SheetHeader>
+      <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+        <DialogTitle>{createdContract ? '上传合同文件' : '新建合同'}</DialogTitle>
+        <DialogDescription>{createdContract ? '合同已创建，可选上传扫描件或电子合同。' : '保存后可继续上传合同扫描件或电子合同。'}</DialogDescription>
+      </DialogHeader>
       {createdContract ? uploadContent : formContent}
-      <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
-        <Button onClick={closeSheet} type="button" variant="outline">{createdContract ? '跳过附件并关闭' : '取消'}</Button>
+      <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
+        <Button onClick={closeDialog} type="button" variant="outline">{createdContract ? '跳过附件并关闭' : '取消'}</Button>
         {!createdContract && <Button disabled={createContract.isPending || deals.length === 0} onClick={form.handleSubmit(submit)} type="button">{createContract.isPending ? '正在保存' : '保存合同'}</Button>}
-      </SheetFooter>
+      </DialogFooter>
     </>
   )
 
-  if (isMobile) return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
-  return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
+  return <Dialog onOpenChange={onOpenChange} open={open}><DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">{content}</DialogContent></Dialog>
 }

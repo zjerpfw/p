@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/EditTaskSheet.tsx
+// apps/web/src/components/customers/EditTaskDialog.tsx
 import { useEffect, useState } from 'react'
 import { ClipboardPenLine, Trash2 } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { customerDetailQueryKey } from '@/hooks/useCustomerDetail'
 import { useUsers } from '@/hooks/useUsers'
@@ -25,7 +25,7 @@ export interface EditableTask {
   createdBy: string
 }
 
-interface EditTaskSheetProps {
+interface EditTaskDialogProps {
   task: EditableTask | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -38,7 +38,7 @@ function toDateTimeLocal(value: string) {
   return localDate.toISOString().slice(0, 16)
 }
 
-export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) {
+export function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -125,9 +125,9 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
 
   const canDelete = Boolean(task && (isAdmin || currentUserId === task.createdBy))
 
-  return <Sheet onOpenChange={onOpenChange} open={open}>
-    <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">
-      <SheetHeader className="border-b border-border px-5 py-5"><SheetTitle>编辑跟进任务</SheetTitle><SheetDescription>可调整截止时间、优先级和任务说明，也可重新打开已完成任务。</SheetDescription></SheetHeader>
+  return <Dialog onOpenChange={onOpenChange} open={open}>
+    <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">
+      <DialogHeader className="border-b border-border px-5 py-5"><DialogTitle>编辑跟进任务</DialogTitle><DialogDescription>可调整截止时间、优先级和任务说明，也可重新打开已完成任务。</DialogDescription></DialogHeader>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
         <div className="space-y-2"><Label htmlFor="edit-task-title"><span className="text-rose-500">*</span> 任务标题</Label><Input id="edit-task-title" onChange={(event) => setTitle(event.target.value)} value={title} /></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="edit-task-due-at"><span className="text-rose-500">*</span> 截止时间</Label><Input id="edit-task-due-at" onChange={(event) => setDueAt(event.target.value)} type="datetime-local" value={dueAt} /></div><div className="space-y-2"><Label>优先级</Label><Select onValueChange={(value) => setPriority(value as EditableTask['priority'])} value={priority}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="High">高</SelectItem><SelectItem value="Normal">普通</SelectItem><SelectItem value="Low">低</SelectItem></SelectContent></Select></div></div>
@@ -135,7 +135,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
         {isAdmin && <div className="space-y-2"><Label>任务负责人</Label><Select onValueChange={setAssigneeId} value={assigneeId}><SelectTrigger><SelectValue placeholder="选择负责人" /></SelectTrigger><SelectContent>{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}{user.role === 'admin' ? ' · 管理员' : ''}</SelectItem>)}</SelectContent></Select></div>}
         <div className="space-y-2"><Label htmlFor="edit-task-description">任务说明</Label><Textarea id="edit-task-description" onChange={(event) => setDescription(event.target.value)} placeholder="记录任务背景、客户要求或完成标准" value={description} /></div>
       </div>
-      <SheetFooter className="border-t border-border bg-background px-5 py-4"><div className="mr-auto">{canDelete && <Button className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={updateTask.isPending || deleteTask.isPending} onClick={confirmDeleteTask} type="button" variant="ghost"><Trash2 aria-hidden="true" />删除</Button>}</div><Button disabled={updateTask.isPending || deleteTask.isPending} onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={updateTask.isPending || deleteTask.isPending || !task} onClick={saveTask} type="button"><ClipboardPenLine aria-hidden="true" />{updateTask.isPending ? '正在保存' : '保存变更'}</Button></SheetFooter>
-    </SheetContent>
-  </Sheet>
+      <DialogFooter className="shrink-0 border-t border-border bg-background px-5 py-4"><div className="mr-auto">{canDelete && <Button className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={updateTask.isPending || deleteTask.isPending} onClick={confirmDeleteTask} type="button" variant="ghost"><Trash2 aria-hidden="true" />删除</Button>}</div><Button disabled={updateTask.isPending || deleteTask.isPending} onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={updateTask.isPending || deleteTask.isPending || !task} onClick={saveTask} type="button"><ClipboardPenLine aria-hidden="true" />{updateTask.isPending ? '正在保存' : '保存变更'}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>
 }

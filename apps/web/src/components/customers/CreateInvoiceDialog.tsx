@@ -1,4 +1,4 @@
-// apps/web/src/components/customers/CreateInvoiceSheet.tsx
+// apps/web/src/components/customers/CreateInvoiceDialog.tsx
 import { zodResolver } from '@hookform/resolvers/zod'
 import { FileCheck2, FileUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -10,9 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useCreateInvoice } from '@/hooks/useAssets'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import { yuanToCents } from '@/lib/money'
 import type { ContractDto, InvoiceDto } from '@/lib/assets'
 
@@ -44,7 +43,7 @@ const createInvoiceFormSchema = z.object({
 
 type CreateInvoiceFormValues = z.infer<typeof createInvoiceFormSchema>
 
-interface CreateInvoiceSheetProps {
+interface CreateInvoiceDialogProps {
   customerId: string
   customerName: string
   contracts: ContractDto[]
@@ -62,8 +61,7 @@ const defaultValues: CreateInvoiceFormValues = {
   issued_at: '',
 }
 
-export function CreateInvoiceSheet({ customerId, customerName, contracts, open, onOpenChange }: CreateInvoiceSheetProps) {
-  const isMobile = useIsMobile()
+export function CreateInvoiceDialog({ customerId, customerName, contracts, open, onOpenChange }: CreateInvoiceDialogProps) {
   const createInvoice = useCreateInvoice()
   const [createdInvoice, setCreatedInvoice] = useState<InvoiceDto | null>(null)
   const form = useForm<CreateInvoiceFormValues>({ resolver: zodResolver(createInvoiceFormSchema), defaultValues })
@@ -100,7 +98,7 @@ export function CreateInvoiceSheet({ customerId, customerName, contracts, open, 
     }
   }
 
-  function closeSheet() {
+  function closeDialog() {
     if (!createInvoice.isPending) onOpenChange(false)
   }
 
@@ -127,11 +125,10 @@ export function CreateInvoiceSheet({ customerId, customerName, contracts, open, 
   )
 
   const content = <>
-    <SheetHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><SheetTitle>{createdInvoice ? '上传发票文件' : '申请开票'}</SheetTitle><SheetDescription>{createdInvoice ? '开票申请已保存，可选上传发票 PDF 或扫描件。' : '保存后可继续上传发票 PDF 或扫描件。'}</SheetDescription></SheetHeader>
+    <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"><DialogTitle>{createdInvoice ? '上传发票文件' : '申请开票'}</DialogTitle><DialogDescription>{createdInvoice ? '开票申请已保存，可选上传发票 PDF 或扫描件。' : '保存后可继续上传发票 PDF 或扫描件。'}</DialogDescription></DialogHeader>
     {createdInvoice ? uploadContent : formContent}
-    <SheetFooter className="border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={closeSheet} type="button" variant="outline">{createdInvoice ? '跳过附件并关闭' : '取消'}</Button>{!createdInvoice && <Button disabled={createInvoice.isPending || contracts.length === 0} onClick={form.handleSubmit(submit)} type="button">{createInvoice.isPending ? '正在保存' : '保存开票申请'}</Button>}</SheetFooter>
+    <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4"><Button onClick={closeDialog} type="button" variant="outline">{createdInvoice ? '跳过附件并关闭' : '取消'}</Button>{!createdInvoice && <Button disabled={createInvoice.isPending || contracts.length === 0} onClick={form.handleSubmit(submit)} type="button">{createInvoice.isPending ? '正在保存' : '保存开票申请'}</Button>}</DialogFooter>
   </>
 
-  if (isMobile) return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="h-[92dvh] max-h-[92dvh] w-full gap-0 overflow-hidden rounded-t-2xl border-t p-0" side="bottom">{content}</SheetContent></Sheet>
-  return <Sheet onOpenChange={onOpenChange} open={open}><SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-lg">{content}</SheetContent></Sheet>
+  return <Dialog onOpenChange={onOpenChange} open={open}><DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[600px]">{content}</DialogContent></Dialog>
 }
