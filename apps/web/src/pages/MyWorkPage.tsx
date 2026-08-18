@@ -26,7 +26,10 @@ export default function MyWorkPage() {
   const updateTaskStatus = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) => apiFetch(`/api/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ])
       toast.success(taskStatus === 'Open' ? '任务已完成' : '任务已重新打开')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : '任务更新失败'),

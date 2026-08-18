@@ -81,6 +81,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(task?.customerId ?? '') }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ])
       toast.success(status === 'Completed' ? '任务已更新并完成' : '任务已更新')
       onOpenChange(false)
@@ -97,6 +98,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(task?.customerId ?? '') }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ])
       toast.success('任务已删除')
       onOpenChange(false)

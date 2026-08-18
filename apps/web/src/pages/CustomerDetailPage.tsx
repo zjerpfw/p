@@ -163,6 +163,7 @@ export default function CustomerDetailPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ])
       toast.success('任务已完成')
     },

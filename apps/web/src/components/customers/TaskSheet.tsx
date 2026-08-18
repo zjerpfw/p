@@ -49,6 +49,7 @@ export function TaskSheet({ customerId, deals, open, onOpenChange }: TaskSheetPr
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['tasks'] }),
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(customerId) }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ])
       toast.success('任务已创建')
       onOpenChange(false)
