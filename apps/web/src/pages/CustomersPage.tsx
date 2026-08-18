@@ -47,6 +47,10 @@ export default function CustomersPage() {
   }, [searchParams, setSearchParams])
 
   useEffect(() => {
+    if (searchParams.get('follow_up') === 'stale') setFollowUp('stale')
+  }, [searchParams])
+
+  useEffect(() => {
     setSelectedCustomerIds(new Set())
   }, [page, debouncedSearch, status, tagId, followUp])
 
@@ -68,6 +72,10 @@ export default function CustomersPage() {
   function updateFollowUp(value: '' | 'stale') {
     setFollowUp(value)
     setPage(1)
+    const nextParams = new URLSearchParams(searchParams)
+    if (value) nextParams.set('follow_up', value)
+    else nextParams.delete('follow_up')
+    setSearchParams(nextParams, { replace: true })
   }
 
   function getFollowUpLabel(lastActivityAt: string | null) {

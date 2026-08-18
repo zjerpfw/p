@@ -1,6 +1,6 @@
 // apps/api/src/routes/dashboard.ts
 import { createDb } from '@crm/db/client'
-import { contracts, customers, deals, payments, tasks, users } from '@crm/db/schema'
+import { activities, contracts, customers, deals, payments, tasks, users } from '@crm/db/schema'
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lte, lt, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -26,6 +26,7 @@ dashboardRoutes.get('/', async (c) => {
   const now = new Date()
   const renewalDeadline = new Date(now)
   renewalDeadline.setDate(renewalDeadline.getDate() + 60)
+  const staleFollowUpAt = new Date(now.getTime() - 7 * 86_400_000)
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const db = createDb(c.env.DB)
@@ -37,7 +38,7 @@ dashboardRoutes.get('/', async (c) => {
     : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers, overdueReceivables, [taskSummary], overdueTasks] = await Promise.all([
+  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers, overdueReceivables, [taskSummary], overdueTasks, [staleFollowUpSummary], staleFollowUps] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -126,6 +127,30 @@ dashboardRoutes.get('/', async (c) => {
       .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, now), taskVisibilityFilter))
       .orderBy(asc(tasks.dueAt))
       .limit(10),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(customers)
+      .where(and(
+        eq(customers.isDeleted, false),
+        ownerFilter,
+        sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})`,
+      )),
+    db
+      .select({
+        customerId: customers.id,
+        customerName: customers.name,
+        ownerName: users.name,
+        lastActivityAt: sql<number | null>`(select max(${activities.createdAt}) from ${activities} where ${activities.customerId} = ${customers.id})`,
+      })
+      .from(customers)
+      .leftJoin(users, eq(customers.ownerId, users.id))
+      .where(and(
+        eq(customers.isDeleted, false),
+        ownerFilter,
+        sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})`,
+      ))
+      .orderBy(asc(sql`coalesce((select max(${activities.createdAt}) from ${activities} where ${activities.customerId} = ${customers.id}), 0)`))
+      .limit(10),
   ])
 
   const renewalCustomerIds = renewalCustomers.map((customer) => customer.customerId)
@@ -164,6 +189,7 @@ dashboardRoutes.get('/', async (c) => {
     wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
     weightedForecastCents: Number(weightedForecast?.totalCents ?? 0),
     taskSummary: { openCount: Number(taskSummary?.openCount ?? 0), overdueCount: Number(taskSummary?.overdueCount ?? 0) },
+    staleFollowUpCount: Number(staleFollowUpSummary?.count ?? 0),
     stageDistribution: normalizedStageDistribution,
     funnelDistribution: normalizedStageDistribution.map((item) => ({
       name: stageLabels[item.stage] ?? item.stage,
@@ -192,6 +218,10 @@ dashboardRoutes.get('/', async (c) => {
     overdueTasks: overdueTasks.map((task) => ({
       ...task,
       overdueDays: Math.max(0, Math.floor((now.getTime() - task.dueAt.getTime()) / 86_400_000)),
+    })),
+    staleFollowUps: staleFollowUps.map((customer) => ({
+      ...customer,
+      lastActivityAt: customer.lastActivityAt ? new Date(customer.lastActivityAt).toISOString() : null,
     })),
   })
 })

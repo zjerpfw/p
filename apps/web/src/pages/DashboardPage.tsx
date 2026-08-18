@@ -28,6 +28,12 @@ export default function DashboardPage() {
   const distribution = new Map(data?.stageDistribution.map((item) => [item.stage, item.count]))
   const maxCount = Math.max(1, ...dealStages.map((stage) => distribution.get(stage) ?? 0))
 
+  function getLastFollowUpLabel(lastActivityAt: string | null) {
+    if (!lastActivityAt) return '从未跟进'
+    const days = Math.max(0, differenceInCalendarDays(startOfDay(new Date()), startOfDay(new Date(lastActivityAt))))
+    return days === 0 ? '今日已跟进' : `${days} 天前跟进`
+  }
+
   if (isLoading) return <p className="text-sm text-muted-foreground">正在加载经营数据...</p>
   if (error) return <p className="text-sm text-destructive">{error.message}</p>
 
@@ -72,6 +78,10 @@ export default function DashboardPage() {
         <Card className="gap-0 py-0">
           <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">逾期跟进任务</CardTitle><CircleAlert aria-hidden="true" className="size-4 text-rose-600" /></CardHeader>
           <CardContent className="px-5 pb-5"><strong className="text-3xl text-rose-700">{data?.taskSummary.overdueCount ?? 0}</strong><span className="ml-1 text-sm text-muted-foreground">个</span></CardContent>
+        </Card>
+        <Card className="gap-0 py-0">
+          <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">超过 7 天未跟进</CardTitle><CircleAlert aria-hidden="true" className="size-4 text-rose-600" /></CardHeader>
+          <CardContent className="flex items-end justify-between gap-3 px-5 pb-5"><div><strong className="text-3xl text-rose-700">{data?.staleFollowUpCount ?? 0}</strong><span className="ml-1 text-sm text-muted-foreground">个</span></div><Button asChild size="sm" type="button" variant="ghost"><Link to="/customers?follow_up=stale">查看客户</Link></Button></CardContent>
         </Card>
       </div>
 
@@ -143,6 +153,21 @@ export default function DashboardPage() {
             <TableBody>
               {data?.overdueReceivables.map((contract) => <TableRow key={contract.id}><TableCell className="font-medium">{contract.customerName}</TableCell><TableCell><p className="font-medium text-slate-800">{contract.contractNumber}</p><p className="mt-1 text-xs text-muted-foreground">{contract.title}</p></TableCell><TableCell>{format(new Date(contract.paymentDueAt), 'yyyy-MM-dd')}</TableCell><TableCell><Badge tone="danger">{contract.overdueDays} 天</Badge></TableCell><TableCell className="text-right font-semibold text-rose-700">{formatCents(contract.outstandingAmountCents)}</TableCell><TableCell className="text-right"><Button asChild size="sm" type="button" variant="ghost"><Link to={`/customers/${contract.customerId}#finance`}>查看账款</Link></Button></TableCell></TableRow>)}
               {data?.overdueReceivables.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={6}>暂无逾期应收合同</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="flex flex-row items-center gap-2 border-b border-border px-5 py-4">
+          <CircleAlert aria-hidden="true" className="size-5 text-rose-600" />
+          <div><CardTitle>待重新跟进客户</CardTitle><p className="mt-1 text-xs text-muted-foreground">超过 7 天未记录跟进，包含从未建立跟进记录的客户。</p></div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>客户</TableHead><TableHead>最近跟进</TableHead><TableHead>归属销售</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {data?.staleFollowUps.map((customer) => <TableRow key={customer.customerId}><TableCell className="font-medium">{customer.customerName}</TableCell><TableCell><Badge tone="danger">{getLastFollowUpLabel(customer.lastActivityAt)}</Badge>{customer.lastActivityAt && <p className="mt-1 text-xs text-muted-foreground">{format(new Date(customer.lastActivityAt), 'yyyy-MM-dd HH:mm')}</p>}</TableCell><TableCell>{customer.ownerName ?? '未分配'}</TableCell><TableCell className="text-right"><Button asChild size="sm" type="button" variant="ghost"><Link to={`/customers/${customer.customerId}`}>处理客户</Link></Button></TableCell></TableRow>)}
+              {data?.staleFollowUps.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={4}>暂无超过 7 天未跟进的客户</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
