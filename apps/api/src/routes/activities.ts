@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 
 interface ActivityPayload {
   customer_id?: unknown
@@ -125,6 +126,7 @@ activityRoutes.post('/', async (c) => {
   }
 
   await db.insert(activities).values(activity)
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Activity', entityId: activity.id, action: 'Created', after: activity }))
 
   return c.json({ activity }, 201)
 })

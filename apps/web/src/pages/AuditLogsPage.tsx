@@ -15,6 +15,7 @@ const entityLabels: Record<string, string> = {
   Invoice: '发票',
   Task: '任务',
   CustomerTag: '客户标签',
+  Activity: '跟进',
 }
 
 const actionLabels: Record<AuditAction, string> = {
