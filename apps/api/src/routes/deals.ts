@@ -294,6 +294,7 @@ dealRoutes.get('/', async (c) => {
   const search = c.req.query('search')?.trim().slice(0, 100)
   const status = c.req.query('status')?.trim().slice(0, 50)
   const stage = status && dealStages.includes(status as (typeof dealStages)[number]) ? status : undefined
+  const activeOnly = c.req.query('active_only') === 'true' || c.req.query('active_only') === '1'
   const page = parsePagination(c.req.query('page'), 1, 1_000_000)
   const limit = parsePagination(c.req.query('limit'), 10, 100)
   const filters = [
@@ -301,6 +302,7 @@ dealRoutes.get('/', async (c) => {
     eq(customers.isDeleted, false),
     search ? like(customers.name, `%${search}%`) : undefined,
     stage ? eq(deals.stage, stage as (typeof dealStages)[number]) : undefined,
+    activeOnly ? inArray(deals.stage, ['Leads', 'Qualified', 'Proposal']) : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = filters.length ? and(...filters) : undefined

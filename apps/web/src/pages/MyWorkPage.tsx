@@ -18,7 +18,7 @@ import { activityTypeLabels, dealStageLabels, getDealStageTone } from '@/lib/pre
 
 export default function MyWorkPage() {
   const activitiesQuery = useActivities()
-  const dealsQuery = useDeals({ limit: 5 })
+  const dealsQuery = useDeals({ activeOnly: true, limit: 5 })
   const [taskStatus, setTaskStatus] = useState<TaskStatus>('Open')
   const tasksQuery = useTasks({ status: taskStatus, assigneeOnly: true, limit: 30 })
   const queryClient = useQueryClient()

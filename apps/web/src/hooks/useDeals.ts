@@ -35,6 +35,7 @@ export interface Deal {
 export interface DealFilters {
   search?: string
   status?: DealStage
+  activeOnly?: boolean
   page?: number
   limit?: number
   enabled?: boolean
@@ -44,6 +45,7 @@ export function useDeals(filters: DealFilters = {}) {
   const params = new URLSearchParams()
   if (filters.search) params.set('search', filters.search)
   if (filters.status) params.set('status', filters.status)
+  if (filters.activeOnly) params.set('active_only', 'true')
   params.set('page', String(filters.page ?? 1))
   params.set('limit', String(filters.limit ?? 10))
   const query = params.toString()
