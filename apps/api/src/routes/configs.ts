@@ -1,10 +1,12 @@
 // apps/api/src/routes/configs.ts
 import { createDb } from '@crm/db/client'
-import { systemConfigs } from '@crm/db/schema'
-import { asc, inArray } from 'drizzle-orm'
+import { systemConfigs, users } from '@crm/db/schema'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
+import { getAuthenticatedActor } from '../lib/auth'
+import { getWeChatAccessToken, sendWeChatMarkdownMessage } from '../services/wechat'
 
 const PUBLIC_CONFIG_KEYS = ['amap_key', 'amap_security_code'] as const
 const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key)/i
@@ -121,4 +123,36 @@ configRoutes.post('/', async (c) => {
   await db.batch([firstStatement, ...remainingStatements])
 
   return c.json({ updated: uniqueEntries.length })
+})
+
+configRoutes.post('/test-wechat', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const db = createDb(c.env.DB)
+  const [user] = await db
+    .select({ name: users.name, wechatUserId: users.wechatUserId })
+    .from(users)
+    .where(eq(users.id, actor.id))
+    .limit(1)
+  const wechatUserId = user?.wechatUserId?.trim()
+  if (!wechatUserId) return c.json({ error: '请先在员工管理中为当前管理员填写企业微信 UserID' }, 400)
+
+  try {
+    const accessToken = await getWeChatAccessToken(c.env)
+    await sendWeChatMarkdownMessage(
+      c.env,
+      accessToken,
+      wechatUserId,
+      [
+        '✅ **CRM 企业微信测试消息**',
+        `管理员：${user.name}`,
+        '续费提醒和任务提醒的发送配置已连通。',
+      ].join('\n'),
+    )
+    return c.json({ sent: true })
+  } catch (error) {
+    console.error('WeChat test message failed', error)
+    return c.json({ error: '测试消息发送失败，请检查企业标识、应用密钥、Agent ID 和员工企业微信 UserID' }, 502)
+  }
 })

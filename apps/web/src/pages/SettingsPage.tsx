@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, MapPinned, Save, ShieldCheck } from 'lucide-react'
+import { KeyRound, MapPinned, Save, Send, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -41,6 +41,10 @@ interface ConfigResponse {
 
 interface UpdateConfigResponse {
   updated: number
+}
+
+interface WeChatTestResponse {
+  sent: boolean
 }
 
 const defaultValues: SettingsFormValues = {
@@ -96,6 +100,12 @@ export default function SettingsPage() {
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '保存系统配置失败')
     },
+  })
+
+  const testWeChatMutation = useMutation({
+    mutationFn: () => apiFetch<WeChatTestResponse>('/api/configs/test-wechat', { method: 'POST' }),
+    onSuccess: () => toast.success('测试消息已发送，请检查当前管理员的企业微信'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : '测试消息发送失败'),
   })
 
   function handleSubmit(values: SettingsFormValues) {
@@ -249,8 +259,12 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end">
-            <Button disabled={updateMutation.isPending} type="submit">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button disabled={testWeChatMutation.isPending || updateMutation.isPending} onClick={() => testWeChatMutation.mutate()} type="button" variant="outline">
+              <Send aria-hidden="true" className="size-4" />
+              {testWeChatMutation.isPending ? '正在发送' : '发送测试消息'}
+            </Button>
+            <Button disabled={updateMutation.isPending || testWeChatMutation.isPending} type="submit">
               <Save aria-hidden="true" className="size-4" />
               {updateMutation.isPending ? '正在保存' : '保存设置'}
             </Button>
