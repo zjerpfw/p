@@ -32,6 +32,7 @@ const updateTaskSchema = z.object({
   due_at: z.union([z.string(), z.number()]).optional(),
   priority: z.enum(taskPriorities).optional(),
   status: z.enum(taskStatuses).optional(),
+  assignee_id: z.string().min(1, '任务负责人编号无效').optional(),
 })
 
 function parseDate(value: string | number | undefined) {
@@ -177,6 +178,14 @@ taskRoutes.patch('/:id', async (c) => {
 
   const dueAt = parseDate(parsed.data.due_at)
   if (parsed.data.due_at !== undefined && !dueAt) return c.json({ error: '截止时间无效' }, 400)
+  if (parsed.data.assignee_id !== undefined && actor.role !== 'admin') {
+    return c.json({ error: '仅管理员可以调整任务负责人' }, 403)
+  }
+  const assigneeId = parsed.data.assignee_id === undefined ? undefined : parsed.data.assignee_id
+  if (assigneeId) {
+    const [assignee] = await db.select({ id: users.id }).from(users).where(eq(users.id, assigneeId)).limit(1)
+    if (!assignee) return c.json({ error: '任务负责人不存在' }, 400)
+  }
   const now = new Date()
   const updates = {
     ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
@@ -184,6 +193,7 @@ taskRoutes.patch('/:id', async (c) => {
     ...(dueAt ? { dueAt } : {}),
     ...(parsed.data.priority !== undefined ? { priority: parsed.data.priority } : {}),
     ...(parsed.data.status !== undefined ? { status: parsed.data.status, completedAt: parsed.data.status === 'Completed' ? now : null } : {}),
+    ...(assigneeId !== undefined ? { assigneeId } : {}),
     updatedAt: now,
   }
   if (Object.keys(updates).length === 1) return c.json({ error: '请至少提供一个需要更新的字段' }, 400)

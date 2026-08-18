@@ -10,13 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { customerDetailQueryKey } from '@/hooks/useCustomerDetail'
-import { apiFetch } from '@/lib/api'
+import { useUsers } from '@/hooks/useUsers'
+import { apiFetch, getCurrentUserRole } from '@/lib/api'
 
 export interface EditableTask {
   id: string
   customerId: string
   title: string
   description: string | null
+  assigneeId: string
   dueAt: string
   priority: 'Low' | 'Normal' | 'High'
   status: 'Open' | 'Completed'
@@ -42,6 +44,10 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
   const [dueAt, setDueAt] = useState('')
   const [priority, setPriority] = useState<EditableTask['priority']>('Normal')
   const [status, setStatus] = useState<EditableTask['status']>('Open')
+  const [assigneeId, setAssigneeId] = useState('')
+  const isAdmin = getCurrentUserRole() === 'admin'
+  const usersQuery = useUsers()
+  const users = usersQuery.data?.users ?? []
 
   useEffect(() => {
     if (!open || !task) return
@@ -50,6 +56,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
     setDueAt(toDateTimeLocal(task.dueAt))
     setPriority(task.priority)
     setStatus(task.status)
+    setAssigneeId(task.assigneeId)
   }, [open, task])
 
   const updateTask = useMutation({
@@ -64,6 +71,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
           due_at: new Date(dueAt).toISOString(),
           priority,
           status,
+          ...(isAdmin ? { assignee_id: assigneeId } : {}),
         }),
       })
     },
@@ -97,6 +105,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: EditTaskSheetProps) 
         <div className="space-y-2"><Label htmlFor="edit-task-title"><span className="text-rose-500">*</span> 任务标题</Label><Input id="edit-task-title" onChange={(event) => setTitle(event.target.value)} value={title} /></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="edit-task-due-at"><span className="text-rose-500">*</span> 截止时间</Label><Input id="edit-task-due-at" onChange={(event) => setDueAt(event.target.value)} type="datetime-local" value={dueAt} /></div><div className="space-y-2"><Label>优先级</Label><Select onValueChange={(value) => setPriority(value as EditableTask['priority'])} value={priority}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="High">高</SelectItem><SelectItem value="Normal">普通</SelectItem><SelectItem value="Low">低</SelectItem></SelectContent></Select></div></div>
         <div className="space-y-2"><Label>任务状态</Label><Select onValueChange={(value) => setStatus(value as EditableTask['status'])} value={status}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Open">待完成</SelectItem><SelectItem value="Completed">已完成</SelectItem></SelectContent></Select></div>
+        {isAdmin && <div className="space-y-2"><Label>任务负责人</Label><Select onValueChange={setAssigneeId} value={assigneeId}><SelectTrigger><SelectValue placeholder="选择负责人" /></SelectTrigger><SelectContent>{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}{user.role === 'admin' ? ' · 管理员' : ''}</SelectItem>)}</SelectContent></Select></div>}
         <div className="space-y-2"><Label htmlFor="edit-task-description">任务说明</Label><Textarea id="edit-task-description" onChange={(event) => setDescription(event.target.value)} placeholder="记录任务背景、客户要求或完成标准" value={description} /></div>
       </div>
       <SheetFooter className="border-t border-border bg-background px-5 py-4"><Button disabled={updateTask.isPending} onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={updateTask.isPending || !task} onClick={saveTask} type="button"><ClipboardPenLine aria-hidden="true" />{updateTask.isPending ? '正在保存' : '保存变更'}</Button></SheetFooter>

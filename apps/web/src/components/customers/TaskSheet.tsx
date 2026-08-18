@@ -11,7 +11,8 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from '@/components/ui/textarea'
 import type { Deal } from '@/hooks/useDeals'
 import { customerDetailQueryKey } from '@/hooks/useCustomerDetail'
-import { apiFetch } from '@/lib/api'
+import { useUsers } from '@/hooks/useUsers'
+import { apiFetch, getCurrentUserRole } from '@/lib/api'
 
 interface TaskSheetProps {
   customerId: string
@@ -34,11 +35,15 @@ export function TaskSheet({ customerId, deals, open, onOpenChange }: TaskSheetPr
   const [dueAt, setDueAt] = useState(defaultDueAt)
   const [priority, setPriority] = useState<'Low' | 'Normal' | 'High'>('Normal')
   const [dealId, setDealId] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
+  const isAdmin = getCurrentUserRole() === 'admin'
+  const usersQuery = useUsers()
+  const users = usersQuery.data?.users ?? []
   const createTask = useMutation({
     mutationFn: () => apiFetch(`/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_id: customerId, deal_id: dealId || null, title: title.trim(), description: description.trim(), due_at: new Date(dueAt).toISOString(), priority }),
+      body: JSON.stringify({ customer_id: customerId, deal_id: dealId || null, title: title.trim(), description: description.trim(), due_at: new Date(dueAt).toISOString(), priority, ...(isAdmin && assigneeId ? { assignee_id: assigneeId } : {}) }),
     }),
     onSuccess: async () => {
       await Promise.all([
@@ -53,7 +58,7 @@ export function TaskSheet({ customerId, deals, open, onOpenChange }: TaskSheetPr
 
   useEffect(() => {
     if (!open) return
-    setTitle(''); setDescription(''); setDueAt(defaultDueAt()); setPriority('Normal'); setDealId('')
+    setTitle(''); setDescription(''); setDueAt(defaultDueAt()); setPriority('Normal'); setDealId(''); setAssigneeId('')
   }, [open])
 
   return <Sheet onOpenChange={onOpenChange} open={open}>
@@ -62,6 +67,7 @@ export function TaskSheet({ customerId, deals, open, onOpenChange }: TaskSheetPr
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
         <div className="space-y-2"><Label htmlFor="task-title"><span className="text-rose-500">*</span> 任务标题</Label><Input id="task-title" onChange={(event) => setTitle(event.target.value)} placeholder="例如：电话确认采购预算" value={title} /></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="task-due-at"><span className="text-rose-500">*</span> 截止时间</Label><Input id="task-due-at" onChange={(event) => setDueAt(event.target.value)} type="datetime-local" value={dueAt} /></div><div className="space-y-2"><Label>优先级</Label><Select onValueChange={(value) => setPriority(value as typeof priority)} value={priority}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="High">高</SelectItem><SelectItem value="Normal">普通</SelectItem><SelectItem value="Low">低</SelectItem></SelectContent></Select></div></div>
+        {isAdmin && <div className="space-y-2"><Label>任务负责人</Label><Select onValueChange={(value) => setAssigneeId(value === '__self__' ? '' : value)} value={assigneeId || '__self__'}><SelectTrigger><SelectValue placeholder="默认指派给自己" /></SelectTrigger><SelectContent><SelectItem value="__self__">默认指派给自己</SelectItem>{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}{user.role === 'admin' ? ' · 管理员' : ''}</SelectItem>)}</SelectContent></Select></div>}
         <div className="space-y-2"><Label>关联商机</Label><Select onValueChange={(value) => setDealId(value === 'none' ? '' : value)} value={dealId}><SelectTrigger><SelectValue placeholder="可选关联商机" /></SelectTrigger><SelectContent><SelectItem value="none">不关联商机</SelectItem>{deals.map((deal) => <SelectItem key={deal.id} value={deal.id}>{deal.productName}</SelectItem>)}</SelectContent></Select></div>
         <div className="space-y-2"><Label htmlFor="task-description">任务说明</Label><Textarea id="task-description" onChange={(event) => setDescription(event.target.value)} placeholder="记录任务背景、客户要求或完成标准" value={description} /></div>
       </div>
