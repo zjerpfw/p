@@ -1,13 +1,14 @@
 // apps/api/src/routes/contracts.ts
 import { createDb } from '@crm/db/client'
 import { contracts, customers, deals, payments } from '@crm/db/schema'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gte, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
+import { parseShanghaiDateRange } from '../lib/date-range'
 
 export const contractRoutes = new Hono<{ Bindings: Env }>()
 
@@ -51,6 +52,8 @@ contractRoutes.get('/', async (c) => {
   const statusResult = contractStatusSchema.optional().safeParse(c.req.query('status'))
   if (!statusResult.success) return c.json({ error: '合同状态无效' }, 400)
   const status = statusResult.data
+  const dateRange = parseShanghaiDateRange(c.req.query('date_from'), c.req.query('date_to'))
+  if (!dateRange) return c.json({ error: '日期范围无效，请使用 YYYY-MM-DD 且结束日期不早于开始日期' }, 400)
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
@@ -58,6 +61,8 @@ contractRoutes.get('/', async (c) => {
     eq(customers.isDeleted, false),
     customerId ? eq(contracts.customerId, customerId) : undefined,
     status ? eq(contracts.status, status) : undefined,
+    dateRange.from ? gte(contracts.signedAt, dateRange.from) : undefined,
+    dateRange.toExclusive ? lt(contracts.signedAt, dateRange.toExclusive) : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)

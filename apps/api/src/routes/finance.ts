@@ -1,12 +1,13 @@
 // apps/api/src/routes/finance.ts
 import { createDb } from '@crm/db/client'
 import { contracts, customers, invoices, payments } from '@crm/db/schema'
-import { and, eq, ne, sql } from 'drizzle-orm'
+import { and, eq, gte, lt, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { csvResponse } from '../lib/csv'
+import { parseShanghaiDateRange } from '../lib/date-range'
 
 export const financeRoutes = new Hono<{ Bindings: Env }>()
 
@@ -64,6 +65,8 @@ financeRoutes.get('/export/csv', async (c) => {
       ? ['Draft', 'Issued', 'Voided']
       : ['Pending', 'Received', 'Reversed']
   if (status && !allowedStatuses.includes(status)) return c.json({ error: '状态筛选无效' }, 400)
+  const dateRange = parseShanghaiDateRange(c.req.query('date_from'), c.req.query('date_to'))
+  if (!dateRange) return c.json({ error: '日期范围无效，请使用 YYYY-MM-DD 且结束日期不早于开始日期' }, 400)
 
   const db = createDb(c.env.DB)
   const ownerFilter = actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)
@@ -85,7 +88,13 @@ financeRoutes.get('/export/csv', async (c) => {
     }).from(contracts)
       .innerJoin(customers, eq(contracts.customerId, customers.id))
       .leftJoin(payments, eq(payments.contractId, contracts.id))
-      .where(and(eq(customers.isDeleted, false), status ? eq(contracts.status, status as 'Draft' | 'Active' | 'Expired' | 'Terminated' | 'Void') : undefined, ownerFilter))
+      .where(and(
+        eq(customers.isDeleted, false),
+        status ? eq(contracts.status, status as 'Draft' | 'Active' | 'Expired' | 'Terminated' | 'Void') : undefined,
+        dateRange.from ? gte(contracts.signedAt, dateRange.from) : undefined,
+        dateRange.toExclusive ? lt(contracts.signedAt, dateRange.toExclusive) : undefined,
+        ownerFilter,
+      ))
       .groupBy(contracts.id)
       .orderBy(sql`${contracts.updatedAt} desc`)
       .limit(5_000)
@@ -111,7 +120,13 @@ financeRoutes.get('/export/csv', async (c) => {
     }).from(invoices)
       .innerJoin(contracts, eq(invoices.contractId, contracts.id))
       .innerJoin(customers, eq(invoices.customerId, customers.id))
-      .where(and(eq(customers.isDeleted, false), status ? eq(invoices.status, status as 'Draft' | 'Issued' | 'Voided') : undefined, ownerFilter))
+      .where(and(
+        eq(customers.isDeleted, false),
+        status ? eq(invoices.status, status as 'Draft' | 'Issued' | 'Voided') : undefined,
+        dateRange.from ? gte(invoices.issuedAt, dateRange.from) : undefined,
+        dateRange.toExclusive ? lt(invoices.issuedAt, dateRange.toExclusive) : undefined,
+        ownerFilter,
+      ))
       .orderBy(sql`${invoices.updatedAt} desc`)
       .limit(5_000)
     return csvResponse('发票台账.csv', ['客户', '归属销售', '合同编号', '发票号码', '发票抬头', '开票内容', '状态', '开票金额（元）', '税额（元）', '开票日期', '创建时间'], rows.map((row) => [row.customerName, row.ownerName, row.contractNumber, row.invoiceNumber, row.title, row.content, row.status, yuan(row.amountCents), yuan(row.taxAmountCents), dateValue(row.issuedAt), row.createdAt]))
@@ -132,7 +147,13 @@ financeRoutes.get('/export/csv', async (c) => {
     .innerJoin(contracts, eq(payments.contractId, contracts.id))
     .innerJoin(customers, eq(payments.customerId, customers.id))
     .leftJoin(invoices, eq(payments.invoiceId, invoices.id))
-    .where(and(eq(customers.isDeleted, false), status ? eq(payments.status, status as 'Pending' | 'Received' | 'Reversed') : undefined, ownerFilter))
+    .where(and(
+      eq(customers.isDeleted, false),
+      status ? eq(payments.status, status as 'Pending' | 'Received' | 'Reversed') : undefined,
+      dateRange.from ? gte(payments.paidAt, dateRange.from) : undefined,
+      dateRange.toExclusive ? lt(payments.paidAt, dateRange.toExclusive) : undefined,
+      ownerFilter,
+    ))
     .orderBy(sql`${payments.paidAt} desc nulls last`, sql`${payments.updatedAt} desc`)
     .limit(5_000)
   return csvResponse('回款台账.csv', ['客户', '归属销售', '合同编号', '关联发票', '回款编号', '状态', '回款金额（元）', '到账日期', '备注', '创建时间'], rows.map((row) => [row.customerName, row.ownerName, row.contractNumber, row.invoiceNumber, row.paymentNumber, row.status, yuan(row.amountCents), dateValue(row.paidAt), row.note, row.createdAt]))

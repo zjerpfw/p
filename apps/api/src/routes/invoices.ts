@@ -1,13 +1,14 @@
 // apps/api/src/routes/invoices.ts
 import { createDb } from '@crm/db/client'
 import { contracts, customers, invoices, payments } from '@crm/db/schema'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gte, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
+import { parseShanghaiDateRange } from '../lib/date-range'
 
 export const invoiceRoutes = new Hono<{ Bindings: Env }>()
 
@@ -75,6 +76,8 @@ invoiceRoutes.get('/', async (c) => {
   const statusResult = invoiceStatusSchema.optional().safeParse(c.req.query('status'))
   if (!statusResult.success) return c.json({ error: '发票状态无效' }, 400)
   const status = statusResult.data
+  const dateRange = parseShanghaiDateRange(c.req.query('date_from'), c.req.query('date_to'))
+  if (!dateRange) return c.json({ error: '日期范围无效，请使用 YYYY-MM-DD 且结束日期不早于开始日期' }, 400)
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
@@ -83,6 +86,8 @@ invoiceRoutes.get('/', async (c) => {
     customerId ? eq(invoices.customerId, customerId) : undefined,
     contractId ? eq(invoices.contractId, contractId) : undefined,
     status ? eq(invoices.status, status) : undefined,
+    dateRange.from ? gte(invoices.issuedAt, dateRange.from) : undefined,
+    dateRange.toExclusive ? lt(invoices.issuedAt, dateRange.toExclusive) : undefined,
     ownershipFilter(actor),
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)
