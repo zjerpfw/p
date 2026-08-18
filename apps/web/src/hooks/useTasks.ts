@@ -40,7 +40,7 @@ export function useTasks(filters: TaskFilters = {}) {
   params.set('limit', String(filters.limit ?? 50))
   return useQuery({
     queryKey: ['tasks', filters],
-    queryFn: () => apiFetch<{ tasks: Task[] }>(`/api/tasks?${params.toString()}`),
+    queryFn: () => apiFetch<{ tasks: Task[]; total: number }>(`/api/tasks?${params.toString()}`),
     enabled: filters.enabled ?? true,
   })
 }

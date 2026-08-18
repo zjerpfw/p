@@ -1,7 +1,7 @@
 // apps/api/src/routes/tasks.ts
 import { createDb } from '@crm/db/client'
 import { customers, deals, taskPriorities, tasks, taskStatuses, users } from '@crm/db/schema'
-import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -129,8 +129,13 @@ taskRoutes.get('/', async (c) => {
     .where(and(...filters))
     .orderBy(asc(tasks.status), asc(tasks.dueAt), desc(tasks.createdAt))
     .limit(limit)
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(tasks)
+    .innerJoin(customers, eq(tasks.customerId, customers.id))
+    .where(and(...filters))
 
-  return c.json({ tasks: rows })
+  return c.json({ tasks: rows, total: Number(total) })
 })
 
 taskRoutes.post('/', async (c) => {
