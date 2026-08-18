@@ -6,7 +6,7 @@ import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
-import { shanghaiMonthKey, todayInShanghai } from '../lib/shanghai-date'
+import { shanghaiDateKeyToUtc, shanghaiMonthKey, todayInShanghai } from '../lib/shanghai-date'
 
 export const dashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -47,6 +47,14 @@ dashboardRoutes.get('/', async (c) => {
   try {
   const now = new Date()
   const todayStart = todayInShanghai(now)
+  const currentMonthKey = shanghaiMonthKey(now)
+  const [currentYear, currentMonth] = currentMonthKey.split('-').map(Number)
+  const forecastMonths = [0, 1, 2].map((offset) => {
+    const monthDate = new Date(Date.UTC(currentYear, currentMonth - 1 + offset, 1, 12))
+    return shanghaiMonthKey(monthDate)
+  })
+  const forecastStart = shanghaiDateKeyToUtc(`${forecastMonths[0]}-01`)
+  const forecastEnd = shanghaiDateKeyToUtc(`${shanghaiMonthKey(new Date(Date.UTC(currentYear, currentMonth + 2, 1, 12)))}-01`)
   const renewalDeadline = new Date(now)
   renewalDeadline.setDate(renewalDeadline.getDate() + 60)
   const staleFollowUpAt = new Date(now.getTime() - 7 * 86_400_000)
@@ -80,6 +88,8 @@ dashboardRoutes.get('/', async (c) => {
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(
         inArray(deals.stage, ['Leads', 'Qualified', 'Proposal']),
+        gte(deals.expectedCloseDate, forecastStart),
+        lt(deals.expectedCloseDate, forecastEnd),
         ...activeFilters,
       )))
   const forecastRows = await runDashboardQuery('forecast-by-month', () => db
@@ -231,12 +241,6 @@ dashboardRoutes.get('/', async (c) => {
     stage: item.stage,
     count: Number(item.count),
   }))
-  const currentMonthKey = shanghaiMonthKey(now)
-  const [currentYear, currentMonth] = currentMonthKey.split('-').map(Number)
-  const forecastMonths = [0, 1, 2].map((offset) => {
-    const monthDate = new Date(Date.UTC(currentYear, currentMonth - 1 + offset, 1, 12))
-    return shanghaiMonthKey(monthDate)
-  })
   const forecastTotals = new Map(forecastMonths.map((month) => [month, { amountCents: 0, dealCount: 0 }]))
   for (const row of forecastRows) {
     const month = shanghaiMonthKey(row.expectedCloseDate)

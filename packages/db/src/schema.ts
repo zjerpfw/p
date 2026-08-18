@@ -212,6 +212,11 @@ export const deals = sqliteTable(
     index('deals_customer_id_idx').on(table.customerId),
     index('deals_stage_idx').on(table.stage),
     index('deals_stage_won_at_idx').on(table.stage, table.wonAt),
+    index('deals_stage_deleted_expected_close_idx').on(
+      table.stage,
+      table.isDeleted,
+      table.expectedCloseDate,
+    ),
     uniqueIndex('deals_idempotency_key_unique').on(table.idempotencyKey),
     index('deals_stage_deleted_created_id_idx').on(
       table.stage,
