@@ -1,6 +1,6 @@
 // apps/web/src/pages/DashboardPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
-import { BarChart3, CircleAlert, CircleDollarSign, ClipboardList, Lightbulb, Target, TrendingUp } from 'lucide-react'
+import { BarChart3, CircleAlert, CircleDollarSign, ClipboardList, Lightbulb, RefreshCw, Target, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -24,7 +24,7 @@ function FunnelTooltip({ active, payload }: { active?: boolean; payload?: Array<
 
 export default function DashboardPage() {
   const [renewTarget, setRenewTarget] = useState<RenewCustomerTarget | null>(null)
-  const { data, error, isLoading } = useDashboard()
+  const { data, error, isLoading, isRefetching, refetch } = useDashboard()
   const distribution = new Map(data?.stageDistribution.map((item) => [item.stage, item.count]))
   const maxCount = Math.max(1, ...dealStages.map((stage) => distribution.get(stage) ?? 0))
 
@@ -35,7 +35,21 @@ export default function DashboardPage() {
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">正在加载经营数据...</p>
-  if (error) return <p className="text-sm text-destructive">{error.message}</p>
+  if (error) {
+    return (
+      <section className="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+        <CircleAlert aria-hidden="true" className="size-7 text-destructive" />
+        <div>
+          <h1 className="text-base font-semibold text-slate-900">仪表盘数据暂时无法加载</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+        </div>
+        <Button disabled={isRefetching} onClick={() => void refetch()} type="button" variant="outline">
+          <RefreshCw aria-hidden="true" className={isRefetching ? 'animate-spin' : undefined} />
+          重新加载
+        </Button>
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-6">
