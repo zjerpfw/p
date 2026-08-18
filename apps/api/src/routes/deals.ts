@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
+import { csvResponse } from '../lib/csv'
 
 export const dealRoutes = new Hono<{ Bindings: Env }>()
 
@@ -324,6 +325,60 @@ dealRoutes.get('/', async (c) => {
     page,
     totalPages: Math.max(1, Math.ceil(total / limit)),
   })
+})
+
+dealRoutes.get('/export/won.csv', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const db = createDb(c.env.DB)
+  const rows = await db
+    .select({
+      customerName: customers.name,
+      productName: deals.productName,
+      dealType: deals.dealType,
+      channel: deals.channel,
+      originalPriceCents: deals.originalPriceCents,
+      amountCents: deals.amountCents,
+      netProfitCents: deals.netProfitCents,
+      startDate: deals.startDate,
+      expireDate: deals.expireDate,
+      expectedCloseDate: deals.expectedCloseDate,
+      ownerName: users.name,
+      createdAt: deals.createdAt,
+    })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .leftJoin(users, eq(customers.ownerId, users.id))
+    .where(and(
+      eq(deals.stage, 'Won'),
+      eq(deals.isDeleted, false),
+      eq(customers.isDeleted, false),
+      search ? like(customers.name, `%${search}%`) : undefined,
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .orderBy(desc(deals.expectedCloseDate), desc(deals.createdAt))
+    .limit(5_000)
+
+  return csvResponse(
+    '已赢单商机.csv',
+    ['客户名称', '产品/版本', '订单类型', '渠道', '原价（元）', '成交金额（元）', '净利润（元）', '服务开始日', '服务到期日', '成交日期', '归属销售', '录入时间'],
+    rows.map((row) => [
+      row.customerName,
+      row.productName,
+      row.dealType === 'Renewal' ? '续费' : '新签',
+      row.channel,
+      row.originalPriceCents === null ? '' : (row.originalPriceCents / 100).toFixed(2),
+      (row.amountCents / 100).toFixed(2),
+      row.netProfitCents === null ? '' : (row.netProfitCents / 100).toFixed(2),
+      row.startDate,
+      row.expireDate,
+      row.expectedCloseDate,
+      row.ownerName,
+      row.createdAt,
+    ]),
+  )
 })
 
 dealRoutes.post('/', async (c) => {

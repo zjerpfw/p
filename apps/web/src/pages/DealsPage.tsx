@@ -1,6 +1,6 @@
 // apps/web/src/pages/DealsPage.tsx
 import { format, isBefore, parseISO, startOfDay } from 'date-fns'
-import { CalendarDays, CircleDollarSign, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
+import { CalendarDays, CircleDollarSign, Download, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -16,7 +16,7 @@ import { dealStages, type Deal, type DealStage, useDeals } from '@/hooks/useDeal
 import { useDealPipelineColumn, useDealPipelineSummary, type PipelineStageSummary } from '@/hooks/useDealPipeline'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { apiFetch } from '@/lib/api'
+import { apiFetch, downloadApiFile } from '@/lib/api'
 import { formatCents } from '@/lib/money'
 import { dealStageLabels, getDealStageTone } from '@/lib/presentation'
 import { useSearchParams } from 'react-router-dom'
@@ -145,6 +145,16 @@ export default function DealsPage() {
     deleteDeal.mutate(deal.id)
   }
 
+  async function exportWonDeals() {
+    try {
+      const query = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : ''
+      await downloadApiFile(`/api/deals/export/won.csv${query}`, '已赢单商机.csv')
+      toast.success('已赢单商机清单已开始下载')
+    } catch (exportError) {
+      toast.error(exportError instanceof Error ? exportError.message : '商机导出失败')
+    }
+  }
+
   return (
     <section className={isMobile ? 'space-y-4' : 'flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3 overflow-hidden'}>
       <div className="flex min-h-[3.25rem] shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
@@ -160,6 +170,7 @@ export default function DealsPage() {
           <option value="">全部阶段</option>
           {dealStages.map((stage) => <option key={stage} value={stage}>{dealStageLabels[stage]}</option>)}
         </select>
+        <Button className="h-11 md:h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
         <Button className="h-11 shadow-sm shadow-indigo-200 md:h-8" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
       </div>
 

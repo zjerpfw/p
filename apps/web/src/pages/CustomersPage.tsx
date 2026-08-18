@@ -1,6 +1,7 @@
 // apps/web/src/pages/CustomersPage.tsx
 import { useEffect, useState } from 'react'
-import { ChevronRight, MapPin, Phone, Plus, Search, X, Zap } from 'lucide-react'
+import { ChevronRight, Download, MapPin, Phone, Plus, Search, X, Zap } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,6 +15,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Link, useSearchParams } from 'react-router-dom'
+import { downloadApiFile } from '@/lib/api'
 
 export default function CustomersPage() {
   const isMobile = useIsMobile()
@@ -45,6 +47,18 @@ export default function CustomersPage() {
     setPage(1)
   }
 
+  async function exportCustomers() {
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (status) params.set('status', status)
+    try {
+      await downloadApiFile(`/api/customers/export/csv?${params.toString()}`, '客户清单.csv')
+      toast.success('客户清单已开始下载')
+    } catch (exportError) {
+      toast.error(exportError instanceof Error ? exportError.message : '客户导出失败')
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -53,7 +67,7 @@ export default function CustomersPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">客户池</h1>
           <p className="mt-1 text-sm text-muted-foreground">集中管理客户资料与跟进状态。</p>
         </div>
-        <div className="flex flex-wrap gap-2"><Button className="bg-emerald-600 shadow-sm shadow-emerald-200 hover:bg-emerald-700" onClick={() => setDirectWonDialogOpen(true)} type="button"><Zap aria-hidden="true" />直接录入成交客户</Button><Button className="shadow-sm shadow-indigo-200" onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button></div>
+        <div className="flex flex-wrap gap-2"><Button onClick={() => void exportCustomers()} type="button" variant="outline"><Download aria-hidden="true" />导出客户</Button><Button className="bg-emerald-600 shadow-sm shadow-emerald-200 hover:bg-emerald-700" onClick={() => setDirectWonDialogOpen(true)} type="button"><Zap aria-hidden="true" />直接录入成交客户</Button><Button className="shadow-sm shadow-indigo-200" onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button></div>
       </div>
       <Card className="gap-0 py-0">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row">

@@ -96,3 +96,33 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   return response.json() as Promise<T>
 }
+
+export async function downloadApiFile(path: string, fallbackFilename: string) {
+  const token = getAccessToken()
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    credentials: 'include',
+  })
+  if (response.status === 401) {
+    clearAccessToken()
+    redirectToLogin()
+  }
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as { error?: string } | null
+    throw new ApiError(data?.error ?? '文件导出失败', response.status)
+  }
+
+  const disposition = response.headers.get('Content-Disposition')
+  const encodedFilename = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const filename = encodedFilename
+    ? decodeURIComponent(encodedFilename)
+    : disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? fallbackFilename
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.append(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}

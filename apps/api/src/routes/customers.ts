@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
+import { csvResponse } from '../lib/csv'
 import { addShanghaiCalendarYears, startOfShanghaiDay, todayInShanghai } from '../lib/shanghai-date'
 
 export const customerRoutes = new Hono<{ Bindings: Env }>()
@@ -392,6 +393,49 @@ customerRoutes.get('/', async (c) => {
     page,
     totalPages: Math.max(1, Math.ceil(total / limit)),
   })
+})
+
+customerRoutes.get('/export/csv', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const status = c.req.query('status')?.trim().slice(0, 50)
+  const db = createDb(c.env.DB)
+  const rows = await db
+    .select({
+      name: customers.name,
+      contactPhone: customers.contactPhone,
+      status: customers.status,
+      address: customers.address,
+      saasExpireDate: customers.saasExpireDate,
+      ownerName: users.name,
+      createdAt: customers.createdAt,
+    })
+    .from(customers)
+    .leftJoin(users, eq(customers.ownerId, users.id))
+    .where(and(
+      eq(customers.isDeleted, false),
+      search ? like(customers.name, `%${search}%`) : undefined,
+      status ? eq(customers.status, status) : undefined,
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .orderBy(desc(customers.createdAt))
+    .limit(5_000)
+
+  return csvResponse(
+    '客户清单.csv',
+    ['客户名称', '联系电话', '当前状态', '详细地址', '当前服务到期日', '归属销售', '创建时间'],
+    rows.map((row) => [
+      row.name,
+      row.contactPhone,
+      row.status,
+      row.address,
+      row.saasExpireDate,
+      row.ownerName,
+      row.createdAt,
+    ]),
+  )
 })
 
 customerRoutes.get('/:id', async (c) => {
