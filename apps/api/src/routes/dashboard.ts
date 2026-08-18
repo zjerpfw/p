@@ -48,7 +48,7 @@ dashboardRoutes.get('/', async (c) => {
       .select({ totalCents: sql<number>`coalesce(sum(${deals.netProfitCents}), 0)` })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
-      .where(and(eq(deals.stage, 'Won'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
+      .where(and(eq(deals.stage, 'Won'), gte(deals.wonAt, monthStart), lt(deals.wonAt, nextMonthStart), ...activeFilters)),
     db
       .select({ totalCents: sql<number>`coalesce(sum(${deals.amountCents} * ${deals.probability} / 100), 0)` })
       .from(deals)

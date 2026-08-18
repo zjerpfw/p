@@ -1,7 +1,7 @@
 // apps/api/src/routes/deals.ts
 import { createDb } from '@crm/db/client'
 import { customers, dealSplits, deals, dealStages, users } from '@crm/db/schema'
-import { and, count, desc, eq, inArray, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gte, inArray, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -9,6 +9,7 @@ import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { writeAuditLog } from '../lib/audit'
 import { csvResponse } from '../lib/csv'
+import { shanghaiDateKeyToUtc } from '../lib/shanghai-date'
 
 export const dealRoutes = new Hono<{ Bindings: Env }>()
 
@@ -135,6 +136,15 @@ function parsePagination(value: string | undefined, fallback: number, max: numbe
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback
 }
 
+function parseShanghaiDateQuery(value: string | undefined) {
+  if (!value) return undefined
+  try {
+    return shanghaiDateKeyToUtc(value)
+  } catch {
+    return null
+  }
+}
+
 interface PipelineCursor {
   createdAt: number
   id: string
@@ -181,6 +191,7 @@ const dealSelection = {
   probability: deals.probability,
   lostReason: deals.lostReason,
   expectedCloseDate: deals.expectedCloseDate,
+  wonAt: deals.wonAt,
   startDate: deals.startDate,
   durationYears: deals.durationYears,
   giftMonths: deals.giftMonths,
@@ -334,6 +345,11 @@ dealRoutes.get('/export/won.csv', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
   const search = c.req.query('search')?.trim().slice(0, 100)
+  const wonAtFrom = parseShanghaiDateQuery(c.req.query('won_at_from'))
+  const wonAtTo = parseShanghaiDateQuery(c.req.query('won_at_to'))
+  if (wonAtFrom === null || wonAtTo === null) return c.json({ error: '成交日期必须为 YYYY-MM-DD 格式' }, 400)
+  const wonAtEnd = wonAtTo ? new Date(wonAtTo.getTime() + 86_400_000) : undefined
+  if (wonAtFrom && wonAtEnd && wonAtFrom.getTime() >= wonAtEnd.getTime()) return c.json({ error: '成交日期范围无效' }, 400)
   const db = createDb(c.env.DB)
   const rows = await db
     .select({
@@ -346,7 +362,7 @@ dealRoutes.get('/export/won.csv', async (c) => {
       netProfitCents: deals.netProfitCents,
       startDate: deals.startDate,
       expireDate: deals.expireDate,
-      expectedCloseDate: deals.expectedCloseDate,
+      wonAt: deals.wonAt,
       ownerName: users.name,
       createdAt: deals.createdAt,
     })
@@ -358,14 +374,16 @@ dealRoutes.get('/export/won.csv', async (c) => {
       eq(deals.isDeleted, false),
       eq(customers.isDeleted, false),
       search ? like(customers.name, `%${search}%`) : undefined,
+      wonAtFrom ? gte(deals.wonAt, wonAtFrom) : undefined,
+      wonAtEnd ? lt(deals.wonAt, wonAtEnd) : undefined,
       actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
     ))
-    .orderBy(desc(deals.expectedCloseDate), desc(deals.createdAt))
+    .orderBy(desc(deals.wonAt), desc(deals.createdAt))
     .limit(5_000)
 
   return csvResponse(
     '已赢单商机.csv',
-    ['客户名称', '产品/版本', '订单类型', '渠道', '原价（元）', '成交金额（元）', '净利润（元）', '服务开始日', '服务到期日', '成交日期', '归属销售', '录入时间'],
+    ['客户名称', '产品/版本', '订单类型', '渠道', '原价（元）', '成交金额（元）', '净利润（元）', '服务开始日', '服务到期日', '实际成交时间', '归属销售', '录入时间'],
     rows.map((row) => [
       row.customerName,
       row.productName,
@@ -376,7 +394,7 @@ dealRoutes.get('/export/won.csv', async (c) => {
       row.netProfitCents === null ? '' : (row.netProfitCents / 100).toFixed(2),
       row.startDate,
       row.expireDate,
-      row.expectedCloseDate,
+      row.wonAt,
       row.ownerName,
       row.createdAt,
     ]),
@@ -552,6 +570,7 @@ dealRoutes.post('/:id/won', async (c) => {
       taxCostCents: body.tax_cost_cents as number,
       rebateAmountCents: body.rebate_amount_cents as number,
       netProfitCents: body.net_profit_cents as number,
+      wonAt: new Date(),
       updatedAt: new Date(),
     })
     .where(and(eq(deals.id, dealId), eq(deals.idempotencyKey, idempotencyKey)))

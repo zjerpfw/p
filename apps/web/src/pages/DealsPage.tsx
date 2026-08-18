@@ -85,7 +85,7 @@ function PipelineColumn({ stage, summary, search, deletePending, onEdit, onDelet
           <div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-bold text-slate-900" title={deal.customerName}>{deal.customerName}</p><div className="flex shrink-0 gap-0.5"><Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => onEdit(deal)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.customerName}的商机`} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" disabled={deletePending} onClick={() => onDelete(deal)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
           <div className="flex items-center gap-1.5 text-lg font-bold tracking-tight text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-4 shrink-0" />{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}</div>
           <div className="flex flex-wrap gap-1.5"><Badge tone="neutral">{deal.productName}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}{deal.stage !== 'Won' && deal.stage !== 'Lost' && <Badge tone="info">概率 {deal.probability}%</Badge>}{deal.stage === 'Lost' && deal.lostReason && <Badge tone="danger">{deal.lostReason}</Badge>}</div>
-          {dateValue && <p className={`flex items-center gap-1.5 text-xs ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />{deal.stage === 'Won' ? '成交日期' : '预计成交'}：{formatDate(dateValue)}{overdue && ' · 已逾期'}</p>}
+          {(deal.stage === 'Won' ? deal.wonAt : dateValue) && <p className={`flex items-center gap-1.5 text-xs ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />{deal.stage === 'Won' ? '实际成交' : '预计成交'}：{formatDate(deal.stage === 'Won' ? deal.wonAt! : dateValue)}{overdue && ' · 已逾期'}</p>}
           {deal.stage === 'Won' && deal.giftMonths > 0 && <p className="text-[11px] font-medium text-amber-700">含赠送 {deal.giftMonths} 个月</p>}
           {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="mt-0.5 w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => onConfirmWon(deal)} size="sm" type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}
         </CardContent></Card>
@@ -100,6 +100,8 @@ export default function DealsPage() {
   const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<DealStage | ''>('')
+  const [wonAtFrom, setWonAtFrom] = useState('')
+  const [wonAtTo, setWonAtTo] = useState('')
   const [page, setPage] = useState(1)
   const [dealToConfirm, setDealToConfirm] = useState<Deal | null>(null)
   const [dealToEdit, setDealToEdit] = useState<Deal | null>(null)
@@ -147,8 +149,15 @@ export default function DealsPage() {
 
   async function exportWonDeals() {
     try {
-      const query = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : ''
-      await downloadApiFile(`/api/deals/export/won.csv${query}`, '已赢单商机.csv')
+      if (wonAtFrom && wonAtTo && wonAtFrom > wonAtTo) {
+        toast.error('成交开始日期不能晚于结束日期')
+        return
+      }
+      const query = new URLSearchParams()
+      if (debouncedSearch) query.set('search', debouncedSearch)
+      if (wonAtFrom) query.set('won_at_from', wonAtFrom)
+      if (wonAtTo) query.set('won_at_to', wonAtTo)
+      await downloadApiFile(`/api/deals/export/won.csv?${query.toString()}`, '已赢单商机.csv')
       toast.success('已赢单商机清单已开始下载')
     } catch (exportError) {
       toast.error(exportError instanceof Error ? exportError.message : '商机导出失败')
@@ -170,6 +179,8 @@ export default function DealsPage() {
           <option value="">全部阶段</option>
           {dealStages.map((stage) => <option key={stage} value={stage}>{dealStageLabels[stage]}</option>)}
         </select>
+        <Input aria-label="赢单成交开始日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
+        <Input aria-label="赢单成交结束日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
         <Button className="h-11 md:h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
         <Button className="h-11 shadow-sm shadow-indigo-200 md:h-8" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
       </div>
@@ -191,7 +202,7 @@ export default function DealsPage() {
             return <li key={deal.id}><Card className="gap-0 py-0"><CardContent className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-bold text-slate-900">{deal.customerName}</h2><div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge><Badge tone="neutral">{deal.productName}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}</div></div><div className="flex shrink-0"><Button aria-label={`编辑${deal.customerName}的商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.customerName}的商机`} className="text-rose-600" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
               <div className="flex items-center gap-2 text-xl font-bold text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-5 shrink-0" />{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}{deal.stage !== 'Won' && deal.stage !== 'Lost' && <span className="text-xs font-medium text-indigo-500">· {deal.probability}%</span>}</div>
-              {dateValue && <p className={`flex items-center gap-1.5 text-sm ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-4 shrink-0" />{deal.stage === 'Won' ? '成交日期' : '预计成交'}：{formatDate(dateValue)}{overdue && ' · 已逾期'}</p>}
+              {(deal.stage === 'Won' ? deal.wonAt : dateValue) && <p className={`flex items-center gap-1.5 text-sm ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-4 shrink-0" />{deal.stage === 'Won' ? '实际成交' : '预计成交'}：{formatDate(deal.stage === 'Won' ? deal.wonAt! : dateValue)}{overdue && ' · 已逾期'}</p>}
               {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="w-full border-indigo-200 text-indigo-700" onClick={() => setDealToConfirm(deal)} type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}
             </CardContent></Card></li>
           })}

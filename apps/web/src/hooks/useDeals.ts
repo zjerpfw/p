@@ -20,6 +20,7 @@ export interface Deal {
   probability: number
   lostReason: string | null
   expectedCloseDate: string
+  wonAt: string | null
   startDate: string | null
   durationYears: number | null
   giftMonths: number

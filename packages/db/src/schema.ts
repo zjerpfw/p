@@ -186,6 +186,7 @@ export const deals = sqliteTable(
     probability: integer('probability').notNull().default(10),
     lostReason: text('lost_reason'),
     expectedCloseDate: integer('expected_close_date', { mode: 'timestamp' }).notNull(),
+    wonAt: integer('won_at', { mode: 'timestamp' }),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
     startDate: integer('start_date', { mode: 'timestamp' }),
     durationYears: integer('duration_years'),
@@ -203,6 +204,7 @@ export const deals = sqliteTable(
   (table) => [
     index('deals_customer_id_idx').on(table.customerId),
     index('deals_stage_idx').on(table.stage),
+    index('deals_stage_won_at_idx').on(table.stage, table.wonAt),
     uniqueIndex('deals_idempotency_key_unique').on(table.idempotencyKey),
     index('deals_stage_deleted_created_id_idx').on(
       table.stage,
