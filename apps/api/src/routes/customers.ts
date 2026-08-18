@@ -411,6 +411,7 @@ customerRoutes.post('/direct-won', async (c) => {
     rebateAmountCents: parsed.data.rebate_amount_cents,
     netProfitCents: parsed.data.net_profit_cents,
     createdAt: now,
+    updatedAt: now,
   })
   const splitInserts = parsed.data.splits.map((split) => db.insert(dealSplits).values({
     id: crypto.randomUUID(),
