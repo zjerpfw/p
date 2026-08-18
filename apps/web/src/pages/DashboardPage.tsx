@@ -139,10 +139,10 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>客户</TableHead><TableHead>合同</TableHead><TableHead>回款截止日</TableHead><TableHead>逾期天数</TableHead><TableHead className="text-right">待回款</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>客户</TableHead><TableHead>合同</TableHead><TableHead>回款截止日</TableHead><TableHead>逾期天数</TableHead><TableHead className="text-right">待回款</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
             <TableBody>
-              {data?.overdueReceivables.map((contract) => <TableRow key={contract.id}><TableCell className="font-medium">{contract.customerName}</TableCell><TableCell><p className="font-medium text-slate-800">{contract.contractNumber}</p><p className="mt-1 text-xs text-muted-foreground">{contract.title}</p></TableCell><TableCell>{format(new Date(contract.paymentDueAt), 'yyyy-MM-dd')}</TableCell><TableCell><Badge tone="danger">{contract.overdueDays} 天</Badge></TableCell><TableCell className="text-right font-semibold text-rose-700">{formatCents(contract.outstandingAmountCents)}</TableCell></TableRow>)}
-              {data?.overdueReceivables.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>暂无逾期应收合同</TableCell></TableRow>}
+              {data?.overdueReceivables.map((contract) => <TableRow key={contract.id}><TableCell className="font-medium">{contract.customerName}</TableCell><TableCell><p className="font-medium text-slate-800">{contract.contractNumber}</p><p className="mt-1 text-xs text-muted-foreground">{contract.title}</p></TableCell><TableCell>{format(new Date(contract.paymentDueAt), 'yyyy-MM-dd')}</TableCell><TableCell><Badge tone="danger">{contract.overdueDays} 天</Badge></TableCell><TableCell className="text-right font-semibold text-rose-700">{formatCents(contract.outstandingAmountCents)}</TableCell><TableCell className="text-right"><Button asChild size="sm" type="button" variant="ghost"><Link to={`/customers/${contract.customerId}#finance`}>查看账款</Link></Button></TableCell></TableRow>)}
+              {data?.overdueReceivables.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={6}>暂无逾期应收合同</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>

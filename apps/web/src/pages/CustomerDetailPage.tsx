@@ -1,8 +1,8 @@
 // apps/web/src/pages/CustomerDetailPage.tsx
 import { differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns'
 import { AtSign, CalendarCheck, CalendarSync, Check, ChevronLeft, CircleAlert, CircleCheck, Clock3, Eye, MapPin, MessageCircleMore, Paperclip, Pencil, Phone, Plus, Send, Square, Trash2, Upload } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +60,7 @@ function getServiceStatus(expireDate: string | null) {
 
 export default function CustomerDetailPage() {
   const { id } = useParams()
+  const location = useLocation()
   const { data, error, isLoading } = useCustomerDetail(id)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -85,6 +86,11 @@ export default function CustomerDetailPage() {
   // Hooks must run in the same order during loading and loaded renders.
   const customerContracts = useContracts({ customer_id: assetCustomerId, limit: 100, enabled: Boolean(assetCustomerId) })
   const customerInvoices = useInvoices({ customer_id: assetCustomerId, limit: 100, enabled: Boolean(assetCustomerId) })
+  useEffect(() => {
+    if (location.hash !== '#finance' || !customer?.id) return
+    const frame = window.requestAnimationFrame(() => document.getElementById('finance')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    return () => window.cancelAnimationFrame(frame)
+  }, [customer?.id, location.hash])
 
   const createActivity = useMutation({
     mutationFn: (payload: CreateActivityPayload) =>
@@ -356,13 +362,15 @@ export default function CustomerDetailPage() {
               <div><p className="mb-2 text-xs font-semibold text-slate-500">历史成交与商机记录</p><div className="space-y-3">{data?.deals.map((deal) => <article className="rounded-md border border-slate-200 bg-white p-3" key={deal.id}><div className="flex items-start justify-between gap-2"><p className="min-w-0 truncate text-sm font-semibold text-slate-800">{deal.productName}</p><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge></div>{deal.channel && <Badge className="mt-2" tone="info">渠道：{deal.channel}</Badge>}<p className="mt-2 flex items-center gap-2 text-sm font-bold text-indigo-700">{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}</p><p className="mt-2 text-xs text-muted-foreground">{deal.dealType === 'Renewal' ? '续费成交' : '新购商机'} · {format(new Date(deal.createdAt), 'yyyy-MM-dd')}</p></article>)}{data?.deals.length === 0 && <p className="py-3 text-sm text-muted-foreground">暂无关联商机</p>}</div></div>
             </CardContent>
           </Card>
-          <CustomerFinancePanel
-            canManage={canManageFinance}
-            customerId={customer.id}
-            onCreateContract={() => setContractSheetOpen(true)}
-            onCreateInvoice={() => setInvoiceSheetOpen(true)}
-            onCreatePayment={() => setPaymentSheetOpen(true)}
-          />
+          <div id="finance">
+            <CustomerFinancePanel
+              canManage={canManageFinance}
+              customerId={customer.id}
+              onCreateContract={() => setContractSheetOpen(true)}
+              onCreateInvoice={() => setInvoiceSheetOpen(true)}
+              onCreatePayment={() => setPaymentSheetOpen(true)}
+            />
+          </div>
           <Card className="gap-0 overflow-hidden py-0">
         <CardHeader className="border-b border-border px-5 py-4"><CardTitle>附件</CardTitle></CardHeader>
             <CardContent className="divide-y divide-border p-0">{data?.attachments.filter((attachment) => !attachment.activityId).map((attachment) => <div className="flex items-center justify-between gap-2 px-4 py-3" key={attachment.id}><div className="min-w-0"><p className="truncate text-sm font-medium">{attachment.fileName}</p><p className="mt-1 text-xs text-muted-foreground">{format(new Date(attachment.createdAt), 'MM-dd HH:mm')}</p></div><div className="flex shrink-0"><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost"><Eye aria-hidden="true" /></Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>)}{data?.attachments.filter((attachment) => !attachment.activityId).length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">暂无附件</p>}</CardContent>
