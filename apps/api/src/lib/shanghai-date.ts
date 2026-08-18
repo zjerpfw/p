@@ -34,6 +34,12 @@ function dateKeyFor(date: Date) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+/** Returns the YYYY-MM calendar month for an instant in Shanghai time. */
+export function shanghaiMonthKey(date: Date) {
+  const { year, month } = partsFor(date)
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
 /** Returns the UTC instant representing 00:00:00 on a Shanghai calendar date. */
 export function shanghaiDateKeyToUtc(dateKey: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)

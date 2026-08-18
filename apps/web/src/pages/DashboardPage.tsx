@@ -83,7 +83,7 @@ export default function DashboardPage() {
         </Card>
         <Card className="gap-0 py-0 sm:col-span-2 xl:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">加权预测金额</CardTitle><Target aria-hidden="true" className="size-4 text-indigo-600" /></CardHeader>
-          <CardContent className="px-5 pb-5"><strong className="text-3xl text-indigo-700">{formatCents(data?.weightedForecastCents)}</strong></CardContent>
+          <CardContent className="px-5 pb-5"><strong className="text-3xl text-indigo-700">{formatCents(data?.weightedForecastCents)}</strong><div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3">{data?.forecastByMonth.map((item) => <div key={item.month}><p className="text-xs text-muted-foreground">{item.isCurrentMonth ? '本月' : item.offset === 1 ? '下月' : '下下月'}</p><p className="mt-1 text-sm font-semibold text-slate-800">{formatCents(item.amountCents)}</p><p className="mt-0.5 text-xs text-muted-foreground">{item.dealCount} 个商机</p></div>)}</div></CardContent>
         </Card>
         <Card className="gap-0 py-0">
           <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">待完成任务</CardTitle><ClipboardList aria-hidden="true" className="size-4 text-amber-600" /></CardHeader>

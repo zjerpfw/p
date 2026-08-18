@@ -8,6 +8,7 @@ export interface DashboardData {
   newLeads: number
   wonNetProfitCents: number
   weightedForecastCents: number
+  forecastByMonth: Array<{ month: string; amountCents: number; dealCount: number; isCurrentMonth: boolean; offset: number }>
   taskSummary: { openCount: number; overdueCount: number }
   staleFollowUpCount: number
   stageDistribution: Array<{ stage: DealStage; count: number }>

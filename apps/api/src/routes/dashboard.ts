@@ -6,7 +6,7 @@ import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
-import { todayInShanghai } from '../lib/shanghai-date'
+import { shanghaiMonthKey, todayInShanghai } from '../lib/shanghai-date'
 
 export const dashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -76,6 +76,18 @@ dashboardRoutes.get('/', async (c) => {
       .where(and(eq(deals.stage, 'Won'), gte(deals.wonAt, monthStart), lt(deals.wonAt, nextMonthStart), ...activeFilters)))
   const [weightedForecast] = await runDashboardQuery('weighted-forecast', () => db
       .select({ totalCents: sql<number>`coalesce(sum(${deals.amountCents} * ${deals.probability} / 100), 0)` })
+      .from(deals)
+      .innerJoin(customers, eq(deals.customerId, customers.id))
+      .where(and(
+        inArray(deals.stage, ['Leads', 'Qualified', 'Proposal']),
+        ...activeFilters,
+      )))
+  const forecastRows = await runDashboardQuery('forecast-by-month', () => db
+      .select({
+        expectedCloseDate: deals.expectedCloseDate,
+        amountCents: deals.amountCents,
+        probability: deals.probability,
+      })
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(
@@ -219,6 +231,20 @@ dashboardRoutes.get('/', async (c) => {
     stage: item.stage,
     count: Number(item.count),
   }))
+  const currentMonthKey = shanghaiMonthKey(now)
+  const [currentYear, currentMonth] = currentMonthKey.split('-').map(Number)
+  const forecastMonths = [0, 1, 2].map((offset) => {
+    const monthDate = new Date(Date.UTC(currentYear, currentMonth - 1 + offset, 1, 12))
+    return shanghaiMonthKey(monthDate)
+  })
+  const forecastTotals = new Map(forecastMonths.map((month) => [month, { amountCents: 0, dealCount: 0 }]))
+  for (const row of forecastRows) {
+    const month = shanghaiMonthKey(row.expectedCloseDate)
+    const total = forecastTotals.get(month)
+    if (!total) continue
+    total.amountCents += Math.round(row.amountCents * row.probability / 100)
+    total.dealCount += 1
+  }
 
   operation = 'response-serialization'
   return c.json({
@@ -226,6 +252,13 @@ dashboardRoutes.get('/', async (c) => {
     newLeads: Number(newLead?.count ?? 0),
     wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
     weightedForecastCents: Number(weightedForecast?.totalCents ?? 0),
+    forecastByMonth: forecastMonths.map((month, index) => ({
+      month,
+      amountCents: forecastTotals.get(month)?.amountCents ?? 0,
+      dealCount: forecastTotals.get(month)?.dealCount ?? 0,
+      isCurrentMonth: month === currentMonthKey,
+      offset: index,
+    })),
     taskSummary: {
       openCount: Number(openTaskSummary?.openCount ?? 0),
       overdueCount: Number(overdueTaskSummary?.overdueCount ?? 0),
