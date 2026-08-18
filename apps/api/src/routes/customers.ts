@@ -412,14 +412,18 @@ customerRoutes.get('/', async (c) => {
   const search = c.req.query('search')?.trim().slice(0, 100)
   const status = c.req.query('status')?.trim().slice(0, 50)
   const tagId = c.req.query('tag_id')?.trim()
+  const followUp = c.req.query('follow_up')?.trim()
   if (tagId && !z.string().uuid().safeParse(tagId).success) return c.json({ error: '标签编号无效' }, 400)
+  if (followUp && followUp !== 'stale') return c.json({ error: '跟进状态筛选无效' }, 400)
   const page = parsePagination(c.req.query('page'), 1, 1_000_000)
   const limit = parsePagination(c.req.query('limit'), 10, 100)
+  const staleFollowUpAt = new Date(Date.now() - 7 * 86_400_000)
   const filters = [
     eq(customers.isDeleted, false),
     search ? like(customers.name, `%${search}%`) : undefined,
     status ? eq(customers.status, status) : undefined,
     tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
+    followUp === 'stale' ? sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})` : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = filters.length ? and(...filters) : undefined
@@ -435,6 +439,7 @@ customerRoutes.get('/', async (c) => {
       ownerId: customers.ownerId,
       ownerName: users.name,
       saasExpireDate: customers.saasExpireDate,
+      lastActivityAt: sql<number | null>`(select max(${activities.createdAt}) from ${activities} where ${activities.customerId} = ${customers.id})`,
       createdAt: customers.createdAt,
       updatedAt: customers.updatedAt,
     }).from(customers).leftJoin(users, eq(customers.ownerId, users.id)).where(where).orderBy(desc(customers.createdAt)).limit(limit).offset((page - 1) * limit),
@@ -442,7 +447,10 @@ customerRoutes.get('/', async (c) => {
   ])
 
   return c.json({
-    data: customerList,
+    data: customerList.map((customer) => ({
+      ...customer,
+      lastActivityAt: customer.lastActivityAt ? new Date(customer.lastActivityAt).toISOString() : null,
+    })),
     total,
     page,
     totalPages: Math.max(1, Math.ceil(total / limit)),
@@ -456,8 +464,11 @@ customerRoutes.get('/export/csv', async (c) => {
   const search = c.req.query('search')?.trim().slice(0, 100)
   const status = c.req.query('status')?.trim().slice(0, 50)
   const tagId = c.req.query('tag_id')?.trim()
+  const followUp = c.req.query('follow_up')?.trim()
   if (tagId && !z.string().uuid().safeParse(tagId).success) return c.json({ error: '标签编号无效' }, 400)
+  if (followUp && followUp !== 'stale') return c.json({ error: '跟进状态筛选无效' }, 400)
   const db = createDb(c.env.DB)
+  const staleFollowUpAt = new Date(Date.now() - 7 * 86_400_000)
   const rows = await db
     .select({
       name: customers.name,
@@ -475,6 +486,7 @@ customerRoutes.get('/export/csv', async (c) => {
       search ? like(customers.name, `%${search}%`) : undefined,
       status ? eq(customers.status, status) : undefined,
       tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
+      followUp === 'stale' ? sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})` : undefined,
       actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
     ))
     .orderBy(desc(customers.createdAt))
