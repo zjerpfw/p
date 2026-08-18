@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import { z } from 'zod'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
+import { writeAuditLog } from '../lib/audit'
 
 export const taskRoutes = new Hono<{ Bindings: Env }>()
 
@@ -52,7 +53,14 @@ async function getVisibleTask(db: ReturnType<typeof createDb>, taskId: string, a
       customerOwnerId: customers.ownerId,
       assigneeId: tasks.assigneeId,
       createdBy: tasks.createdBy,
+      dealId: tasks.dealId,
+      title: tasks.title,
+      description: tasks.description,
+      dueAt: tasks.dueAt,
+      priority: tasks.priority,
       status: tasks.status,
+      completedAt: tasks.completedAt,
+      updatedAt: tasks.updatedAt,
     })
     .from(tasks)
     .innerJoin(customers, eq(tasks.customerId, customers.id))
@@ -152,6 +160,7 @@ taskRoutes.post('/', async (c) => {
     updatedAt: now,
   }
   await db.insert(tasks).values(task)
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Task', entityId: task.id, action: 'Created', after: task }))
   return c.json({ task }, 201)
 })
 
@@ -179,6 +188,7 @@ taskRoutes.patch('/:id', async (c) => {
   }
   if (Object.keys(updates).length === 1) return c.json({ error: '请至少提供一个需要更新的字段' }, 400)
   const [task] = await db.update(tasks).set(updates).where(eq(tasks.id, existing.id)).returning()
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Task', entityId: task.id, action: 'Updated', before: existing, after: task }))
   return c.json({ task })
 })
 
