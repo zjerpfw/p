@@ -12,7 +12,7 @@ export interface CustomerTag {
 
 export interface Activity {
   id: string
-  dealId: string
+  dealId: string | null
   dealStage: Deal['stage'] | null
   type: 'Call' | 'Meeting' | 'Email'
   notes: string | null

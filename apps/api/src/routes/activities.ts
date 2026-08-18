@@ -1,6 +1,6 @@
 // apps/api/src/routes/activities.ts
 import { createDb } from '@crm/db/client'
-import { activities, activityTypes, customers, deals } from '@crm/db/schema'
+import { activities, activityTypes, attachments, customers, deals } from '@crm/db/schema'
 import { and, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -16,6 +16,12 @@ interface ActivityPayload {
   check_in_lng?: unknown
   check_in_lat?: unknown
   check_in_address?: unknown
+}
+
+interface ActivityUpdatePayload {
+  deal_id?: unknown
+  type?: unknown
+  notes?: unknown
 }
 
 function isNullableNumber(value: unknown): value is number | null | undefined {
@@ -129,4 +135,109 @@ activityRoutes.post('/', async (c) => {
   c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Activity', entityId: activity.id, action: 'Created', after: activity }))
 
   return c.json({ activity }, 201)
+})
+
+activityRoutes.put('/:id', async (c) => {
+  let body: ActivityUpdatePayload
+  try {
+    body = await c.req.json<ActivityUpdatePayload>()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+
+  const updatesType = body.type === undefined
+    || (typeof body.type === 'string' && activityTypes.includes(body.type as (typeof activityTypes)[number]))
+  const updatesNotes = body.notes === undefined || (typeof body.notes === 'string' && body.notes.trim().length > 0)
+  const updatesDeal = body.deal_id === undefined
+    || body.deal_id === null
+    || (typeof body.deal_id === 'string' && body.deal_id.trim().length > 0)
+  if (!updatesType || !updatesNotes || !updatesDeal || (body.type === undefined && body.notes === undefined && body.deal_id === undefined)) {
+    return c.json({ error: '跟进记录参数无效' }, 400)
+  }
+  const requestedDealId = typeof body.deal_id === 'string' ? body.deal_id : null
+  const requestedNotes = typeof body.notes === 'string' ? body.notes.trim() : undefined
+
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [authorized] = await db
+    .select({
+      id: activities.id,
+      customerId: activities.customerId,
+      dealId: activities.dealId,
+      type: activities.type,
+      notes: activities.notes,
+      checkInLng: activities.checkInLng,
+      checkInLat: activities.checkInLat,
+      checkInAddress: activities.checkInAddress,
+      createdBy: activities.createdBy,
+      createdAt: activities.createdAt,
+    })
+    .from(activities)
+    .innerJoin(customers, eq(activities.customerId, customers.id))
+    .where(and(
+      eq(activities.id, c.req.param('id')),
+      eq(customers.isDeleted, false),
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .limit(1)
+  if (!authorized) return c.json({ error: '跟进记录不存在或无权编辑' }, 404)
+  if (actor.role !== 'admin' && authorized.createdBy !== actor.id) return c.json({ error: '仅创建人或管理员可以编辑跟进记录' }, 403)
+
+  let dealId = authorized.dealId
+  if (body.deal_id !== undefined) {
+    if (body.deal_id === null) {
+      dealId = null
+    } else {
+      const [deal] = await db.select({ id: deals.id }).from(deals)
+        .where(and(eq(deals.id, requestedDealId as string), eq(deals.customerId, authorized.customerId), eq(deals.isDeleted, false)))
+        .limit(1)
+      if (!deal) return c.json({ error: '关联商机不存在或不属于当前客户' }, 400)
+      dealId = deal.id
+    }
+  }
+
+  const updates = {
+    ...(body.type !== undefined ? { type: body.type as (typeof activityTypes)[number] } : {}),
+    ...(requestedNotes !== undefined ? { notes: requestedNotes } : {}),
+    ...(body.deal_id !== undefined ? { dealId } : {}),
+  }
+  const [activity] = await db.update(activities).set(updates).where(eq(activities.id, authorized.id)).returning()
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Activity', entityId: activity.id, action: 'Updated', before: authorized, after: activity }))
+  return c.json({ activity })
+})
+
+activityRoutes.delete('/:id', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const [authorized] = await db
+    .select({
+      id: activities.id,
+      customerId: activities.customerId,
+      dealId: activities.dealId,
+      type: activities.type,
+      notes: activities.notes,
+      checkInLng: activities.checkInLng,
+      checkInLat: activities.checkInLat,
+      checkInAddress: activities.checkInAddress,
+      createdBy: activities.createdBy,
+      createdAt: activities.createdAt,
+    })
+    .from(activities)
+    .innerJoin(customers, eq(activities.customerId, customers.id))
+    .where(and(
+      eq(activities.id, c.req.param('id')),
+      eq(customers.isDeleted, false),
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .limit(1)
+  if (!authorized) return c.json({ error: '跟进记录不存在或无权删除' }, 404)
+  if (actor.role !== 'admin' && authorized.createdBy !== actor.id) return c.json({ error: '仅创建人或管理员可以删除跟进记录' }, 403)
+
+  // Keep files accessible from the customer timeline after their follow-up record is removed.
+  await db.update(attachments).set({ activityId: null }).where(eq(attachments.activityId, authorized.id))
+  await db.delete(activities).where(eq(activities.id, authorized.id))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Activity', entityId: authorized.id, action: 'Deleted', before: authorized }))
+  return c.json({ id: authorized.id, deleted: true })
 })

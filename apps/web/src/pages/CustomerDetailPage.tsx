@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CreateActivitySheet } from '@/components/activities/CreateActivitySheet'
+import { EditActivitySheet } from '@/components/activities/EditActivitySheet'
 import { CreateContractSheet } from '@/components/customers/CreateContractSheet'
 import { CreateInvoiceSheet } from '@/components/customers/CreateInvoiceSheet'
 import { CreatePaymentSheet } from '@/components/customers/CreatePaymentSheet'
@@ -23,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { customerDetailQueryKey, type Contact, useCustomerDetail } from '@/hooks/useCustomerDetail'
 import { useContracts, useInvoices } from '@/hooks/useAssets'
 import { apiFetch, getCurrentUserId, getCurrentUserRole } from '@/lib/api'
+import type { Activity } from '@/hooks/useCustomerDetail'
 import { formatCents } from '@/lib/money'
 import { activityTypeLabels, dealStageLabels, getCustomerStatusLabel, getCustomerStatusTone, getDealStageTone } from '@/lib/presentation'
 import { toast } from 'sonner'
@@ -76,6 +78,7 @@ export default function CustomerDetailPage() {
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [taskSheetOpen, setTaskSheetOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null)
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
 
   const customer = data?.customer
   const assetCustomerId = customer?.id ?? ''
@@ -127,6 +130,18 @@ export default function CustomerDetailPage() {
       toast.success('联系人已删除')
     },
     onError: (contactError) => toast.error(contactError instanceof Error ? contactError.message : '联系人删除失败'),
+  })
+
+  const deleteActivity = useMutation({
+    mutationFn: (activityId: string) => apiFetch(`/api/activities/${activityId}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
+        queryClient.invalidateQueries({ queryKey: ['activities'] }),
+      ])
+      toast.success('跟进记录已删除，关联附件已保留为客户附件')
+    },
+    onError: (activityError) => toast.error(activityError instanceof Error ? activityError.message : '跟进记录删除失败'),
   })
 
   const updateTask = useMutation({
@@ -238,6 +253,11 @@ export default function CustomerDetailPage() {
     deleteContact.mutate(contact.id)
   }
 
+  function confirmDeleteActivity(activity: Activity) {
+    if (!window.confirm('确定删除这条跟进记录吗？关联附件会保留为客户附件。')) return
+    deleteActivity.mutate(activity.id)
+  }
+
   if (isLoading) return <p className="text-sm text-muted-foreground">正在加载客户信息...</p>
 
   if (error) return <p className="text-sm text-destructive">{error.message}</p>
@@ -258,6 +278,8 @@ export default function CustomerDetailPage() {
   const CurrentServiceIcon = currentServiceStatus.icon
   const latestWonDeal = data?.deals.find((deal) => deal.stage === 'Won')
   const canManageFinance = getCurrentUserRole() === 'admin' || getCurrentUserId() === customer.ownerId
+  const currentUserId = getCurrentUserId()
+  const isAdmin = getCurrentUserRole() === 'admin'
 
   return (
     <section className="space-y-6">
@@ -311,6 +333,7 @@ export default function CustomerDetailPage() {
                   </div>
                   {activity.notes && <p className="mt-1 text-sm leading-6 text-muted-foreground">{activity.notes}</p>}
                   {activity.checkInAddress && <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><MapPin aria-hidden="true" className="size-3" />{activity.checkInAddress}</p>}
+                  {(isAdmin || currentUserId === activity.createdBy) && <div className="mt-2 flex items-center gap-1"><Button aria-label="编辑跟进记录" onClick={() => setEditingActivity(activity)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label="删除跟进记录" disabled={deleteActivity.isPending} onClick={() => confirmDeleteActivity(activity)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div>}
                   {data?.attachments.filter((attachment) => attachment.activityId === activity.id).map((attachment) => <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs" key={attachment.id}><Paperclip aria-hidden="true" className="size-3.5 text-muted-foreground" /><span className="max-w-48 truncate font-medium">{attachment.fileName}</span><Button aria-label={`在线预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="xs" type="button" variant="ghost"><Eye aria-hidden="true" />预览</Button><Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div>)}
                 </li>
               ))}
@@ -349,6 +372,7 @@ export default function CustomerDetailPage() {
       </div>
 
       <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
+      <EditActivitySheet activity={editingActivity} customerId={customer.id} deals={data?.deals ?? []} onOpenChange={(open) => !open && setEditingActivity(null)} open={Boolean(editingActivity)} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
       <ContactSheet contact={editingContact} customerId={customer.id} onOpenChange={(open) => { setContactSheetOpen(open); if (!open) setEditingContact(null) }} open={contactSheetOpen} />
       <TaskSheet customerId={customer.id} deals={data?.deals.map((deal) => ({ id: deal.id, productName: deal.productName, stage: deal.stage })) ?? []} onOpenChange={setTaskSheetOpen} open={taskSheetOpen} />
