@@ -41,12 +41,12 @@ configRoutes.get('/public', async (c) => {
   return c.json({ configs: Object.fromEntries(configs.map(({ key, value }) => [key, value])) })
 })
 
-configRoutes.use('/', async (c, next) => {
+configRoutes.use('*', async (c, next) => {
   const middleware = jwt({ alg: 'HS256', secret: c.env.JWT_SECRET })
   return middleware(c, next)
 })
 
-configRoutes.use('/', async (c, next) => {
+configRoutes.use('*', async (c, next) => {
   const payload = c.get('jwtPayload') as { role?: unknown }
   if (payload.role !== 'admin') {
     return c.json({ error: '仅管理员可以管理系统配置' }, 403)
