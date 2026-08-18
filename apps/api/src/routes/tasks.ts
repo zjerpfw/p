@@ -208,4 +208,20 @@ taskRoutes.patch('/:id', async (c) => {
   return c.json({ task })
 })
 
+taskRoutes.delete('/:id', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const db = createDb(c.env.DB)
+  const [existing] = await getVisibleTask(db, c.req.param('id'), actor)
+  if (!existing) return c.json({ error: '任务不存在或无权删除' }, 404)
+  if (actor.role !== 'admin' && existing.createdBy !== actor.id) {
+    return c.json({ error: '仅任务创建人或管理员可以删除任务' }, 403)
+  }
+
+  await db.delete(tasks).where(eq(tasks.id, existing.id))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Task', entityId: existing.id, action: 'Deleted', before: existing }))
+  return c.json({ id: existing.id, deleted: true })
+})
+
 export type TaskRoutes = typeof taskRoutes
