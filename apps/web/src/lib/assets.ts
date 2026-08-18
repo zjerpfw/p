@@ -131,6 +131,7 @@ export interface AssetListFilters {
   customer_id?: string
   contract_id?: string
   invoice_id?: string
+  status?: ContractStatus | InvoiceStatus | PaymentStatus
   page?: number
   limit?: number
   enabled?: boolean
@@ -228,6 +229,7 @@ function queryString(filters: AssetListFilters = {}) {
   if (filters.customer_id) params.set('customer_id', filters.customer_id)
   if (filters.contract_id) params.set('contract_id', filters.contract_id)
   if (filters.invoice_id) params.set('invoice_id', filters.invoice_id)
+  if (filters.status) params.set('status', filters.status)
   params.set('page', String(filters.page ?? 1))
   params.set('limit', String(filters.limit ?? 20))
   return params.toString()

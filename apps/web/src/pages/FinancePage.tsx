@@ -13,12 +13,18 @@ import { downloadApiFile } from '@/lib/api'
 import { toast } from 'sonner'
 
 type LedgerTab = 'contracts' | 'invoices' | 'payments'
+type LedgerStatus = 'Draft' | 'Active' | 'Expired' | 'Terminated' | 'Void' | 'Issued' | 'Voided' | 'Pending' | 'Received' | 'Reversed'
 
 const tabs: Array<{ id: LedgerTab; label: string }> = [
   { id: 'contracts', label: '合同台账' },
   { id: 'invoices', label: '发票台账' },
   { id: 'payments', label: '回款台账' },
 ]
+const statusOptions: Record<LedgerTab, Array<{ value: LedgerStatus; label: string }>> = {
+  contracts: [{ value: 'Draft', label: '草稿' }, { value: 'Active', label: '生效' }, { value: 'Expired', label: '已到期' }, { value: 'Terminated', label: '已终止' }, { value: 'Void', label: '已作废' }],
+  invoices: [{ value: 'Draft', label: '草稿' }, { value: 'Issued', label: '已开票' }, { value: 'Voided', label: '已作废' }],
+  payments: [{ value: 'Pending', label: '待到账' }, { value: 'Received', label: '已到账' }, { value: 'Reversed', label: '已冲销' }],
+}
 
 const contractStatus: Record<string, { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' }> = {
   Draft: { label: '草稿', tone: 'neutral' }, Active: { label: '生效', tone: 'success' }, Expired: { label: '已到期', tone: 'warning' }, Terminated: { label: '已终止', tone: 'danger' }, Void: { label: '已作废', tone: 'neutral' },
@@ -40,17 +46,21 @@ function StatusBadge({ item }: { item: { label: string; tone: 'neutral' | 'info'
 
 export default function FinancePage() {
   const [activeTab, setActiveTab] = useState<LedgerTab>('contracts')
+  const [status, setStatus] = useState<LedgerStatus | ''>('')
   const summary = useFinanceSummary()
-  const contracts = useContracts({ limit: 10_000 })
-  const invoices = useInvoices({ limit: 10_000 })
-  const payments = usePayments({ limit: 10_000 })
+  const selectedStatus = status || undefined
+  const contracts = useContracts({ limit: 10_000, status: activeTab === 'contracts' ? selectedStatus : undefined })
+  const invoices = useInvoices({ limit: 10_000, status: activeTab === 'invoices' ? selectedStatus : undefined })
+  const payments = usePayments({ limit: 10_000, status: activeTab === 'payments' ? selectedStatus : undefined })
   const isLoading = summary.isLoading || contracts.isLoading || invoices.isLoading || payments.isLoading
   const error = summary.error ?? contracts.error ?? invoices.error ?? payments.error
 
   async function exportLedger() {
     const filenames: Record<LedgerTab, string> = { contracts: '合同台账.csv', invoices: '发票台账.csv', payments: '回款台账.csv' }
     try {
-      await downloadApiFile(`/api/finance/export/csv?kind=${activeTab}`, filenames[activeTab])
+      const query = new URLSearchParams({ kind: activeTab })
+      if (status) query.set('status', status)
+      await downloadApiFile(`/api/finance/export/csv?${query.toString()}`, filenames[activeTab])
       toast.success(`${tabs.find((tab) => tab.id === activeTab)?.label}已开始下载`)
     } catch (exportError) {
       toast.error(exportError instanceof Error ? exportError.message : '财务台账导出失败')
@@ -78,8 +88,8 @@ export default function FinancePage() {
 
     <Card className="gap-0 overflow-hidden py-0">
       <CardHeader className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle>业务台账</CardTitle><p className="mt-1 text-xs text-muted-foreground">数据范围跟随当前客户负责人权限。</p></div><div className="flex flex-wrap gap-2"><div aria-label="台账类型" className="flex min-w-[260px] flex-1 rounded-md border border-slate-200 bg-slate-50 p-1 sm:flex-none" role="tablist">
-        {tabs.map((tab) => <button aria-selected={activeTab === tab.id} className={cn('h-8 flex-1 rounded px-3 text-sm font-medium transition-colors sm:flex-none', activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800')} key={tab.id} onClick={() => setActiveTab(tab.id)} role="tab" type="button">{tab.label}</button>)}
-      </div><button aria-label="导出台账 CSV" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50" onClick={() => void exportLedger()} type="button"><Download aria-hidden="true" className="size-4" />导出 CSV</button></div></CardHeader>
+        {tabs.map((tab) => <button aria-selected={activeTab === tab.id} className={cn('h-8 flex-1 rounded px-3 text-sm font-medium transition-colors sm:flex-none', activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800')} key={tab.id} onClick={() => { setActiveTab(tab.id); setStatus('') }} role="tab" type="button">{tab.label}</button>)}
+      </div><select aria-label="按状态筛选台账" className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700" onChange={(event) => setStatus(event.target.value as LedgerStatus | '')} value={status}><option value="">全部状态</option>{statusOptions[activeTab].map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><button aria-label="导出台账 CSV" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50" onClick={() => void exportLedger()} type="button"><Download aria-hidden="true" className="size-4" />导出 CSV</button></div></CardHeader>
       <CardContent className="p-0">
         {activeTab === 'contracts' && <Table><TableHeader><TableRow><TableHead>客户</TableHead><TableHead>合同</TableHead><TableHead>状态</TableHead><TableHead>回款截止日</TableHead><TableHead className="text-right">合同金额</TableHead><TableHead className="text-right">已回款</TableHead><TableHead className="text-right">待回款</TableHead></TableRow></TableHeader><TableBody>
           {contracts.data?.data.map((contract) => <TableRow key={contract.id}><TableCell className="font-medium"><Link className="hover:text-primary hover:underline" to={`/customers/${contract.customer_id}`}>{contract.customer_name}</Link></TableCell><TableCell><p className="font-medium text-slate-800">{contract.contract_number}</p><p className="mt-1 max-w-52 truncate text-xs text-muted-foreground">{contract.title}</p></TableCell><TableCell><StatusBadge item={contractStatus[contract.status]} /></TableCell><TableCell>{formatDate(contract.payment_due_at)}</TableCell><TableCell className="text-right">{formatCents(contract.total_amount_cents)}</TableCell><TableCell className="text-right text-emerald-700">{formatCents(contract.received_amount_cents)}</TableCell><TableCell className="text-right font-semibold text-rose-700">{formatCents(contract.outstanding_amount_cents)}</TableCell></TableRow>)}

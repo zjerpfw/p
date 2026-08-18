@@ -48,12 +48,16 @@ contractRoutes.get('/', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const customerId = c.req.query('customer_id')
+  const statusResult = contractStatusSchema.optional().safeParse(c.req.query('status'))
+  if (!statusResult.success) return c.json({ error: '合同状态无效' }, 400)
+  const status = statusResult.data
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
   const filters = [
     eq(customers.isDeleted, false),
     customerId ? eq(contracts.customerId, customerId) : undefined,
+    status ? eq(contracts.status, status) : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)

@@ -57,6 +57,13 @@ financeRoutes.get('/export/csv', async (c) => {
   if (kind !== 'contracts' && kind !== 'invoices' && kind !== 'payments') {
     return c.json({ error: '导出类型无效' }, 400)
   }
+  const status = c.req.query('status')
+  const allowedStatuses = kind === 'contracts'
+    ? ['Draft', 'Active', 'Expired', 'Terminated', 'Void']
+    : kind === 'invoices'
+      ? ['Draft', 'Issued', 'Voided']
+      : ['Pending', 'Received', 'Reversed']
+  if (status && !allowedStatuses.includes(status)) return c.json({ error: '状态筛选无效' }, 400)
 
   const db = createDb(c.env.DB)
   const ownerFilter = actor.role === 'admin' ? undefined : eq(customers.ownerId, actor.id)
@@ -78,7 +85,7 @@ financeRoutes.get('/export/csv', async (c) => {
     }).from(contracts)
       .innerJoin(customers, eq(contracts.customerId, customers.id))
       .leftJoin(payments, eq(payments.contractId, contracts.id))
-      .where(and(eq(customers.isDeleted, false), ownerFilter))
+      .where(and(eq(customers.isDeleted, false), status ? eq(contracts.status, status as 'Draft' | 'Active' | 'Expired' | 'Terminated' | 'Void') : undefined, ownerFilter))
       .groupBy(contracts.id)
       .orderBy(sql`${contracts.updatedAt} desc`)
       .limit(5_000)
@@ -104,7 +111,7 @@ financeRoutes.get('/export/csv', async (c) => {
     }).from(invoices)
       .innerJoin(contracts, eq(invoices.contractId, contracts.id))
       .innerJoin(customers, eq(invoices.customerId, customers.id))
-      .where(and(eq(customers.isDeleted, false), ownerFilter))
+      .where(and(eq(customers.isDeleted, false), status ? eq(invoices.status, status as 'Draft' | 'Issued' | 'Voided') : undefined, ownerFilter))
       .orderBy(sql`${invoices.updatedAt} desc`)
       .limit(5_000)
     return csvResponse('发票台账.csv', ['客户', '归属销售', '合同编号', '发票号码', '发票抬头', '开票内容', '状态', '开票金额（元）', '税额（元）', '开票日期', '创建时间'], rows.map((row) => [row.customerName, row.ownerName, row.contractNumber, row.invoiceNumber, row.title, row.content, row.status, yuan(row.amountCents), yuan(row.taxAmountCents), dateValue(row.issuedAt), row.createdAt]))
@@ -125,7 +132,7 @@ financeRoutes.get('/export/csv', async (c) => {
     .innerJoin(contracts, eq(payments.contractId, contracts.id))
     .innerJoin(customers, eq(payments.customerId, customers.id))
     .leftJoin(invoices, eq(payments.invoiceId, invoices.id))
-    .where(and(eq(customers.isDeleted, false), ownerFilter))
+    .where(and(eq(customers.isDeleted, false), status ? eq(payments.status, status as 'Pending' | 'Received' | 'Reversed') : undefined, ownerFilter))
     .orderBy(sql`${payments.paidAt} desc nulls last`, sql`${payments.updatedAt} desc`)
     .limit(5_000)
   return csvResponse('回款台账.csv', ['客户', '归属销售', '合同编号', '关联发票', '回款编号', '状态', '回款金额（元）', '到账日期', '备注', '创建时间'], rows.map((row) => [row.customerName, row.ownerName, row.contractNumber, row.invoiceNumber, row.paymentNumber, row.status, yuan(row.amountCents), dateValue(row.paidAt), row.note, row.createdAt]))

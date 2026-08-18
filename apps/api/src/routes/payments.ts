@@ -91,6 +91,9 @@ paymentRoutes.get('/', async (c) => {
   const customerId = c.req.query('customer_id')
   const contractId = c.req.query('contract_id')
   const invoiceId = c.req.query('invoice_id')
+  const statusResult = paymentStatusSchema.optional().safeParse(c.req.query('status'))
+  if (!statusResult.success) return c.json({ error: '回款状态无效' }, 400)
+  const status = statusResult.data
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
@@ -99,6 +102,7 @@ paymentRoutes.get('/', async (c) => {
     customerId ? eq(payments.customerId, customerId) : undefined,
     contractId ? eq(payments.contractId, contractId) : undefined,
     invoiceId ? eq(payments.invoiceId, invoiceId) : undefined,
+    status ? eq(payments.status, status) : undefined,
     ownershipFilter(actor),
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)

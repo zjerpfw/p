@@ -72,6 +72,9 @@ invoiceRoutes.get('/', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const customerId = c.req.query('customer_id')
   const contractId = c.req.query('contract_id')
+  const statusResult = invoiceStatusSchema.optional().safeParse(c.req.query('status'))
+  if (!statusResult.success) return c.json({ error: '发票状态无效' }, 400)
+  const status = statusResult.data
   const page = parsePagination(c.req.query('page'), 1, 10_000)
   const limit = parsePagination(c.req.query('limit'), 20, 100)
   const db = createDb(c.env.DB)
@@ -79,6 +82,7 @@ invoiceRoutes.get('/', async (c) => {
     eq(customers.isDeleted, false),
     customerId ? eq(invoices.customerId, customerId) : undefined,
     contractId ? eq(invoices.contractId, contractId) : undefined,
+    status ? eq(invoices.status, status) : undefined,
     ownershipFilter(actor),
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = and(...filters)
