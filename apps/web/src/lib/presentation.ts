@@ -15,7 +15,9 @@ export const activityTypeLabels = {
   Email: '邮件沟通',
 } as const
 
-const customerStatusLabels: Record<string, string> = {
+export const customerStatuses = ['Active', 'Following', 'Inactive'] as const
+
+const customerStatusLabels: Record<(typeof customerStatuses)[number], string> = {
   Active: '活跃',
   Following: '跟进中',
   Inactive: '沉睡',
@@ -27,7 +29,7 @@ const userRoleLabels: Record<string, string> = {
 }
 
 export function getCustomerStatusLabel(status: string) {
-  return customerStatusLabels[status] ?? status
+  return customerStatusLabels[status as keyof typeof customerStatusLabels] ?? status
 }
 
 export function getCustomerStatusTone(status: string) {

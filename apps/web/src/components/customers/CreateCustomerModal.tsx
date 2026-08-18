@@ -81,6 +81,7 @@ export function CreateCustomerSheet({ open, onOpenChange }: CreateCustomerModalP
             <Label htmlFor="customer-status">当前状态</Label>
             <select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm md:h-9" id="customer-status" onChange={(event) => setStatus(event.target.value)} value={status}>
               <option value="Active">活跃</option>
+              <option value="Following">跟进中</option>
               <option value="Inactive">沉睡</option>
             </select>
             </div>

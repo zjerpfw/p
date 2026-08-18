@@ -18,6 +18,7 @@ export const dealStages = [
 ] as const
 
 export const activityTypes = ['Call', 'Meeting', 'Email'] as const
+export const customerStatuses = ['Active', 'Following', 'Inactive'] as const
 
 export const contractStatuses = ['Draft', 'Active', 'Expired', 'Terminated', 'Void'] as const
 export const invoiceStatuses = ['Draft', 'Issued', 'Voided'] as const
@@ -102,7 +103,7 @@ export const customers = sqliteTable(
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     contactPhone: text('contact_phone'),
-    status: text('status').notNull(),
+    status: text('status', { enum: customerStatuses }).notNull(),
     lng: real('lng'),
     lat: real('lat'),
     address: text('address'),

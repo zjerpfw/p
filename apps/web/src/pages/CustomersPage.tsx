@@ -15,7 +15,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useCustomerTags } from '@/hooks/useCustomerTags'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
+import { customerStatuses, getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Link, useSearchParams } from 'react-router-dom'
 import { downloadApiFile } from '@/lib/api'
@@ -35,7 +35,6 @@ export default function CustomersPage() {
   const debouncedSearch = useDebouncedValue(search.trim())
   const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, tagId, followUp: followUp || undefined, page })
   const tagsQuery = useCustomerTags()
-  const statuses = ['Active', 'Inactive']
   const selectedCustomers = data?.data.filter((customer) => selectedCustomerIds.has(customer.id)) ?? []
 
   useEffect(() => {
@@ -131,7 +130,7 @@ export default function CustomersPage() {
         </div>
         <select aria-label="客户状态筛选" className="h-11 rounded-md border border-input bg-background px-3 text-sm md:h-9 md:w-36" onChange={(event) => updateStatus(event.target.value)} value={status}>
           <option value="">全部状态</option>
-          {statuses.map((item) => <option key={item} value={item}>{getCustomerStatusLabel(item)}</option>)}
+          {customerStatuses.map((item) => <option key={item} value={item}>{getCustomerStatusLabel(item)}</option>)}
         </select>
         <select aria-label="客户标签筛选" className="h-11 rounded-md border border-input bg-background px-3 text-sm md:h-9 md:w-40" disabled={tagsQuery.isLoading} onChange={(event) => updateTag(event.target.value)} value={tagId}>
           <option value="">全部标签</option>

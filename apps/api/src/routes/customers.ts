@@ -1,6 +1,6 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
-import { activities, attachments, contacts, customerTagAssignments, customerTags, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
+import { activities, attachments, contacts, customerStatuses, customerTagAssignments, customerTags, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
 import { and, asc, count, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
@@ -39,6 +39,7 @@ interface UpdateCustomerPayload {
 }
 
 const tagNameSchema = z.string().trim().min(1, '请填写标签名称').max(40, '标签名称不能超过 40 个字符')
+const customerStatusSchema = z.enum(customerStatuses, { errorMap: () => ({ message: '客户状态无效' }) })
 const customerTagIdsSchema = z.object({
   tag_ids: z.array(z.string().uuid('标签编号无效')).max(20, '每个客户最多添加 20 个标签'),
 })
@@ -164,18 +165,19 @@ customerRoutes.post('/', async (c) => {
 
   const name = optionalText(body.name, 100)
   const contactPhone = optionalText(body.contact_phone, 30)
-  const status = optionalText(body.status, 50) ?? 'Active'
+  const statusResult = customerStatusSchema.safeParse(optionalText(body.status, 50) ?? 'Active')
   const address = optionalText(body.address, 500)
   if (!name || contactPhone === undefined || address === undefined) {
     return c.json({ error: '客户名称、联系电话或详细地址格式无效' }, 400)
   }
+  if (!statusResult.success) return c.json({ error: '客户状态无效' }, 400)
 
   const now = new Date()
   const customer = {
     id: crypto.randomUUID(),
     name,
     contactPhone,
-    status,
+    status: statusResult.data,
     address,
     ownerId: actor.id,
     createdAt: now,
@@ -414,6 +416,8 @@ customerRoutes.get('/', async (c) => {
   const tagId = c.req.query('tag_id')?.trim()
   const followUp = c.req.query('follow_up')?.trim()
   if (tagId && !z.string().uuid().safeParse(tagId).success) return c.json({ error: '标签编号无效' }, 400)
+  const statusResult = status ? customerStatusSchema.safeParse(status) : undefined
+  if (statusResult && !statusResult.success) return c.json({ error: '客户状态无效' }, 400)
   if (followUp && followUp !== 'stale') return c.json({ error: '跟进状态筛选无效' }, 400)
   const page = parsePagination(c.req.query('page'), 1, 1_000_000)
   const limit = parsePagination(c.req.query('limit'), 10, 100)
@@ -421,7 +425,7 @@ customerRoutes.get('/', async (c) => {
   const filters = [
     eq(customers.isDeleted, false),
     search ? like(customers.name, `%${search}%`) : undefined,
-    status ? eq(customers.status, status) : undefined,
+    statusResult?.success ? eq(customers.status, statusResult.data) : undefined,
     tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
     followUp === 'stale' ? sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})` : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
@@ -466,6 +470,8 @@ customerRoutes.get('/export/csv', async (c) => {
   const tagId = c.req.query('tag_id')?.trim()
   const followUp = c.req.query('follow_up')?.trim()
   if (tagId && !z.string().uuid().safeParse(tagId).success) return c.json({ error: '标签编号无效' }, 400)
+  const statusResult = status ? customerStatusSchema.safeParse(status) : undefined
+  if (statusResult && !statusResult.success) return c.json({ error: '客户状态无效' }, 400)
   if (followUp && followUp !== 'stale') return c.json({ error: '跟进状态筛选无效' }, 400)
   const db = createDb(c.env.DB)
   const staleFollowUpAt = new Date(Date.now() - 7 * 86_400_000)
@@ -484,7 +490,7 @@ customerRoutes.get('/export/csv', async (c) => {
     .where(and(
       eq(customers.isDeleted, false),
       search ? like(customers.name, `%${search}%`) : undefined,
-      status ? eq(customers.status, status) : undefined,
+      statusResult?.success ? eq(customers.status, statusResult.data) : undefined,
       tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
       followUp === 'stale' ? sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})` : undefined,
       actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
@@ -797,12 +803,13 @@ customerRoutes.put('/:id', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const name = body.name === undefined ? undefined : optionalText(body.name, 100)
   const contactPhone = body.contact_phone === undefined ? undefined : optionalText(body.contact_phone, 30)
-  const status = body.status === undefined ? undefined : optionalText(body.status, 50)
+  const statusResult = body.status === undefined ? undefined : customerStatusSchema.safeParse(optionalText(body.status, 50) ?? 'Active')
   const address = body.address === undefined ? undefined : optionalText(body.address, 500)
   const ownerIdResult = body.owner_id === undefined ? undefined : optionalText(body.owner_id, 128)
-  if (name === undefined || name === null || contactPhone === undefined || status === undefined || address === undefined) {
+  if (name === undefined || name === null || contactPhone === undefined || address === undefined) {
     return c.json({ error: '客户资料格式无效' }, 400)
   }
+  if (statusResult && !statusResult.success) return c.json({ error: '客户状态无效' }, 400)
   if (body.owner_id !== undefined && actor.role !== 'admin') return c.json({ error: '仅管理员可以转交客户' }, 403)
   if (body.owner_id !== undefined && !ownerIdResult) return c.json({ error: '请选择有效的客户负责人' }, 400)
   const ownerId = ownerIdResult ?? undefined
@@ -816,7 +823,7 @@ customerRoutes.put('/:id', async (c) => {
   const updates = {
     ...(name !== undefined ? { name } : {}),
     ...(contactPhone !== undefined ? { contactPhone } : {}),
-    ...(status !== undefined ? { status: status ?? 'Active' } : {}),
+    ...(statusResult?.success ? { status: statusResult.data } : {}),
     ...(address !== undefined ? { address } : {}),
     ...(ownerId !== undefined ? { ownerId } : {}),
     updatedAt: new Date(),
