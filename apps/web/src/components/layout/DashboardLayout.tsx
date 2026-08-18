@@ -12,7 +12,7 @@ const navigation = [
   { to: '/customers', label: '客户池', icon: UsersRound },
   { to: '/deals', label: '商机看板', icon: BriefcaseBusiness },
   { to: '/my-work', label: '我的工作', icon: BriefcaseBusiness },
-  { to: '/users', label: '员工管理', icon: ShieldCheck },
+  { to: '/users', label: '员工管理', icon: ShieldCheck, adminOnly: true },
   { to: '/audit-logs', label: '操作日志', icon: History, adminOnly: true },
   { to: '/settings', label: '系统设置', icon: Settings, adminOnly: true },
 ]
