@@ -24,6 +24,7 @@ const actionLabels: Record<AuditAction, string> = {
   Deleted: '删除',
   Won: '赢单',
   Renewed: '续费',
+  Transferred: '转交',
 }
 
 const actionTones: Record<AuditAction, 'default' | 'info' | 'warning' | 'success' | 'danger'> = {
@@ -32,6 +33,7 @@ const actionTones: Record<AuditAction, 'default' | 'info' | 'warning' | 'success
   Deleted: 'danger',
   Won: 'success',
   Renewed: 'warning',
+  Transferred: 'warning',
 }
 
 function parseSnapshot(value: string | null) {
@@ -55,6 +57,11 @@ function valueLabel(value: unknown) {
 function changeSummary(log: AuditLog) {
   const before = parseSnapshot(log.beforeValue)
   const after = parseSnapshot(log.afterValue)
+  if (log.action === 'Transferred') {
+    const previousOwner = before?.ownerName ?? before?.ownerId ?? '未分配'
+    const nextOwner = after?.ownerName ?? after?.ownerId ?? '未分配'
+    return `负责人: ${valueLabel(previousOwner)} -> ${valueLabel(nextOwner)}`
+  }
   if (!before && !after) return '无字段快照'
   if (!before) return Object.entries(after ?? {}).filter(([key]) => !['id', 'createdAt', 'updatedAt'].includes(key)).slice(0, 3).map(([key, value]) => `${key}: ${valueLabel(value)}`).join('；') || '已创建'
   if (!after) return '已删除'

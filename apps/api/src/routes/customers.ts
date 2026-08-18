@@ -986,6 +986,11 @@ customerRoutes.post('/transfer', async (c) => {
 
   const changedCustomers = selectedCustomers.filter((customer) => customer.ownerId !== targetOwner.id)
   if (changedCustomers.length > 0) {
+    const previousOwnerIds = [...new Set(changedCustomers.map((customer) => customer.ownerId).filter((ownerId): ownerId is string => Boolean(ownerId)))]
+    const previousOwners = previousOwnerIds.length > 0
+      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, previousOwnerIds))
+      : []
+    const previousOwnerNameById = new Map(previousOwners.map((owner) => [owner.id, owner.name]))
     await db
       .update(customers)
       .set({ ownerId: targetOwner.id, updatedAt: new Date() })
@@ -994,9 +999,19 @@ customerRoutes.post('/transfer', async (c) => {
       actorId: actor.id,
       entityType: 'Customer',
       entityId: customer.id,
-      action: 'Updated',
-      before: customer,
-      after: { ...customer, ownerId: targetOwner.id },
+      action: 'Transferred',
+      before: {
+        customerId: customer.id,
+        customerName: customer.name,
+        ownerId: customer.ownerId,
+        ownerName: customer.ownerId ? previousOwnerNameById.get(customer.ownerId) ?? null : null,
+      },
+      after: {
+        customerId: customer.id,
+        customerName: customer.name,
+        ownerId: targetOwner.id,
+        ownerName: targetOwner.name,
+      },
     }))))
   }
 
@@ -1031,10 +1046,10 @@ customerRoutes.put('/:id', async (c) => {
   const ownerId = ownerIdResult ?? undefined
 
   const db = createDb(c.env.DB)
-  if (ownerId) {
-    const [owner] = await db.select({ id: users.id }).from(users).where(eq(users.id, ownerId)).limit(1)
-    if (!owner) return c.json({ error: '客户负责人不存在' }, 400)
-  }
+  const [targetOwner] = ownerId
+    ? await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, ownerId)).limit(1)
+    : []
+  if (ownerId && !targetOwner) return c.json({ error: '客户负责人不存在' }, 400)
 
   const updates = {
     ...(name !== undefined ? { name } : {}),
@@ -1050,6 +1065,10 @@ customerRoutes.put('/:id', async (c) => {
     .where(and(eq(customers.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)
   if (!beforeCustomer) return c.json({ error: '客户不存在或无权编辑' }, 404)
+  const ownershipChanged = ownerId !== undefined && ownerId !== beforeCustomer.ownerId
+  const [previousOwner] = ownershipChanged && beforeCustomer.ownerId
+    ? await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, beforeCustomer.ownerId)).limit(1)
+    : []
   const [customer] = await db
     .update(customers)
     .set(updates)
@@ -1057,7 +1076,26 @@ customerRoutes.put('/:id', async (c) => {
     .returning()
   if (!customer) return c.json({ error: '客户不存在或无权编辑' }, 404)
 
-  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Updated', before: beforeCustomer, after: customer }))
+  c.executionCtx.waitUntil(writeAuditLog(c.env, ownershipChanged
+    ? {
+        actorId: actor.id,
+        entityType: 'Customer',
+        entityId: customer.id,
+        action: 'Transferred',
+        before: {
+          customerId: beforeCustomer.id,
+          customerName: beforeCustomer.name,
+          ownerId: beforeCustomer.ownerId,
+          ownerName: previousOwner?.name ?? null,
+        },
+        after: {
+          customerId: customer.id,
+          customerName: customer.name,
+          ownerId: customer.ownerId,
+          ownerName: targetOwner?.name ?? null,
+        },
+      }
+    : { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Updated', before: beforeCustomer, after: customer }))
 
   return c.json({ customer })
 })

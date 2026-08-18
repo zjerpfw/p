@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 
-export type AuditAction = 'Created' | 'Updated' | 'Deleted' | 'Won' | 'Renewed'
+export type AuditAction = 'Created' | 'Updated' | 'Deleted' | 'Won' | 'Renewed' | 'Transferred'
 
 export interface AuditLog {
   id: string

@@ -28,7 +28,7 @@ export const assetUploadStatuses = ['Pending', 'Uploaded', 'Failed', 'Deleted'] 
 export const notificationTypes = ['RenewalReminder', 'TaskUpcomingReminder', 'TaskDueReminder', 'TaskOverdueReminder'] as const
 export const taskStatuses = ['Open', 'Completed'] as const
 export const taskPriorities = ['Low', 'Normal', 'High'] as const
-export const auditActions = ['Created', 'Updated', 'Deleted', 'Won', 'Renewed'] as const
+export const auditActions = ['Created', 'Updated', 'Deleted', 'Won', 'Renewed', 'Transferred'] as const
 
 export const users = sqliteTable(
   'users',
