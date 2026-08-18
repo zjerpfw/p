@@ -19,6 +19,7 @@ import { taskRoutes } from './routes/tasks'
 import { userRoutes } from './routes/users'
 import type { Env } from './env'
 import { sendRenewalReminders } from './scheduled/renewal-reminders'
+import { sendTaskReminders } from './scheduled/task-reminders'
 
 export type { Env } from './env'
 
@@ -100,12 +101,10 @@ app.route('/api/users', userRoutes)
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env, context: ExecutionContext) {
-    context.waitUntil(
-      sendRenewalReminders(env).catch((error) => {
-        console.error('Renewal reminder job failed', error)
-        throw error
-      }),
-    )
+    context.waitUntil(Promise.all([
+      sendRenewalReminders(env).catch((error) => { console.error('Renewal reminder job failed', error); throw error }),
+      sendTaskReminders(env).catch((error) => { console.error('Task reminder job failed', error); throw error }),
+    ]))
   },
 } satisfies ExportedHandler<Env>
 export type ApiApp = typeof app
