@@ -1,0 +1,1 @@
+ALTER TABLE `deals` ADD `updated_at` integer DEFAULT (unixepoch()) NOT NULL;

@@ -301,6 +301,8 @@ customerRoutes.post('/:id/renew', async (c) => {
     expireDate: newExpireDate,
     renewalReminderDays: latestWonDeal?.reminderDays ?? 30,
     idempotencyKey,
+    probability: 100,
+    updatedAt: now,
     createdAt: now,
   })
   const updateCustomerExpireDate = db

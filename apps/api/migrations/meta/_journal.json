@@ -162,6 +162,20 @@
       "when": 1787023898092,
       "tag": "0022_condemned_ricochet",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1787025223263,
+      "tag": "0023_puzzling_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1787025789983,
+      "tag": "0024_wealthy_hiroim",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,8 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
   const [channel, setChannel] = useState('')
   const [originalPrice, setOriginalPrice] = useState('')
   const [stage, setStage] = useState<DealStage>('Leads')
+  const [probability, setProbability] = useState('10')
+  const [lostReason, setLostReason] = useState('')
   const [expectedCloseDate, setExpectedCloseDate] = useState('')
   const [softwareCost, setSoftwareCost] = useState('0')
   const [taxCost, setTaxCost] = useState('0')
@@ -40,6 +42,8 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
     setChannel(deal.channel ?? '')
     setOriginalPrice(centsToYuanInput(deal.originalPriceCents ?? deal.amountCents))
     setStage(deal.stage)
+    setProbability(String(deal.probability ?? 10))
+    setLostReason(deal.lostReason ?? '')
     setExpectedCloseDate(dateInput(deal.expectedCloseDate))
     setSoftwareCost(centsToYuanInput(deal.softwareCostCents ?? 0))
     setTaxCost(centsToYuanInput(deal.taxCostCents ?? 0))
@@ -65,6 +69,8 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
         channel: channel.trim(),
         original_price_cents: originalPriceCents,
         stage,
+        probability: stage === 'Won' ? 100 : stage === 'Lost' ? 0 : Number(probability),
+        lost_reason: stage === 'Lost' ? lostReason.trim() : undefined,
         expected_close_date: expectedCloseDate,
         ...(stage === 'Won' ? {
           software_cost_cents: softwareCostCents,
@@ -94,10 +100,12 @@ export function DealDetailModal({ deal, onOpenChange }: DealDetailModalProps) {
             <div className="space-y-1.5"><Label htmlFor="deal-edit-original-price">原价 / 刊例价（元）</Label><Input id="deal-edit-original-price" min="0" onChange={(event) => setOriginalPrice(event.target.value)} step="0.01" type="number" value={originalPrice} /></div>
             <div className="space-y-1.5"><Label htmlFor="deal-edit-stage">当前阶段</Label><select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="deal-edit-stage" onChange={(event) => setStage(event.target.value as DealStage)} value={stage}>{dealStages.filter((item) => item !== 'Won' || deal?.stage === 'Won').map((item) => <option key={item} value={item}>{dealStageLabels[item]}</option>)}</select></div>
             <div className="space-y-1.5"><Label htmlFor="deal-edit-close">预计成交日</Label><Input id="deal-edit-close" onChange={(event) => setExpectedCloseDate(event.target.value)} type="date" value={expectedCloseDate} /></div>
+            {stage !== 'Won' && stage !== 'Lost' && <div className="space-y-1.5"><Label htmlFor="deal-edit-probability">成交概率（%）</Label><Input id="deal-edit-probability" max="100" min="0" onChange={(event) => setProbability(event.target.value)} type="number" value={probability} /></div>}
+            {stage === 'Lost' && <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="deal-edit-lost-reason">输单原因</Label><Input id="deal-edit-lost-reason" onChange={(event) => setLostReason(event.target.value)} placeholder="例如：预算不足、竞品胜出、需求暂停" value={lostReason} /></div>}
           </div>
           {stage === 'Won' && <section className="space-y-4 border-t border-border pt-5"><div><h3 className="font-semibold">赢单财务信息</h3><p className="mt-1 text-xs text-muted-foreground">当前 SaaS 到期日由客户档案统一维护，商机仅保留成交财务流水。</p></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="deal-edit-software">软件成本（元）</Label><Input id="deal-edit-software" min="0" onChange={(event) => setSoftwareCost(event.target.value)} step="0.01" type="number" value={softwareCost} /></div><div className="space-y-1.5"><Label htmlFor="deal-edit-tax">开票成本（元）</Label><Input id="deal-edit-tax" min="0" onChange={(event) => setTaxCost(event.target.value)} step="0.01" type="number" value={taxCost} /></div><div className="space-y-1.5"><Label htmlFor="deal-edit-rebate">返利（元）</Label><Input id="deal-edit-rebate" min="0" onChange={(event) => setRebateAmount(event.target.value)} step="0.01" type="number" value={rebateAmount} /></div><div className="space-y-1.5"><Label htmlFor="deal-edit-profit">实际利润（元）</Label><Input disabled id="deal-edit-profit" value={formatCents(calculatedNetProfitCents)} /></div></div><div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">自动核算利润：<strong>{formatCents(calculatedNetProfitCents)}</strong></div></section>}
         </div>
-        <DialogFooter><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!productName.trim() || !expectedCloseDate || amountCents === null || originalPriceCents === null || (stage === 'Won' && (calculatedNetProfitCents === null || calculatedNetProfitCents < 0)) || updateDeal.isPending} onClick={() => updateDeal.mutate()} type="button">{updateDeal.isPending ? '正在保存' : '保存修改'}</Button></DialogFooter>
+        <DialogFooter><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!productName.trim() || !expectedCloseDate || amountCents === null || originalPriceCents === null || (stage !== 'Won' && stage !== 'Lost' && (!Number.isInteger(Number(probability)) || Number(probability) < 0 || Number(probability) > 100)) || (stage === 'Lost' && !lostReason.trim()) || (stage === 'Won' && (calculatedNetProfitCents === null || calculatedNetProfitCents < 0)) || updateDeal.isPending} onClick={() => updateDeal.mutate()} type="button">{updateDeal.isPending ? '正在保存' : '保存修改'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )

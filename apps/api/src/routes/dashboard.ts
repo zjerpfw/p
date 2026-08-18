@@ -34,7 +34,7 @@ dashboardRoutes.get('/', async (c) => {
   const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], stageDistribution, renewalCustomers] = await Promise.all([
+  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -45,6 +45,14 @@ dashboardRoutes.get('/', async (c) => {
       .from(deals)
       .innerJoin(customers, eq(deals.customerId, customers.id))
       .where(and(eq(deals.stage, 'Won'), gte(deals.createdAt, monthStart), lt(deals.createdAt, nextMonthStart), ...activeFilters)),
+    db
+      .select({ totalCents: sql<number>`coalesce(sum(${deals.amountCents} * ${deals.probability} / 100), 0)` })
+      .from(deals)
+      .innerJoin(customers, eq(deals.customerId, customers.id))
+      .where(and(
+        inArray(deals.stage, ['Leads', 'Qualified', 'Proposal']),
+        ...activeFilters,
+      )),
     db
       .select({ stage: deals.stage, count: sql<number>`count(*)` })
       .from(deals)
@@ -102,6 +110,7 @@ dashboardRoutes.get('/', async (c) => {
     month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     newLeads: Number(newLead?.count ?? 0),
     wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
+    weightedForecastCents: Number(weightedForecast?.totalCents ?? 0),
     stageDistribution: normalizedStageDistribution,
     funnelDistribution: normalizedStageDistribution.map((item) => ({
       name: stageLabels[item.stage] ?? item.stage,

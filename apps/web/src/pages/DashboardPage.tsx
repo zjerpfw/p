@@ -60,6 +60,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="px-5 pb-5"><strong className="text-3xl text-indigo-700">{dealStages.slice(0, 3).reduce((sum, stage) => sum + (distribution.get(stage) ?? 0), 0)}</strong><span className="ml-1 text-sm text-muted-foreground">个</span></CardContent>
         </Card>
+        <Card className="gap-0 py-0 sm:col-span-2 xl:col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">加权预测金额</CardTitle><Target aria-hidden="true" className="size-4 text-indigo-600" /></CardHeader>
+          <CardContent className="px-5 pb-5"><strong className="text-3xl text-indigo-700">{formatCents(data?.weightedForecastCents)}</strong></CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

@@ -7,11 +7,13 @@ export interface PipelineStageSummary {
   stage: DealStage
   count: number
   totalAmountCents: number
+  weightedAmountCents: number
 }
 
 export interface PipelineSummary {
   count: number
   totalAmountCents: number
+  weightedAmountCents: number
   stages: PipelineStageSummary[]
 }
 

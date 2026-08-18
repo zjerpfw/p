@@ -17,6 +17,8 @@ export interface Deal {
   dealType: string
   productName: string
   stage: DealStage
+  probability: number
+  lostReason: string | null
   expectedCloseDate: string
   startDate: string | null
   durationYears: number | null

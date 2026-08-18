@@ -47,6 +47,8 @@ interface UpdateDealPayload {
   tax_cost_cents?: unknown
   rebate_amount_cents?: unknown
   net_profit_cents?: unknown
+  probability?: unknown
+  lost_reason?: unknown
 }
 
 interface CreateDealPayload {
@@ -56,6 +58,8 @@ interface CreateDealPayload {
   original_price_cents?: unknown
   amount_cents?: unknown
   stage?: unknown
+  probability?: unknown
+  lost_reason?: unknown
   expected_close_date?: unknown
 }
 
@@ -67,6 +71,8 @@ const createDealSchema = z.object({
   original_price_cents: z.number().int().nonnegative('原价不能小于 0').optional(),
   amount_cents: z.number().int().nonnegative('预计金额不能小于 0'),
   stage: z.enum(['Leads', 'Qualified', 'Proposal', 'Lost']).optional().default('Leads'),
+  probability: z.number().int().min(0, '成交概率不能小于 0').max(100, '成交概率不能超过 100').optional(),
+  lost_reason: z.string().trim().min(1, '请填写输单原因').max(500, '输单原因不能超过 500 个字符').optional(),
   expected_close_date: z.union([z.string(), z.number()]),
 })
 const updateProductSchema = z.object({
@@ -80,6 +86,16 @@ const wonProductSchema = z.object({
   original_price_cents: z.number().int().nonnegative('原价不能小于 0').optional(),
 })
 const wonGiftMonthsSchema = z.object({ gift_months: z.number().int().nonnegative('赠送时长不能小于 0').optional().default(0) })
+const probabilitySchema = z.number().int().min(0, '成交概率不能小于 0').max(100, '成交概率不能超过 100')
+const lostReasonSchema = z.string().trim().min(1, '请填写输单原因').max(500, '输单原因不能超过 500 个字符')
+
+const defaultProbabilityByStage: Record<(typeof dealStages)[number], number> = {
+  Leads: 10,
+  Qualified: 35,
+  Proposal: 65,
+  Won: 100,
+  Lost: 0,
+}
 
 const financialFields = [
   'duration_years',
@@ -160,6 +176,8 @@ const dealSelection = {
   dealType: deals.dealType,
   productName: deals.productName,
   stage: deals.stage,
+  probability: deals.probability,
+  lostReason: deals.lostReason,
   expectedCloseDate: deals.expectedCloseDate,
   startDate: deals.startDate,
   durationYears: deals.durationYears,
@@ -170,6 +188,7 @@ const dealSelection = {
   taxCostCents: deals.taxCostCents,
   rebateAmountCents: deals.rebateAmountCents,
   netProfitCents: deals.netProfitCents,
+  updatedAt: deals.updatedAt,
   createdAt: deals.createdAt,
 }
 
@@ -184,6 +203,7 @@ dealRoutes.get('/pipeline', async (c) => {
       stage: deals.stage,
       count: count(),
       totalAmountCents: sql<number>`coalesce(sum(${deals.amountCents}), 0)`,
+      weightedAmountCents: sql<number>`coalesce(sum(case when ${deals.stage} in ('Leads', 'Qualified', 'Proposal') then ${deals.amountCents} * ${deals.probability} / 100 else 0 end), 0)`,
     })
     .from(deals)
     .innerJoin(customers, eq(deals.customerId, customers.id))
@@ -202,12 +222,14 @@ dealRoutes.get('/pipeline', async (c) => {
       stage,
       count: Number(row?.count ?? 0),
       totalAmountCents: Number(row?.totalAmountCents ?? 0),
+      weightedAmountCents: Number(row?.weightedAmountCents ?? 0),
     }
   })
 
   return c.json({
     count: stages.reduce((total, stage) => total + stage.count, 0),
     totalAmountCents: stages.reduce((total, stage) => total + stage.totalAmountCents, 0),
+    weightedAmountCents: stages.reduce((total, stage) => total + stage.weightedAmountCents, 0),
     stages,
   })
 })
@@ -313,6 +335,7 @@ dealRoutes.post('/', async (c) => {
 
   const parsed = createDealSchema.safeParse(body)
   if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '商机资料格式无效' }, 400)
+  if (parsed.data.stage === 'Lost' && !parsed.data.lost_reason) return c.json({ error: '输单时必须填写输单原因' }, 400)
   const expectedCloseDate = parseDate(parsed.data.expected_close_date)
   if (!expectedCloseDate) return c.json({ error: '预计成交日无效' }, 400)
 
@@ -338,7 +361,10 @@ dealRoutes.post('/', async (c) => {
     channel: parsed.data.channel || null,
     originalPriceCents: parsed.data.original_price_cents ?? parsed.data.amount_cents,
     stage: parsed.data.stage,
+    probability: parsed.data.stage === 'Lost' ? 0 : parsed.data.probability ?? defaultProbabilityByStage[parsed.data.stage],
+    lostReason: parsed.data.stage === 'Lost' ? parsed.data.lost_reason : null,
     expectedCloseDate,
+    updatedAt: new Date(),
     createdAt: new Date(),
   }
   await db.insert(deals).values(deal)
@@ -432,7 +458,7 @@ dealRoutes.post('/:id/won', async (c) => {
   try {
     const claimed = await db
       .update(deals)
-      .set({ idempotencyKey })
+      .set({ idempotencyKey, updatedAt: new Date() })
       .where(and(eq(deals.id, dealId), eq(deals.isDeleted, false), isNull(deals.idempotencyKey), ne(deals.stage, 'Won')))
       .returning({ id: deals.id })
     if (claimed.length === 0) return c.json({ error: '赢单请求正在处理中，请刷新后确认结果' }, 409)
@@ -453,6 +479,8 @@ dealRoutes.post('/:id/won', async (c) => {
     .update(deals)
     .set({
       stage: 'Won',
+      probability: 100,
+      lostReason: null,
       productName: productNameResult.data.product_name,
       channel: productNameResult.data.channel || null,
       originalPriceCents: productNameResult.data.original_price_cents ?? deal.originalPriceCents ?? deal.amountCents,
@@ -465,6 +493,7 @@ dealRoutes.post('/:id/won', async (c) => {
       taxCostCents: body.tax_cost_cents as number,
       rebateAmountCents: body.rebate_amount_cents as number,
       netProfitCents: body.net_profit_cents as number,
+      updatedAt: new Date(),
     })
     .where(and(eq(deals.id, dealId), eq(deals.idempotencyKey, idempotencyKey)))
   const updateCustomerExpireDate = db
@@ -509,15 +538,18 @@ dealRoutes.put('/:id', async (c) => {
   const productNameResult = updateProductSchema.safeParse(body)
   const stage = body.stage === undefined ? undefined : typeof body.stage === 'string' && dealStages.includes(body.stage as (typeof dealStages)[number]) ? body.stage as (typeof dealStages)[number] : null
   const expectedCloseDate = body.expected_close_date === undefined ? undefined : parseDate(body.expected_close_date)
+  const probability = body.probability === undefined ? undefined : probabilitySchema.safeParse(body.probability)
+  const lostReason = body.lost_reason === undefined ? undefined : lostReasonSchema.safeParse(body.lost_reason)
   const integerFields = [
     ['softwareCostCents', body.software_cost_cents],
     ['taxCostCents', body.tax_cost_cents],
     ['rebateAmountCents', body.rebate_amount_cents],
     ['netProfitCents', body.net_profit_cents],
   ] as const
-  if (!productNameResult.success || amountCents === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
+  if (!productNameResult.success || amountCents === null || stage === null || (body.expected_close_date !== undefined && !expectedCloseDate) || (probability !== undefined && !probability.success) || (lostReason !== undefined && !lostReason.success) || integerFields.some(([, value]) => value !== undefined && (!isInteger(value) || value < 0))) {
     return c.json({ error: '商机资料格式无效' }, 400)
   }
+  if (stage === 'Lost' && (!lostReason || !lostReason.success)) return c.json({ error: '输单时必须填写输单原因' }, 400)
 
   const updates = {
     ...(amountCents !== undefined ? { amountCents } : {}),
@@ -525,6 +557,11 @@ dealRoutes.put('/:id', async (c) => {
     ...(productNameResult.data.channel !== undefined ? { channel: productNameResult.data.channel || null } : {}),
     ...(productNameResult.data.original_price_cents !== undefined ? { originalPriceCents: productNameResult.data.original_price_cents } : {}),
     ...(stage !== undefined ? { stage } : {}),
+    ...(stage === 'Won' ? { probability: 100, lostReason: null } : {}),
+    ...(stage === 'Lost' ? { probability: 0, lostReason: lostReason!.data } : {}),
+    ...(stage !== undefined && stage !== 'Won' && stage !== 'Lost' ? { probability: probability?.success ? probability.data : defaultProbabilityByStage[stage], lostReason: null } : {}),
+    ...(stage === undefined && probability?.success ? { probability: probability.data } : {}),
+    ...(stage === undefined && lostReason?.success ? { lostReason: lostReason.data } : {}),
     ...(expectedCloseDate ? { expectedCloseDate } : {}),
     ...Object.fromEntries(integerFields.filter(([, value]) => value !== undefined).map(([key, value]) => [key, value])),
   }
@@ -582,7 +619,7 @@ dealRoutes.delete('/:id', async (c) => {
 
   const [deal] = await db
     .update(deals)
-    .set({ isDeleted: true })
+    .set({ isDeleted: true, updatedAt: new Date() })
     .where(eq(deals.id, authorizedDeal.id))
     .returning({ id: deals.id })
   if (!deal) return c.json({ error: '商机作废失败' }, 500)
