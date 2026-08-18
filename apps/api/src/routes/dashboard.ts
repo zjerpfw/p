@@ -55,11 +55,11 @@ dashboardRoutes.get('/', async (c) => {
   })
   const forecastStart = shanghaiDateKeyToUtc(`${forecastMonths[0]}-01`)
   const forecastEnd = shanghaiDateKeyToUtc(`${shanghaiMonthKey(new Date(Date.UTC(currentYear, currentMonth + 2, 1, 12)))}-01`)
+  const monthStart = forecastStart
+  const nextMonthStart = shanghaiDateKeyToUtc(`${forecastMonths[1]}-01`)
   const renewalDeadline = new Date(now)
   renewalDeadline.setDate(renewalDeadline.getDate() + 60)
   const staleFollowUpAt = new Date(now.getTime() - 7 * 86_400_000)
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const db = createDb(c.env.DB)
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
@@ -252,7 +252,7 @@ dashboardRoutes.get('/', async (c) => {
 
   operation = 'response-serialization'
   return c.json({
-    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    month: currentMonthKey,
     newLeads: Number(newLead?.count ?? 0),
     wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
     weightedForecastCents: Number(weightedForecast?.totalCents ?? 0),
