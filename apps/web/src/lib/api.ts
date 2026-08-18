@@ -71,7 +71,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      credentials: 'include',
       headers,
       signal: init.signal ?? timeoutController?.signal,
     })
@@ -101,7 +100,6 @@ export async function downloadApiFile(path: string, fallbackFilename: string) {
   const token = getAccessToken()
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    credentials: 'include',
   })
   if (response.status === 401) {
     clearAccessToken()
