@@ -59,9 +59,14 @@ app.use(
   }),
 )
 
-app.get('/health', (c) => {
-  const db = createDb(c.env.DB)
-  return c.json({ status: 'ok', database: Boolean(db) })
+app.get('/health', async (c) => {
+  try {
+    await c.env.DB.prepare('SELECT 1').first()
+    return c.json({ status: 'ok', database: 'ok' })
+  } catch (error) {
+    console.error('Health check database probe failed', error)
+    return c.json({ status: 'unavailable', database: 'unavailable' }, 503)
+  }
 })
 
 app.get('/:verificationFile{WW_verify_[A-Za-z0-9_-]+\\.txt}', async (c) => {
