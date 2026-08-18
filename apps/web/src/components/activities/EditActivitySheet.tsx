@@ -47,6 +47,7 @@ export function EditActivitySheet({ activity, customerId, deals, open, onOpenCha
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(customerId) }),
         queryClient.invalidateQueries({ queryKey: ['activities'] }),
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
       ])
       toast.success('跟进记录已更新')
       onOpenChange(false)

@@ -104,6 +104,7 @@ export default function CustomerDetailPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
         queryClient.invalidateQueries({ queryKey: ['activities'] }),
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
       ])
       setNotes('')
       toast.success('跟进记录已保存')
@@ -145,6 +146,7 @@ export default function CustomerDetailPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }),
         queryClient.invalidateQueries({ queryKey: ['activities'] }),
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
       ])
       toast.success('跟进记录已删除，关联附件已保留为客户附件')
     },
@@ -380,7 +382,7 @@ export default function CustomerDetailPage() {
         </aside>
       </div>
 
-      <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
+      <CreateActivitySheet customerId={customer.id} deals={data?.deals ?? []} onCreated={() => Promise.all([queryClient.invalidateQueries({ queryKey: customerDetailQueryKey(id ?? '') }), queryClient.invalidateQueries({ queryKey: ['activities'] }), queryClient.invalidateQueries({ queryKey: ['customers'] })]).then(() => undefined)} onOpenChange={setActivitySheetOpen} open={activitySheetOpen} />
       <EditActivitySheet activity={editingActivity} customerId={customer.id} deals={data?.deals ?? []} onOpenChange={(open) => !open && setEditingActivity(null)} open={Boolean(editingActivity)} />
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
       <ContactSheet contact={editingContact} customerId={customer.id} onOpenChange={(open) => { setContactSheetOpen(open); if (!open) setEditingContact(null) }} open={contactSheetOpen} />
