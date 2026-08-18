@@ -68,7 +68,7 @@ function PipelineColumn({ stage, summary, search, deletePending, onEdit, onDelet
     return () => observer.disconnect()
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
-  return <section className="flex h-full min-h-0 w-[85vw] shrink-0 snap-center flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-inner md:w-80 md:snap-align-none">
+  return <section className="flex h-full min-h-0 w-[85vw] shrink-0 snap-center flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-inner md:min-w-0 md:w-auto md:snap-align-none">
     <header className={`shrink-0 border-t-4 ${stageStyle[stage].line} border-b border-slate-200 bg-white px-3 py-2.5`}>
       <div className="flex items-center justify-between gap-2"><h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800"><span className={`size-2 shrink-0 rounded-full ${stageStyle[stage].dot}`} />{dealStageLabels[stage]}</h2><Badge tone={getDealStageTone(stage)}>{summary.count}</Badge></div>
       <p className="mt-1 text-lg font-bold tracking-tight text-slate-700">{formatCents(summary.totalAmountCents)}</p><p className="mt-0.5 text-[11px] text-indigo-600">加权 {formatCents(summary.weightedAmountCents)}</p>
@@ -119,6 +119,7 @@ export default function DealsPage() {
   }, [searchParams, setSearchParams])
 
   const visibleStages = status ? [status] : activeDealStages
+  const pipelineGridColumns = visibleStages.length === 1 ? 'md:grid-cols-1' : 'md:grid-cols-3'
   const visibleSummary = pipelineSummary.data?.stages.filter((item) => visibleStages.includes(item.stage)) ?? []
   const visibleTotalAmountCents = visibleSummary.reduce((total, item) => total + item.totalAmountCents, 0)
   const deleteDeal = useMutation({
@@ -202,7 +203,7 @@ export default function DealsPage() {
       {!isMobile && pipelineSummary.isLoading && <p className="flex-1 py-6 text-sm text-muted-foreground">正在加载商机管道...</p>}
       {!isMobile && pipelineSummary.error && <p className="flex-1 py-6 text-sm text-destructive">{pipelineSummary.error.message}</p>}
       {pipelineSummary.data && !isMobile && <>
-        <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl bg-slate-100/80 p-2 touch-pan-x md:snap-none">
+        <div className={`flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl bg-slate-100/80 p-2 touch-pan-x md:grid md:overflow-hidden md:snap-none ${pipelineGridColumns}`}>
           {visibleStages.map((stage) => <PipelineColumn deletePending={deleteDeal.isPending} key={stage} onConfirmWon={setDealToConfirm} onDelete={confirmDeleteDeal} onEdit={setDealToEdit} search={debouncedSearch} stage={stage} summary={pipelineSummary.data.stages.find((item) => item.stage === stage) ?? { stage, count: 0, totalAmountCents: 0, weightedAmountCents: 0 }} />)}
         </div>
       </>}
