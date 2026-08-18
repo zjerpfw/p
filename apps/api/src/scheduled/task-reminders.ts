@@ -1,7 +1,7 @@
 // apps/api/src/scheduled/task-reminders.ts
 import { createDb } from '@crm/db/client'
 import { customers, notificationLogs, tasks, users } from '@crm/db/schema'
-import { and, eq, gt, gte, inArray, lt } from 'drizzle-orm'
+import { and, eq, gte, inArray, lt } from 'drizzle-orm'
 import type { Env } from '../env'
 import { todayInShanghai } from '../lib/shanghai-date'
 import { getWeChatAccessToken, sendWeChatMarkdownMessage } from '../services/wechat'
@@ -42,12 +42,12 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
       id: tasks.id, customerName: customers.name, title: tasks.title, dueAt: tasks.dueAt,
       priority: tasks.priority, recipientUserId: users.id, wechatUserId: users.wechatUserId,
     }).from(tasks).innerJoin(customers, eq(tasks.customerId, customers.id)).innerJoin(users, eq(tasks.assigneeId, users.id))
-      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), gt(tasks.dueAt, now), lt(tasks.dueAt, nextDayStart))),
+      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), gte(tasks.dueAt, dayStart), lt(tasks.dueAt, nextDayStart))),
     db.select({
       id: tasks.id, customerName: customers.name, title: tasks.title, dueAt: tasks.dueAt,
       priority: tasks.priority, recipientUserId: users.id, wechatUserId: users.wechatUserId,
     }).from(tasks).innerJoin(customers, eq(tasks.customerId, customers.id)).innerJoin(users, eq(tasks.assigneeId, users.id))
-      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, now))),
+      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, dayStart))),
   ])
 
   const reminderDate = dateKeyInShanghai(now)
