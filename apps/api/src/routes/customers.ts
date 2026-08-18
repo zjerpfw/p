@@ -35,6 +35,7 @@ interface UpdateCustomerPayload {
   contact_phone?: unknown
   status?: unknown
   address?: unknown
+  owner_id?: unknown
 }
 
 const tagNameSchema = z.string().trim().min(1, '请填写标签名称').max(40, '标签名称不能超过 40 个字符')
@@ -423,7 +424,20 @@ customerRoutes.get('/', async (c) => {
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = filters.length ? and(...filters) : undefined
   const [customerList, [{ total }]] = await Promise.all([
-    db.select().from(customers).where(where).orderBy(desc(customers.createdAt)).limit(limit).offset((page - 1) * limit),
+    db.select({
+      id: customers.id,
+      name: customers.name,
+      contactPhone: customers.contactPhone,
+      status: customers.status,
+      lng: customers.lng,
+      lat: customers.lat,
+      address: customers.address,
+      ownerId: customers.ownerId,
+      ownerName: users.name,
+      saasExpireDate: customers.saasExpireDate,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+    }).from(customers).leftJoin(users, eq(customers.ownerId, users.id)).where(where).orderBy(desc(customers.createdAt)).limit(limit).offset((page - 1) * limit),
     db.select({ total: count() }).from(customers).where(where),
   ])
 
@@ -551,8 +565,23 @@ customerRoutes.get('/:id', async (c) => {
 
   const customerId = c.req.param('id')
   const [customer] = await db
-    .select()
+    .select({
+      id: customers.id,
+      name: customers.name,
+      contactPhone: customers.contactPhone,
+      status: customers.status,
+      lng: customers.lng,
+      lat: customers.lat,
+      address: customers.address,
+      ownerId: customers.ownerId,
+      ownerName: users.name,
+      saasExpireDate: customers.saasExpireDate,
+      isDeleted: customers.isDeleted,
+      createdAt: customers.createdAt,
+      updatedAt: customers.updatedAt,
+    })
     .from(customers)
+    .leftJoin(users, eq(customers.ownerId, users.id))
     .where(and(eq(customers.id, customerId), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)
 
@@ -758,8 +787,18 @@ customerRoutes.put('/:id', async (c) => {
   const contactPhone = body.contact_phone === undefined ? undefined : optionalText(body.contact_phone, 30)
   const status = body.status === undefined ? undefined : optionalText(body.status, 50)
   const address = body.address === undefined ? undefined : optionalText(body.address, 500)
+  const ownerIdResult = body.owner_id === undefined ? undefined : optionalText(body.owner_id, 128)
   if (name === undefined || name === null || contactPhone === undefined || status === undefined || address === undefined) {
     return c.json({ error: '客户资料格式无效' }, 400)
+  }
+  if (body.owner_id !== undefined && actor.role !== 'admin') return c.json({ error: '仅管理员可以转交客户' }, 403)
+  if (body.owner_id !== undefined && !ownerIdResult) return c.json({ error: '请选择有效的客户负责人' }, 400)
+  const ownerId = ownerIdResult ?? undefined
+
+  const db = createDb(c.env.DB)
+  if (ownerId) {
+    const [owner] = await db.select({ id: users.id }).from(users).where(eq(users.id, ownerId)).limit(1)
+    if (!owner) return c.json({ error: '客户负责人不存在' }, 400)
   }
 
   const updates = {
@@ -767,11 +806,11 @@ customerRoutes.put('/:id', async (c) => {
     ...(contactPhone !== undefined ? { contactPhone } : {}),
     ...(status !== undefined ? { status: status ?? 'Active' } : {}),
     ...(address !== undefined ? { address } : {}),
+    ...(ownerId !== undefined ? { ownerId } : {}),
     updatedAt: new Date(),
   }
-  const db = createDb(c.env.DB)
   const [beforeCustomer] = await db
-    .select({ id: customers.id, name: customers.name, contactPhone: customers.contactPhone, status: customers.status, address: customers.address, saasExpireDate: customers.saasExpireDate })
+    .select({ id: customers.id, name: customers.name, contactPhone: customers.contactPhone, status: customers.status, address: customers.address, ownerId: customers.ownerId, saasExpireDate: customers.saasExpireDate })
     .from(customers)
     .where(and(eq(customers.id, c.req.param('id')), eq(customers.isDeleted, false), actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined))
     .limit(1)

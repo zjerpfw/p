@@ -11,6 +11,7 @@ export interface Customer {
   lat: number | null
   address: string | null
   ownerId: string
+  ownerName: string | null
   saasExpireDate: string | null
   createdAt: string
   updatedAt: string
