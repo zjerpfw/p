@@ -1,7 +1,7 @@
 // apps/api/src/routes/dashboard.ts
 import { createDb } from '@crm/db/client'
-import { contracts, customers, deals, payments } from '@crm/db/schema'
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lte, lt, sql } from 'drizzle-orm'
+import { contracts, customers, deals, payments, tasks, users } from '@crm/db/schema'
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lte, lt, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
@@ -32,9 +32,12 @@ dashboardRoutes.get('/', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const ownerFilter = actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined
+  const taskVisibilityFilter = actor.role !== 'admin'
+    ? or(eq(tasks.assigneeId, actor.id), eq(tasks.createdBy, actor.id), eq(customers.ownerId, actor.id))
+    : undefined
   const activeFilters = [eq(customers.isDeleted, false), eq(deals.isDeleted, false), ownerFilter]
 
-  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers, overdueReceivables] = await Promise.all([
+  const [[newLead], [wonProfit], [weightedForecast], stageDistribution, renewalCustomers, overdueReceivables, [taskSummary], overdueTasks] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
@@ -99,6 +102,30 @@ dashboardRoutes.get('/', async (c) => {
       .having(sql`coalesce(sum(case when ${payments.status} = 'Received' then ${payments.amountCents} else 0 end), 0) < ${contracts.totalAmountCents}`)
       .orderBy(asc(contracts.paymentDueAt))
       .limit(20),
+    db
+      .select({
+        openCount: sql<number>`count(*)`,
+        overdueCount: sql<number>`coalesce(sum(case when ${tasks.dueAt} < ${now} then 1 else 0 end), 0)`,
+      })
+      .from(tasks)
+      .innerJoin(customers, eq(tasks.customerId, customers.id))
+      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), taskVisibilityFilter)),
+    db
+      .select({
+        id: tasks.id,
+        customerId: tasks.customerId,
+        customerName: customers.name,
+        title: tasks.title,
+        dueAt: tasks.dueAt,
+        priority: tasks.priority,
+        assigneeName: users.name,
+      })
+      .from(tasks)
+      .innerJoin(customers, eq(tasks.customerId, customers.id))
+      .innerJoin(users, eq(tasks.assigneeId, users.id))
+      .where(and(eq(tasks.status, 'Open'), eq(customers.isDeleted, false), lt(tasks.dueAt, now), taskVisibilityFilter))
+      .orderBy(asc(tasks.dueAt))
+      .limit(10),
   ])
 
   const renewalCustomerIds = renewalCustomers.map((customer) => customer.customerId)
@@ -136,6 +163,7 @@ dashboardRoutes.get('/', async (c) => {
     newLeads: Number(newLead?.count ?? 0),
     wonNetProfitCents: Number(wonProfit?.totalCents ?? 0),
     weightedForecastCents: Number(weightedForecast?.totalCents ?? 0),
+    taskSummary: { openCount: Number(taskSummary?.openCount ?? 0), overdueCount: Number(taskSummary?.overdueCount ?? 0) },
     stageDistribution: normalizedStageDistribution,
     funnelDistribution: normalizedStageDistribution.map((item) => ({
       name: stageLabels[item.stage] ?? item.stage,
@@ -161,5 +189,9 @@ dashboardRoutes.get('/', async (c) => {
         overdueDays: Math.max(0, Math.floor((now.getTime() - contract.paymentDueAt.getTime()) / 86_400_000)),
       }]
     }),
+    overdueTasks: overdueTasks.map((task) => ({
+      ...task,
+      overdueDays: Math.max(0, Math.floor((now.getTime() - task.dueAt.getTime()) / 86_400_000)),
+    })),
   })
 })

@@ -1,7 +1,8 @@
 // apps/web/src/pages/DashboardPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
-import { BarChart3, CircleAlert, CircleDollarSign, Lightbulb, Target, TrendingUp } from 'lucide-react'
+import { BarChart3, CircleAlert, CircleDollarSign, ClipboardList, Lightbulb, Target, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,14 @@ export default function DashboardPage() {
         <Card className="gap-0 py-0 sm:col-span-2 xl:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">加权预测金额</CardTitle><Target aria-hidden="true" className="size-4 text-indigo-600" /></CardHeader>
           <CardContent className="px-5 pb-5"><strong className="text-3xl text-indigo-700">{formatCents(data?.weightedForecastCents)}</strong></CardContent>
+        </Card>
+        <Card className="gap-0 py-0">
+          <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">待完成任务</CardTitle><ClipboardList aria-hidden="true" className="size-4 text-amber-600" /></CardHeader>
+          <CardContent className="px-5 pb-5"><strong className="text-3xl text-amber-700">{data?.taskSummary.openCount ?? 0}</strong><span className="ml-1 text-sm text-muted-foreground">个</span></CardContent>
+        </Card>
+        <Card className="gap-0 py-0">
+          <CardHeader className="flex flex-row items-center justify-between px-5 py-4"><CardTitle className="text-sm font-medium text-muted-foreground">逾期跟进任务</CardTitle><CircleAlert aria-hidden="true" className="size-4 text-rose-600" /></CardHeader>
+          <CardContent className="px-5 pb-5"><strong className="text-3xl text-rose-700">{data?.taskSummary.overdueCount ?? 0}</strong><span className="ml-1 text-sm text-muted-foreground">个</span></CardContent>
         </Card>
       </div>
 
@@ -134,6 +143,21 @@ export default function DashboardPage() {
             <TableBody>
               {data?.overdueReceivables.map((contract) => <TableRow key={contract.id}><TableCell className="font-medium">{contract.customerName}</TableCell><TableCell><p className="font-medium text-slate-800">{contract.contractNumber}</p><p className="mt-1 text-xs text-muted-foreground">{contract.title}</p></TableCell><TableCell>{format(new Date(contract.paymentDueAt), 'yyyy-MM-dd')}</TableCell><TableCell><Badge tone="danger">{contract.overdueDays} 天</Badge></TableCell><TableCell className="text-right font-semibold text-rose-700">{formatCents(contract.outstandingAmountCents)}</TableCell></TableRow>)}
               {data?.overdueReceivables.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>暂无逾期应收合同</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="flex flex-row items-center gap-2 border-b border-border px-5 py-4">
+          <CircleAlert aria-hidden="true" className="size-5 text-rose-600" />
+          <div><CardTitle>逾期跟进任务</CardTitle><p className="mt-1 text-xs text-muted-foreground">按截止时间排序，优先处理最早逾期的客户事项。</p></div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>客户</TableHead><TableHead>任务</TableHead><TableHead>负责人</TableHead><TableHead>截止时间</TableHead><TableHead>逾期天数</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {data?.overdueTasks.map((task) => <TableRow key={task.id}><TableCell className="font-medium"><Link className="hover:text-primary hover:underline" to={`/customers/${task.customerId}`}>{task.customerName}</Link></TableCell><TableCell><p className="font-medium text-slate-800">{task.title}</p>{task.priority === 'High' && <Badge className="mt-1" tone="danger">高优先级</Badge>}</TableCell><TableCell>{task.assigneeName}</TableCell><TableCell>{format(new Date(task.dueAt), 'yyyy-MM-dd HH:mm')}</TableCell><TableCell><Badge tone="danger">{task.overdueDays} 天</Badge></TableCell></TableRow>)}
+              {data?.overdueTasks.length === 0 && <TableRow><TableCell className="py-8 text-center text-muted-foreground" colSpan={5}>暂无逾期跟进任务</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>

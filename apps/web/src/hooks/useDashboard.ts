@@ -8,6 +8,7 @@ export interface DashboardData {
   newLeads: number
   wonNetProfitCents: number
   weightedForecastCents: number
+  taskSummary: { openCount: number; overdueCount: number }
   stageDistribution: Array<{ stage: DealStage; count: number }>
   funnelDistribution: Array<{ name: string; value: number; stage: DealStage }>
   renewalDeals: Array<{
@@ -30,6 +31,16 @@ export interface DashboardData {
     totalAmountCents: number
     receivedAmountCents: number
     outstandingAmountCents: number
+    overdueDays: number
+  }>
+  overdueTasks: Array<{
+    id: string
+    customerId: string
+    customerName: string
+    title: string
+    dueAt: string
+    priority: 'Low' | 'Normal' | 'High'
+    assigneeName: string
     overdueDays: number
   }>
 }
