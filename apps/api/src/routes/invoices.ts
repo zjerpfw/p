@@ -186,7 +186,7 @@ invoiceRoutes.put('/:id', async (c) => {
   const parsed = updateInvoicePayloadSchema.safeParse(body)
   if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '发票资料格式无效' }, 400)
   const issuedAt = parseOptionalDate(parsed.data.issued_at)
-  if (issuedAt === undefined) return c.json({ error: '开票日期格式无效' }, 400)
+  if (parsed.data.issued_at !== undefined && issuedAt === undefined) return c.json({ error: '开票日期格式无效' }, 400)
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
   const db = createDb(c.env.DB)

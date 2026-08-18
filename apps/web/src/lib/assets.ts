@@ -125,7 +125,7 @@ export interface PaymentPayload {
   claimed_by?: string
 }
 
-export type UpdatePaymentPayload = Partial<Omit<PaymentPayload, 'contract_id' | 'invoice_id'>>
+export type UpdatePaymentPayload = Partial<Omit<PaymentPayload, 'contract_id'>>
 
 export interface AssetListFilters {
   customer_id?: string

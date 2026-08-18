@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EditContractSheet } from '@/components/customers/EditContractSheet'
+import { EditInvoiceSheet } from '@/components/customers/EditInvoiceSheet'
+import { EditPaymentSheet } from '@/components/customers/EditPaymentSheet'
 import { useContracts, useInvoices, usePayments } from '@/hooks/useAssets'
-import type { ContractDto } from '@/lib/assets'
+import type { ContractDto, InvoiceDto, PaymentDto } from '@/lib/assets'
 import { formatCents } from '@/lib/money'
 
 interface CustomerFinancePanelProps {
@@ -49,6 +51,8 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
   const invoices = invoicesQuery.data?.data ?? []
   const payments = paymentsQuery.data?.data ?? []
   const [editingContract, setEditingContract] = useState<ContractDto | null>(null)
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceDto | null>(null)
+  const [editingPayment, setEditingPayment] = useState<PaymentDto | null>(null)
 
   return (
     <Card className="gap-0 py-0">
@@ -88,12 +92,12 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
 
               <div className="border-t border-slate-100 bg-slate-50/70 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-600"><ReceiptText className="size-3.5" />开票记录</p>
-                {contractInvoices.length > 0 ? <div className="mt-2 space-y-1.5">{contractInvoices.map((invoice) => <div className="flex items-center justify-between gap-2 text-xs" key={invoice.id}><span className="min-w-0 truncate">{invoice.invoice_number ?? invoice.title}</span><span className="shrink-0 font-medium">{formatCents(invoice.amount_cents)}</span><Badge tone={invoice.status === 'Issued' ? 'success' : invoice.status === 'Voided' ? 'danger' : 'neutral'}>{invoiceStatusLabel(invoice.status)}</Badge></div>)}</div> : <p className="mt-1.5 text-xs text-muted-foreground">暂无开票记录</p>}
+                {contractInvoices.length > 0 ? <div className="mt-2 space-y-1.5">{contractInvoices.map((invoice) => <div className="flex items-center justify-between gap-2 text-xs" key={invoice.id}><span className="min-w-0 flex-1 truncate">{invoice.invoice_number ?? invoice.title}</span><span className="shrink-0 font-medium">{formatCents(invoice.amount_cents)}</span><Badge tone={invoice.status === 'Issued' ? 'success' : invoice.status === 'Voided' ? 'danger' : 'neutral'}>{invoiceStatusLabel(invoice.status)}</Badge>{canManage && <Button aria-label={`编辑发票 ${invoice.invoice_number ?? invoice.title}`} onClick={() => setEditingInvoice(invoice)} size="icon-xs" title="编辑发票" type="button" variant="ghost"><Pencil /></Button>}</div>)}</div> : <p className="mt-1.5 text-xs text-muted-foreground">暂无开票记录</p>}
               </div>
 
               <div className="border-t border-slate-100 bg-emerald-50/30 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-600"><WalletCards className="size-3.5" />回款流水</p>
-                {contractPayments.length > 0 ? <div className="mt-2 space-y-1.5">{contractPayments.map((payment) => <div className="flex items-center justify-between gap-2 text-xs" key={payment.id}><span className="min-w-0 truncate">{payment.payment_number} · {formatDate(payment.paid_at)}</span><span className="shrink-0 font-semibold text-emerald-700">{formatCents(payment.amount_cents)}</span><Badge tone={payment.status === 'Received' ? 'success' : payment.status === 'Reversed' ? 'danger' : 'warning'}>{paymentStatusLabel(payment.status)}</Badge></div>)}</div> : <p className="mt-1.5 text-xs text-muted-foreground">暂无回款记录</p>}
+                {contractPayments.length > 0 ? <div className="mt-2 space-y-1.5">{contractPayments.map((payment) => <div className="flex items-center justify-between gap-2 text-xs" key={payment.id}><span className="min-w-0 flex-1 truncate">{payment.payment_number} · {formatDate(payment.paid_at)}</span><span className="shrink-0 font-semibold text-emerald-700">{formatCents(payment.amount_cents)}</span><Badge tone={payment.status === 'Received' ? 'success' : payment.status === 'Reversed' ? 'danger' : 'warning'}>{paymentStatusLabel(payment.status)}</Badge>{canManage && <Button aria-label={`编辑回款 ${payment.payment_number}`} onClick={() => setEditingPayment(payment)} size="icon-xs" title="编辑回款" type="button" variant="ghost"><Pencil /></Button>}</div>)}</div> : <p className="mt-1.5 text-xs text-muted-foreground">暂无回款记录</p>}
               </div>
             </article>
           )
@@ -101,6 +105,8 @@ export function CustomerFinancePanel({ customerId, canManage, onCreateContract, 
         {!isLoading && !error && contracts.length === 0 && <div className="py-5 text-center text-sm text-muted-foreground"><FileText className="mx-auto mb-2 size-5" />暂无合同与财务记录</div>}
       </CardContent>
       <EditContractSheet contract={editingContract} onOpenChange={(open) => { if (!open) setEditingContract(null) }} open={Boolean(editingContract)} />
+      <EditInvoiceSheet invoice={editingInvoice} onOpenChange={(open) => { if (!open) setEditingInvoice(null) }} open={Boolean(editingInvoice)} />
+      <EditPaymentSheet invoices={invoices} onOpenChange={(open) => { if (!open) setEditingPayment(null) }} open={Boolean(editingPayment)} payment={editingPayment} />
     </Card>
   )
 }
