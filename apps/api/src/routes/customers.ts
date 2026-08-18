@@ -215,6 +215,20 @@ async function findDuplicateCustomer(
   return customer ?? null
 }
 
+function customerSearchCondition(search: string | undefined) {
+  if (!search) return undefined
+  const pattern = `%${search}%`
+  return or(
+    like(customers.name, pattern),
+    like(customers.contactPhone, pattern),
+    sql`exists (
+      select 1 from ${contacts}
+      where ${contacts.customerId} = ${customers.id}
+        and (${contacts.name} like ${pattern} or ${contacts.phone} like ${pattern})
+    )`,
+  )
+}
+
 customerRoutes.post('/', async (c) => {
   let body: CreateCustomerPayload
 
@@ -557,7 +571,7 @@ customerRoutes.get('/', async (c) => {
   const staleFollowUpAt = new Date(Date.now() - 7 * 86_400_000)
   const filters = [
     eq(customers.isDeleted, false),
-    search ? like(customers.name, `%${search}%`) : undefined,
+    customerSearchCondition(search),
     statusResult?.success ? eq(customers.status, statusResult.data) : undefined,
     tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
     followUp === 'stale' ? sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})` : undefined,
@@ -622,7 +636,7 @@ customerRoutes.get('/export/csv', async (c) => {
     .leftJoin(users, eq(customers.ownerId, users.id))
     .where(and(
       eq(customers.isDeleted, false),
-      search ? like(customers.name, `%${search}%`) : undefined,
+      customerSearchCondition(search),
       statusResult?.success ? eq(customers.status, statusResult.data) : undefined,
       tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
       followUp === 'stale' ? sql`not exists (select 1 from ${activities} where ${activities.customerId} = ${customers.id} and ${activities.createdAt} >= ${staleFollowUpAt})` : undefined,

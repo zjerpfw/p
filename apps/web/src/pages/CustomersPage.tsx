@@ -127,7 +127,7 @@ export default function CustomersPage() {
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row">
         <div className="relative flex-1">
           <Search aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input className="pl-9 pr-9" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户名称" value={search} />
+          <Input className="pl-9 pr-9" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户、电话或联系人" value={search} />
           {search && <Button aria-label="清空客户搜索" className="absolute right-1 top-0.5" onClick={() => updateSearch('')} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" /></Button>}
         </div>
         <select aria-label="客户状态筛选" className="h-11 rounded-md border border-input bg-background px-3 text-sm md:h-9 md:w-36" onChange={(event) => updateStatus(event.target.value)} value={status}>
