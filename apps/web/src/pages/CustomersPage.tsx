@@ -11,6 +11,7 @@ import { DirectWonCustomerModal } from '@/components/customers/DirectWonCustomer
 import { Input } from '@/components/ui/input'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerTags } from '@/hooks/useCustomerTags'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -21,12 +22,14 @@ export default function CustomersPage() {
   const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [tagId, setTagId] = useState('')
   const [page, setPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [directWonDialogOpen, setDirectWonDialogOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const debouncedSearch = useDebouncedValue(search.trim())
-  const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, page })
+  const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, tagId, page })
+  const tagsQuery = useCustomerTags()
   const statuses = ['Active', 'Inactive']
 
   useEffect(() => {
@@ -47,10 +50,16 @@ export default function CustomersPage() {
     setPage(1)
   }
 
+  function updateTag(value: string) {
+    setTagId(value)
+    setPage(1)
+  }
+
   async function exportCustomers() {
     const params = new URLSearchParams()
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (status) params.set('status', status)
+    if (tagId) params.set('tag_id', tagId)
     try {
       await downloadApiFile(`/api/customers/export/csv?${params.toString()}`, '客户清单.csv')
       toast.success('客户清单已开始下载')
@@ -79,6 +88,10 @@ export default function CustomersPage() {
         <select aria-label="客户状态筛选" className="h-11 rounded-md border border-input bg-background px-3 text-sm md:h-9 md:w-36" onChange={(event) => updateStatus(event.target.value)} value={status}>
           <option value="">全部状态</option>
           {statuses.map((item) => <option key={item} value={item}>{getCustomerStatusLabel(item)}</option>)}
+        </select>
+        <select aria-label="客户标签筛选" className="h-11 rounded-md border border-input bg-background px-3 text-sm md:h-9 md:w-40" disabled={tagsQuery.isLoading} onChange={(event) => updateTag(event.target.value)} value={tagId}>
+          <option value="">全部标签</option>
+          {tagsQuery.data?.tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
         </select>
         </CardContent>
       </Card>

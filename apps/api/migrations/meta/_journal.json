@@ -183,6 +183,13 @@
       "when": 1787026400176,
       "tag": "0025_talented_xorn",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1787028030777,
+      "tag": "0026_redundant_malice",
+      "breakpoints": true
     }
   ]
 }

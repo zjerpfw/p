@@ -120,6 +120,32 @@ export const customers = sqliteTable(
   ],
 )
 
+export const customerTags = sqliteTable(
+  'customer_tags',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('customer_tags_name_unique').on(table.name),
+  ],
+)
+
+export const customerTagAssignments = sqliteTable(
+  'customer_tag_assignments',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id').notNull().references(() => customers.id),
+    tagId: text('tag_id').notNull().references(() => customerTags.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('customer_tag_assignments_unique').on(table.customerId, table.tagId),
+    index('customer_tag_assignments_tag_customer_idx').on(table.tagId, table.customerId),
+  ],
+)
+
 export const contacts = sqliteTable(
   'contacts',
   {

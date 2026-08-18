@@ -26,6 +26,7 @@ export interface PaginatedResponse<T> {
 export interface CustomerFilters {
   search?: string
   status?: string
+  tagId?: string
   page?: number
   limit?: number
   enabled?: boolean
@@ -35,6 +36,7 @@ export function useCustomers(filters: CustomerFilters = {}) {
   const params = new URLSearchParams()
   if (filters.search) params.set('search', filters.search)
   if (filters.status) params.set('status', filters.status)
+  if (filters.tagId) params.set('tag_id', filters.tagId)
   params.set('page', String(filters.page ?? 1))
   params.set('limit', String(filters.limit ?? 10))
   const query = params.toString()

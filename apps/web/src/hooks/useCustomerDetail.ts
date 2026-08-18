@@ -5,6 +5,11 @@ import type { Deal } from './useDeals'
 import type { Task } from './useTasks'
 import { apiFetch } from '@/lib/api'
 
+export interface CustomerTag {
+  id: string
+  name: string
+}
+
 export interface Activity {
   id: string
   dealId: string
@@ -45,6 +50,7 @@ export type CustomerTask = Pick<Task, 'id' | 'customerId' | 'dealId' | 'title' |
 
 interface CustomerDetailResponse {
   customer: Customer
+  tags: CustomerTag[]
   contacts: Contact[]
   tasks: CustomerTask[]
   deals: Omit<Deal, 'customerName'>[]

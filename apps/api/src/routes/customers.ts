@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
-import { activities, attachments, contacts, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
-import { and, asc, count, desc, eq, inArray, like } from 'drizzle-orm'
+import { activities, attachments, contacts, customerTagAssignments, customerTags, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
+import { and, asc, count, desc, eq, inArray, like, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -36,6 +36,11 @@ interface UpdateCustomerPayload {
   status?: unknown
   address?: unknown
 }
+
+const tagNameSchema = z.string().trim().min(1, '请填写标签名称').max(40, '标签名称不能超过 40 个字符')
+const customerTagIdsSchema = z.object({
+  tag_ids: z.array(z.string().uuid('标签编号无效')).max(20, '每个客户最多添加 20 个标签'),
+})
 
 interface ContactPayload {
   name?: unknown
@@ -373,12 +378,15 @@ customerRoutes.get('/', async (c) => {
 
   const search = c.req.query('search')?.trim().slice(0, 100)
   const status = c.req.query('status')?.trim().slice(0, 50)
+  const tagId = c.req.query('tag_id')?.trim()
+  if (tagId && !z.string().uuid().safeParse(tagId).success) return c.json({ error: '标签编号无效' }, 400)
   const page = parsePagination(c.req.query('page'), 1, 1_000_000)
   const limit = parsePagination(c.req.query('limit'), 10, 100)
   const filters = [
     eq(customers.isDeleted, false),
     search ? like(customers.name, `%${search}%`) : undefined,
     status ? eq(customers.status, status) : undefined,
+    tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
     actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
   ].filter((filter): filter is NonNullable<typeof filter> => Boolean(filter))
   const where = filters.length ? and(...filters) : undefined
@@ -401,6 +409,8 @@ customerRoutes.get('/export/csv', async (c) => {
 
   const search = c.req.query('search')?.trim().slice(0, 100)
   const status = c.req.query('status')?.trim().slice(0, 50)
+  const tagId = c.req.query('tag_id')?.trim()
+  if (tagId && !z.string().uuid().safeParse(tagId).success) return c.json({ error: '标签编号无效' }, 400)
   const db = createDb(c.env.DB)
   const rows = await db
     .select({
@@ -418,6 +428,7 @@ customerRoutes.get('/export/csv', async (c) => {
       eq(customers.isDeleted, false),
       search ? like(customers.name, `%${search}%`) : undefined,
       status ? eq(customers.status, status) : undefined,
+      tagId ? sql`exists (select 1 from ${customerTagAssignments} where ${customerTagAssignments.customerId} = ${customers.id} and ${customerTagAssignments.tagId} = ${tagId})` : undefined,
       actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
     ))
     .orderBy(desc(customers.createdAt))
@@ -438,6 +449,69 @@ customerRoutes.get('/export/csv', async (c) => {
   )
 })
 
+customerRoutes.get('/tags', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  const db = createDb(c.env.DB)
+  const tags = await db.select({ id: customerTags.id, name: customerTags.name }).from(customerTags).orderBy(asc(customerTags.name))
+  return c.json({ tags })
+})
+
+customerRoutes.post('/tags', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  let body: unknown
+  try { body = await c.req.json() } catch { return c.json({ error: '请求体必须是 JSON' }, 400) }
+  const parsed = tagNameSchema.safeParse(typeof body === 'object' && body !== null && 'name' in body ? body.name : undefined)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '标签资料无效' }, 400)
+  const db = createDb(c.env.DB)
+  const tag = { id: crypto.randomUUID(), name: parsed.data, createdAt: new Date() }
+  try {
+    await db.insert(customerTags).values(tag)
+  } catch (error) {
+    if (error instanceof Error && /unique/i.test(error.message)) return c.json({ error: '标签名称已存在' }, 409)
+    throw error
+  }
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'CustomerTag', entityId: tag.id, action: 'Created', after: tag }))
+  return c.json({ tag }, 201)
+})
+
+customerRoutes.put('/:id/tags', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  let body: unknown
+  try { body = await c.req.json() } catch { return c.json({ error: '请求体必须是 JSON' }, 400) }
+  const parsed = customerTagIdsSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '标签资料无效' }, 400)
+  const tagIds = [...new Set(parsed.data.tag_ids)]
+  const db = createDb(c.env.DB)
+  const [customer] = await db.select({ id: customers.id }).from(customers).where(and(
+    eq(customers.id, c.req.param('id')),
+    eq(customers.isDeleted, false),
+    actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+  )).limit(1)
+  if (!customer) return c.json({ error: '客户不存在或无权维护标签' }, 404)
+
+  const [beforeTags, availableTags] = await Promise.all([
+    db.select({ id: customerTags.id, name: customerTags.name })
+      .from(customerTagAssignments)
+      .innerJoin(customerTags, eq(customerTagAssignments.tagId, customerTags.id))
+      .where(eq(customerTagAssignments.customerId, customer.id)),
+    tagIds.length > 0
+      ? db.select({ id: customerTags.id, name: customerTags.name }).from(customerTags).where(inArray(customerTags.id, tagIds))
+      : Promise.resolve([]),
+  ])
+  if (availableTags.length !== tagIds.length) return c.json({ error: '存在不存在的标签' }, 400)
+
+  const now = new Date()
+  await db.batch([
+    db.delete(customerTagAssignments).where(eq(customerTagAssignments.customerId, customer.id)),
+    ...tagIds.map((tagId) => db.insert(customerTagAssignments).values({ id: crypto.randomUUID(), customerId: customer.id, tagId, createdAt: now })),
+  ])
+  c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Customer', entityId: customer.id, action: 'Updated', before: { tags: beforeTags }, after: { tags: availableTags } }))
+  return c.json({ tags: availableTags })
+})
+
 customerRoutes.get('/:id', async (c) => {
   const db = createDb(c.env.DB)
   const actor = getAuthenticatedActor(c)
@@ -454,7 +528,7 @@ customerRoutes.get('/:id', async (c) => {
     return c.json({ error: '客户不存在' }, 404)
   }
 
-  const [customerDeals, customerContacts, customerTasks] = await Promise.all([
+  const [customerDeals, customerContacts, customerTasks, tags] = await Promise.all([
     db
     .select()
     .from(deals)
@@ -484,6 +558,11 @@ customerRoutes.get('/:id', async (c) => {
       .from(tasks)
       .where(eq(tasks.customerId, customer.id))
       .orderBy(asc(tasks.status), asc(tasks.dueAt)),
+    db.select({ id: customerTags.id, name: customerTags.name })
+      .from(customerTagAssignments)
+      .innerJoin(customerTags, eq(customerTagAssignments.tagId, customerTags.id))
+      .where(eq(customerTagAssignments.customerId, customer.id))
+      .orderBy(asc(customerTags.name)),
   ])
 
   const customerActivities = await db
@@ -519,6 +598,7 @@ customerRoutes.get('/:id', async (c) => {
 
   return c.json({
     customer,
+    tags,
     contacts: customerContacts,
     tasks: customerTasks,
     deals: customerDeals,
