@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Customer } from './useCustomers'
 import type { Deal } from './useDeals'
+import type { Task } from './useTasks'
 import { apiFetch } from '@/lib/api'
 
 export interface Activity {
@@ -40,9 +41,12 @@ export interface Contact {
   updatedAt: string
 }
 
+export type CustomerTask = Pick<Task, 'id' | 'customerId' | 'dealId' | 'title' | 'description' | 'assigneeId' | 'dueAt' | 'priority' | 'status' | 'completedAt' | 'createdBy' | 'createdAt' | 'updatedAt'>
+
 interface CustomerDetailResponse {
   customer: Customer
   contacts: Contact[]
+  tasks: CustomerTask[]
   deals: Omit<Deal, 'customerName'>[]
   activities: Activity[]
   attachments: Attachment[]

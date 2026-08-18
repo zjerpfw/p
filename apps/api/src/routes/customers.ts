@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
-import { activities, attachments, contacts, customers, dealSplits, deals, users } from '@crm/db/schema'
-import { and, count, desc, eq, inArray, like } from 'drizzle-orm'
+import { activities, attachments, contacts, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
+import { and, asc, count, desc, eq, inArray, like } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -377,7 +377,7 @@ customerRoutes.get('/:id', async (c) => {
     return c.json({ error: '客户不存在' }, 404)
   }
 
-  const [customerDeals, customerContacts] = await Promise.all([
+  const [customerDeals, customerContacts, customerTasks] = await Promise.all([
     db
     .select()
     .from(deals)
@@ -388,6 +388,25 @@ customerRoutes.get('/:id', async (c) => {
       .from(contacts)
       .where(eq(contacts.customerId, customer.id))
       .orderBy(desc(contacts.isPrimary), desc(contacts.updatedAt)),
+    db
+      .select({
+        id: tasks.id,
+        customerId: tasks.customerId,
+        dealId: tasks.dealId,
+        title: tasks.title,
+        description: tasks.description,
+        assigneeId: tasks.assigneeId,
+        dueAt: tasks.dueAt,
+        priority: tasks.priority,
+        status: tasks.status,
+        completedAt: tasks.completedAt,
+        createdBy: tasks.createdBy,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .where(eq(tasks.customerId, customer.id))
+      .orderBy(asc(tasks.status), asc(tasks.dueAt)),
   ])
 
   const customerActivities = await db
@@ -424,6 +443,7 @@ customerRoutes.get('/:id', async (c) => {
   return c.json({
     customer,
     contacts: customerContacts,
+    tasks: customerTasks,
     deals: customerDeals,
     activities: customerActivities,
     attachments: customerAttachments,

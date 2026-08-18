@@ -25,6 +25,8 @@ export const paymentStatuses = ['Pending', 'Received', 'Reversed'] as const
 export const assetTypes = ['Contract', 'Invoice', 'PaymentProof'] as const
 export const assetUploadStatuses = ['Pending', 'Uploaded', 'Failed', 'Deleted'] as const
 export const notificationTypes = ['RenewalReminder'] as const
+export const taskStatuses = ['Open', 'Completed'] as const
+export const taskPriorities = ['Low', 'Normal', 'High'] as const
 
 export const users = sqliteTable(
   'users',
@@ -159,6 +161,36 @@ export const deals = sqliteTable(
       table.createdAt,
       table.id,
     ),
+  ],
+)
+
+export const tasks = sqliteTable(
+  'tasks',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    dealId: text('deal_id').references(() => deals.id),
+    title: text('title').notNull(),
+    description: text('description'),
+    assigneeId: text('assignee_id')
+      .notNull()
+      .references(() => users.id),
+    dueAt: integer('due_at', { mode: 'timestamp' }).notNull(),
+    priority: text('priority', { enum: taskPriorities }).notNull().default('Normal'),
+    status: text('status', { enum: taskStatuses }).notNull().default('Open'),
+    completedAt: integer('completed_at', { mode: 'timestamp' }),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  (table) => [
+    index('tasks_customer_id_idx').on(table.customerId),
+    index('tasks_assignee_status_due_idx').on(table.assigneeId, table.status, table.dueAt),
+    index('tasks_deal_id_idx').on(table.dealId),
   ],
 )
 
