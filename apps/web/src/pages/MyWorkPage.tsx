@@ -1,12 +1,15 @@
 // apps/web/src/pages/MyWorkPage.tsx
 // apps/web/src/pages/MyWorkPage.tsx
 import { format, isToday, isPast } from 'date-fns'
-import { CalendarCheck, Check, ClipboardList, MapPin, Square } from 'lucide-react'
+import { CalendarCheck, Check, ClipboardList, MapPin, Pencil, Square } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { EditTaskSheet, type EditableTask } from '@/components/customers/EditTaskSheet'
 import { useActivities } from '@/hooks/useActivities'
 import { useDeals } from '@/hooks/useDeals'
 import { useTasks } from '@/hooks/useTasks'
@@ -18,6 +21,7 @@ export default function MyWorkPage() {
   const dealsQuery = useDeals({ limit: 5 })
   const tasksQuery = useTasks({ status: 'Open', limit: 30 })
   const queryClient = useQueryClient()
+  const [editingTask, setEditingTask] = useState<EditableTask | null>(null)
   const completeTask = useMutation({
     mutationFn: (taskId: string) => apiFetch(`/api/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'Completed' }) }),
     onSuccess: async () => {
@@ -47,7 +51,7 @@ export default function MyWorkPage() {
         <Card className="gap-0 py-0"><CardHeader className="border-b border-border px-5 py-4"><CardTitle>待完成任务</CardTitle></CardHeader><CardContent className="divide-y divide-border p-0">
           {tasksQuery.isLoading && <p className="p-5 text-sm text-muted-foreground">正在加载任务...</p>}
           {tasksQuery.isError && <p className="p-5 text-sm text-destructive">任务加载失败</p>}
-          {tasksQuery.data?.tasks.map((task) => { const overdue = isPast(new Date(task.dueAt)) ; return <div className="flex items-start gap-3 px-5 py-4" key={task.id}><button aria-label={`完成任务 ${task.title}`} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" disabled={completeTask.isPending} onClick={() => completeTask.mutate(task.id)} type="button"><Square aria-hidden="true" className="size-4" /></button><Link className="min-w-0 flex-1 hover:text-primary" to={`/customers/${task.customerId}`}><p className="font-medium">{task.title}</p><p className="mt-1 text-sm text-muted-foreground">{task.customerName}{task.dealProductName ? ` · ${task.dealProductName}` : ''}</p><p className={`mt-1 text-xs ${overdue ? 'font-medium text-rose-600' : 'text-muted-foreground'}`}>{overdue ? '已逾期 · ' : '截止 '}{format(new Date(task.dueAt), 'MM-dd HH:mm')}{task.priority === 'High' ? ' · 高优先级' : ''}</p></Link></div> })}
+          {tasksQuery.data?.tasks.map((task) => { const overdue = isPast(new Date(task.dueAt)) ; return <div className="flex items-start gap-3 px-5 py-4" key={task.id}><button aria-label={`完成任务 ${task.title}`} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" disabled={completeTask.isPending} onClick={() => completeTask.mutate(task.id)} type="button"><Square aria-hidden="true" className="size-4" /></button><Link className="min-w-0 flex-1 hover:text-primary" to={`/customers/${task.customerId}`}><p className="font-medium">{task.title}</p><p className="mt-1 text-sm text-muted-foreground">{task.customerName}{task.dealProductName ? ` · ${task.dealProductName}` : ''}</p><p className={`mt-1 text-xs ${overdue ? 'font-medium text-rose-600' : 'text-muted-foreground'}`}>{overdue ? '已逾期 · ' : '截止 '}{format(new Date(task.dueAt), 'MM-dd HH:mm')}{task.priority === 'High' ? ' · 高优先级' : ''}</p></Link><Button aria-label={`编辑任务 ${task.title}`} onClick={() => setEditingTask(task)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></div> })}
           {!tasksQuery.isLoading && !tasksQuery.isError && tasksQuery.data?.tasks.length === 0 && <p className="p-5 text-sm text-muted-foreground">暂无待完成任务</p>}
         </CardContent></Card>
         <Card className="gap-0 py-0"><CardHeader className="border-b border-border px-5 py-4"><CardTitle>待推进商机</CardTitle></CardHeader><CardContent className="divide-y divide-border p-0">
@@ -57,6 +61,7 @@ export default function MyWorkPage() {
           {!dealsQuery.isLoading && !dealsQuery.isError && dealsQuery.data?.data.length === 0 && <p className="p-5 text-sm text-muted-foreground">暂无待推进商机</p>}
         </CardContent></Card>
       </div>
+      <EditTaskSheet onOpenChange={(open) => { if (!open) setEditingTask(null) }} open={Boolean(editingTask)} task={editingTask} />
     </section>
   )
 }

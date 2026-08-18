@@ -14,6 +14,7 @@ import { CustomerFinancePanel } from '@/components/customers/CustomerFinancePane
 import { ContactSheet } from '@/components/customers/ContactSheet'
 import { CustomerTagManager } from '@/components/customers/CustomerTagManager'
 import { TaskSheet } from '@/components/customers/TaskSheet'
+import { EditTaskSheet, type EditableTask } from '@/components/customers/EditTaskSheet'
 import { EditCustomerModal } from '@/components/customers/EditCustomerModal'
 import { RenewCustomerSheet, type RenewCustomerTarget } from '@/components/customers/RenewCustomerSheet'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -74,6 +75,7 @@ export default function CustomerDetailPage() {
   const [contactSheetOpen, setContactSheetOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [taskSheetOpen, setTaskSheetOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<EditableTask | null>(null)
 
   const customer = data?.customer
   const assetCustomerId = customer?.id ?? ''
@@ -283,7 +285,7 @@ export default function CustomerDetailPage() {
           <Card className="gap-0 overflow-hidden py-0">
             <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-4"><CardTitle>跟进任务</CardTitle><Button aria-label="新建跟进任务" onClick={() => setTaskSheetOpen(true)} size="icon-sm" type="button" variant="ghost"><Plus aria-hidden="true" /></Button></CardHeader>
             <CardContent className="divide-y divide-border p-0">
-              {data?.tasks.map((task) => <article className="flex items-start gap-3 px-5 py-4" key={task.id}><button aria-label={task.status === 'Completed' ? `任务 ${task.title} 已完成` : `完成任务 ${task.title}`} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" disabled={task.status === 'Completed' || updateTask.isPending} onClick={() => updateTask.mutate(task.id)} type="button">{task.status === 'Completed' ? <Check aria-hidden="true" className="size-4 text-emerald-600" /> : <Square aria-hidden="true" className="size-4" />}</button><div className="min-w-0 flex-1"><p className={`text-sm font-medium ${task.status === 'Completed' ? 'text-muted-foreground line-through' : 'text-slate-800'}`}>{task.title}</p><p className="mt-1 text-xs text-muted-foreground">{task.status === 'Completed' ? '已完成' : `截止 ${format(new Date(task.dueAt), 'MM-dd HH:mm')}`}{task.priority === 'High' && task.status !== 'Completed' ? ' · 高优先级' : ''}</p>{task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}</div></article>)}
+              {data?.tasks.map((task) => <article className="flex items-start gap-3 px-5 py-4" key={task.id}><button aria-label={task.status === 'Completed' ? `任务 ${task.title} 已完成` : `完成任务 ${task.title}`} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" disabled={task.status === 'Completed' || updateTask.isPending} onClick={() => updateTask.mutate(task.id)} type="button">{task.status === 'Completed' ? <Check aria-hidden="true" className="size-4 text-emerald-600" /> : <Square aria-hidden="true" className="size-4" />}</button><div className="min-w-0 flex-1"><p className={`text-sm font-medium ${task.status === 'Completed' ? 'text-muted-foreground line-through' : 'text-slate-800'}`}>{task.title}</p><p className="mt-1 text-xs text-muted-foreground">{task.status === 'Completed' ? '已完成' : `截止 ${format(new Date(task.dueAt), 'MM-dd HH:mm')}`}{task.priority === 'High' && task.status !== 'Completed' ? ' · 高优先级' : ''}</p>{task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}</div><Button aria-label={`编辑任务 ${task.title}`} onClick={() => setEditingTask(task)} size="icon-xs" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></article>)}
               {data?.tasks.length === 0 && <div className="px-5 py-6 text-sm text-muted-foreground"><p>暂无跟进任务</p><Button className="mt-3" onClick={() => setTaskSheetOpen(true)} size="sm" type="button" variant="outline"><Plus aria-hidden="true" />创建任务</Button></div>}
             </CardContent>
           </Card>
@@ -350,6 +352,7 @@ export default function CustomerDetailPage() {
       <EditCustomerModal customer={editCustomerOpen ? customer : null} onOpenChange={setEditCustomerOpen} />
       <ContactSheet contact={editingContact} customerId={customer.id} onOpenChange={(open) => { setContactSheetOpen(open); if (!open) setEditingContact(null) }} open={contactSheetOpen} />
       <TaskSheet customerId={customer.id} deals={data?.deals.map((deal) => ({ id: deal.id, productName: deal.productName, stage: deal.stage })) ?? []} onOpenChange={setTaskSheetOpen} open={taskSheetOpen} />
+      <EditTaskSheet onOpenChange={(open) => { if (!open) setEditingTask(null) }} open={Boolean(editingTask)} task={editingTask} />
       <RenewCustomerSheet onOpenChange={(open) => !open && setRenewTarget(null)} target={renewTarget} />
       <CreateContractSheet
         customerId={customer.id}

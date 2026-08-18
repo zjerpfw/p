@@ -23,7 +23,8 @@ interface TaskSheetProps {
 function defaultDueAt() {
   const date = new Date(Date.now() + 24 * 60 * 60 * 1000)
   date.setMinutes(0, 0, 0)
-  return date.toISOString().slice(0, 16)
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
 }
 
 export function TaskSheet({ customerId, deals, open, onOpenChange }: TaskSheetProps) {
