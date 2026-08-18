@@ -1,7 +1,7 @@
 // apps/api/src/routes/tasks.ts
 import { createDb } from '@crm/db/client'
 import { customers, deals, taskPriorities, tasks, taskStatuses, users } from '@crm/db/schema'
-import { and, asc, desc, eq, or } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -33,6 +33,15 @@ const updateTaskSchema = z.object({
   priority: z.enum(taskPriorities).optional(),
   status: z.enum(taskStatuses).optional(),
   assignee_id: z.string().min(1, '任务负责人编号无效').optional(),
+})
+
+const batchTaskSchema = z.object({
+  customer_ids: z.array(z.string().min(1, '客户编号不能为空')).min(1, '请至少选择一位客户').max(50, '单次最多创建 50 个任务'),
+  title: z.string().trim().min(1, '请填写任务标题').max(200, '任务标题不能超过 200 个字符'),
+  description: z.string().trim().max(2_000, '任务描述不能超过 2000 个字符').optional().default(''),
+  assignee_id: z.string().min(1, '任务负责人编号无效').optional(),
+  due_at: z.union([z.string(), z.number()]),
+  priority: z.enum(taskPriorities).optional().default('Normal'),
 })
 
 function parseDate(value: string | number | undefined) {
@@ -169,6 +178,49 @@ taskRoutes.post('/', async (c) => {
   await db.insert(tasks).values(task)
   c.executionCtx.waitUntil(writeAuditLog(c.env, { actorId: actor.id, entityType: 'Task', entityId: task.id, action: 'Created', after: task }))
   return c.json({ task }, 201)
+})
+
+taskRoutes.post('/batch', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  let body: unknown
+  try { body = await c.req.json() } catch { return c.json({ error: '请求体必须是 JSON' }, 400) }
+  const parsed = batchTaskSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '批量任务资料格式无效' }, 400)
+  const customerIds = [...new Set(parsed.data.customer_ids)]
+  const dueAt = parseDate(parsed.data.due_at)
+  if (!dueAt) return c.json({ error: '截止时间无效' }, 400)
+
+  const assigneeId = parsed.data.assignee_id ?? actor.id
+  if (actor.role !== 'admin' && assigneeId !== actor.id) return c.json({ error: '普通销售只能将任务指派给自己' }, 403)
+  const db = createDb(c.env.DB)
+  const [visibleCustomers, assignees] = await Promise.all([
+    db.select({ id: customers.id }).from(customers).where(and(
+      inArray(customers.id, customerIds),
+      eq(customers.isDeleted, false),
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    )),
+    db.select({ id: users.id }).from(users).where(eq(users.id, assigneeId)).limit(1),
+  ])
+  if (visibleCustomers.length !== customerIds.length) return c.json({ error: '存在不存在或无权处理的客户' }, 404)
+  if (assignees.length === 0) return c.json({ error: '任务负责人不存在' }, 400)
+
+  const now = new Date()
+  const createdTasks = customerIds.map((customerId) => ({
+    id: crypto.randomUUID(), customerId, dealId: null, title: parsed.data.title,
+    description: parsed.data.description || null, assigneeId, dueAt, priority: parsed.data.priority,
+    status: 'Open' as const, completedAt: null, createdBy: actor.id, createdAt: now, updatedAt: now,
+  }))
+  const [firstTask, ...remainingTasks] = createdTasks
+  if (!firstTask) return c.json({ error: '请至少选择一位客户' }, 400)
+  await db.batch([
+    db.insert(tasks).values(firstTask),
+    ...remainingTasks.map((task) => db.insert(tasks).values(task)),
+  ])
+  c.executionCtx.waitUntil(Promise.all(createdTasks.map((task) => writeAuditLog(c.env, {
+    actorId: actor.id, entityType: 'Task', entityId: task.id, action: 'Created', after: task,
+  }))))
+  return c.json({ created: createdTasks.length, taskIds: createdTasks.map((task) => task.id) }, 201)
 })
 
 taskRoutes.patch('/:id', async (c) => {
