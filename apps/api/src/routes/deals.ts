@@ -340,6 +340,79 @@ dealRoutes.get('/', async (c) => {
   })
 })
 
+dealRoutes.get('/export/csv', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+
+  const search = c.req.query('search')?.trim().slice(0, 100)
+  const status = c.req.query('status')?.trim().slice(0, 50)
+  const stage = status && dealStages.includes(status as (typeof dealStages)[number])
+    ? status as (typeof dealStages)[number]
+    : undefined
+  if (status && !stage) return c.json({ error: '商机阶段无效' }, 400)
+  const activeOnly = c.req.query('active_only') === 'true' || c.req.query('active_only') === '1'
+  const db = createDb(c.env.DB)
+  const rows = await db
+    .select({
+      customerName: customers.name,
+      productName: deals.productName,
+      dealType: deals.dealType,
+      stage: deals.stage,
+      probability: deals.probability,
+      channel: deals.channel,
+      originalPriceCents: deals.originalPriceCents,
+      amountCents: deals.amountCents,
+      netProfitCents: deals.netProfitCents,
+      expectedCloseDate: deals.expectedCloseDate,
+      wonAt: deals.wonAt,
+      lostReason: deals.lostReason,
+      ownerName: users.name,
+      createdAt: deals.createdAt,
+    })
+    .from(deals)
+    .innerJoin(customers, eq(deals.customerId, customers.id))
+    .leftJoin(users, eq(customers.ownerId, users.id))
+    .where(and(
+      eq(deals.isDeleted, false),
+      eq(customers.isDeleted, false),
+      search ? like(customers.name, `%${search}%`) : undefined,
+      stage ? eq(deals.stage, stage) : undefined,
+      activeOnly ? inArray(deals.stage, ['Leads', 'Qualified', 'Proposal']) : undefined,
+      actor.role !== 'admin' ? eq(customers.ownerId, actor.id) : undefined,
+    ))
+    .orderBy(desc(deals.createdAt), desc(deals.id))
+    .limit(5_000)
+
+  const stageLabel: Record<(typeof dealStages)[number], string> = {
+    Leads: '初步线索',
+    Qualified: '需求确认',
+    Proposal: '方案报价',
+    Won: '赢单成交',
+    Lost: '遗憾输单',
+  }
+  const yuan = (value: number | null) => value === null ? '' : (value / 100).toFixed(2)
+  return csvResponse(
+    '商机清单.csv',
+    ['客户名称', '产品/版本', '订单类型', '当前阶段', '成交概率', '渠道', '原价（元）', '预计/成交金额（元）', '净利润（元）', '预计成交日', '实际成交时间', '输单原因', '归属销售', '录入时间'],
+    rows.map((row) => [
+      row.customerName,
+      row.productName,
+      row.dealType === 'Renewal' ? '续费' : '新签',
+      stageLabel[row.stage],
+      `${row.probability}%`,
+      row.channel,
+      yuan(row.originalPriceCents),
+      yuan(row.amountCents),
+      yuan(row.netProfitCents),
+      row.expectedCloseDate,
+      row.wonAt,
+      row.lostReason,
+      row.ownerName,
+      row.createdAt,
+    ]),
+  )
+})
+
 dealRoutes.get('/export/won.csv', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)

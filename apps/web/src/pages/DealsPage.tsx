@@ -164,6 +164,18 @@ export default function DealsPage() {
     }
   }
 
+  async function exportFilteredDeals() {
+    try {
+      const query = new URLSearchParams()
+      if (debouncedSearch) query.set('search', debouncedSearch)
+      if (status) query.set('status', status)
+      await downloadApiFile(`/api/deals/export/csv?${query.toString()}`, '商机清单.csv')
+      toast.success('当前筛选商机清单已开始下载')
+    } catch (exportError) {
+      toast.error(exportError instanceof Error ? exportError.message : '商机导出失败')
+    }
+  }
+
   return (
     <section className={isMobile ? 'space-y-4' : 'flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3 overflow-hidden'}>
       <div className="flex min-h-[3.25rem] shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
@@ -181,6 +193,7 @@ export default function DealsPage() {
         </select>
         <Input aria-label="赢单成交开始日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
         <Input aria-label="赢单成交结束日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
+        <Button className="h-11 md:h-8" onClick={() => void exportFilteredDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出当前筛选</Button>
         <Button className="h-11 md:h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
         <Button className="h-11 shadow-sm shadow-indigo-200 md:h-8" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
       </div>
