@@ -43,6 +43,10 @@ const customerStatusSchema = z.enum(customerStatuses, { errorMap: () => ({ messa
 const customerTagIdsSchema = z.object({
   tag_ids: z.array(z.string().uuid('标签编号无效')).max(20, '每个客户最多添加 20 个标签'),
 })
+const transferCustomersSchema = z.object({
+  customer_ids: z.array(z.string().min(1, '客户编号不能为空')).min(1, '请至少选择一位客户').max(50, '单次最多转交 50 位客户'),
+  owner_id: z.string().min(1, '请选择新的客户负责人'),
+})
 const MAX_CUSTOMER_IMPORT_BYTES = 512 * 1024
 const MAX_CUSTOMER_IMPORT_ROWS = 200
 const customerImportHeaderAliases: Record<string, 'name' | 'contactPhone' | 'status' | 'address'> = {
@@ -939,6 +943,68 @@ customerRoutes.delete('/:id/contacts/:contactId', async (c) => {
   if (!contact) return c.json({ error: '联系人不存在或无权删除' }, 404)
   await db.delete(contacts).where(eq(contacts.id, contact.id))
   return c.json({ id: contact.id, deleted: true })
+})
+
+customerRoutes.post('/transfer', async (c) => {
+  const actor = getAuthenticatedActor(c)
+  if (!actor) return c.json({ error: '登录凭证无效' }, 401)
+  if (actor.role !== 'admin') return c.json({ error: '仅管理员可以批量转交客户' }, 403)
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: '请求体必须是 JSON' }, 400)
+  }
+  const parsed = transferCustomersSchema.safeParse(body)
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? '批量转交参数无效' }, 400)
+
+  const customerIds = [...new Set(parsed.data.customer_ids)]
+  const db = createDb(c.env.DB)
+  const [targetOwner] = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(eq(users.id, parsed.data.owner_id))
+    .limit(1)
+  if (!targetOwner) return c.json({ error: '新的客户负责人不存在' }, 400)
+
+  const selectedCustomers = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      ownerId: customers.ownerId,
+      status: customers.status,
+      contactPhone: customers.contactPhone,
+      address: customers.address,
+      saasExpireDate: customers.saasExpireDate,
+    })
+    .from(customers)
+    .where(and(inArray(customers.id, customerIds), eq(customers.isDeleted, false)))
+  if (selectedCustomers.length !== customerIds.length) {
+    return c.json({ error: '存在已删除或不存在的客户，无法完成批量转交' }, 404)
+  }
+
+  const changedCustomers = selectedCustomers.filter((customer) => customer.ownerId !== targetOwner.id)
+  if (changedCustomers.length > 0) {
+    await db
+      .update(customers)
+      .set({ ownerId: targetOwner.id, updatedAt: new Date() })
+      .where(inArray(customers.id, changedCustomers.map((customer) => customer.id)))
+    c.executionCtx.waitUntil(Promise.all(changedCustomers.map((customer) => writeAuditLog(c.env, {
+      actorId: actor.id,
+      entityType: 'Customer',
+      entityId: customer.id,
+      action: 'Updated',
+      before: customer,
+      after: { ...customer, ownerId: targetOwner.id },
+    }))))
+  }
+
+  return c.json({
+    transferred: changedCustomers.length,
+    unchanged: selectedCustomers.length - changedCustomers.length,
+    owner: targetOwner,
+  })
 })
 
 customerRoutes.put('/:id', async (c) => {

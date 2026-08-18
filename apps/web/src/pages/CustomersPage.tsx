@@ -1,7 +1,7 @@
 // apps/web/src/pages/CustomersPage.tsx
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
 import { useEffect, useState } from 'react'
-import { ChevronRight, ClipboardPlus, Download, MapPin, Phone, Plus, Search, Upload, X, Zap } from 'lucide-react'
+import { ArrowRightLeft, ChevronRight, ClipboardPlus, Download, MapPin, Phone, Plus, Search, Upload, X, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +10,7 @@ import { PaginationControls } from '@/components/PaginationControls'
 import { CreateCustomerModal } from '@/components/customers/CreateCustomerModal'
 import { DirectWonCustomerModal } from '@/components/customers/DirectWonCustomerModal'
 import { BatchTaskSheet } from '@/components/customers/BatchTaskSheet'
+import { BatchTransferCustomersSheet } from '@/components/customers/BatchTransferCustomersSheet'
 import { CustomerImportSheet } from '@/components/customers/CustomerImportSheet'
 import { Input } from '@/components/ui/input'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -19,7 +20,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { customerStatuses, getCustomerStatusLabel, getCustomerStatusTone } from '@/lib/presentation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Link, useSearchParams } from 'react-router-dom'
-import { downloadApiFile } from '@/lib/api'
+import { downloadApiFile, getCurrentUserRole } from '@/lib/api'
 
 export default function CustomersPage() {
   const isMobile = useIsMobile()
@@ -29,6 +30,7 @@ export default function CustomersPage() {
   const [followUp, setFollowUp] = useState<'' | 'stale'>('')
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
   const [batchTaskOpen, setBatchTaskOpen] = useState(false)
+  const [batchTransferOpen, setBatchTransferOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [directWonDialogOpen, setDirectWonDialogOpen] = useState(false)
@@ -38,6 +40,7 @@ export default function CustomersPage() {
   const { data, error, isLoading } = useCustomers({ search: debouncedSearch, status, tagId, followUp: followUp || undefined, page })
   const tagsQuery = useCustomerTags()
   const selectedCustomers = data?.data.filter((customer) => selectedCustomerIds.has(customer.id)) ?? []
+  const isAdmin = getCurrentUserRole() === 'admin'
 
   useEffect(() => {
     if (searchParams.get('create') !== '1') return
@@ -121,7 +124,7 @@ export default function CustomersPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">客户池</h1>
           <p className="mt-1 text-sm text-muted-foreground">集中管理客户资料与跟进状态。</p>
         </div>
-        <div className="flex flex-wrap gap-2"><Button disabled={selectedCustomers.length === 0} onClick={() => setBatchTaskOpen(true)} type="button" variant="outline"><ClipboardPlus aria-hidden="true" />批量建任务{selectedCustomers.length > 0 ? ` (${selectedCustomers.length})` : ''}</Button><Button onClick={() => setCustomerImportOpen(true)} type="button" variant="outline"><Upload aria-hidden="true" />导入客户</Button><Button onClick={() => void exportCustomers()} type="button" variant="outline"><Download aria-hidden="true" />导出客户</Button><Button className="bg-emerald-600 shadow-sm shadow-emerald-200 hover:bg-emerald-700" onClick={() => setDirectWonDialogOpen(true)} type="button"><Zap aria-hidden="true" />直接录入成交客户</Button><Button className="shadow-sm shadow-indigo-200" onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button></div>
+        <div className="flex flex-wrap gap-2"><Button disabled={selectedCustomers.length === 0} onClick={() => setBatchTaskOpen(true)} type="button" variant="outline"><ClipboardPlus aria-hidden="true" />批量建任务{selectedCustomers.length > 0 ? ` (${selectedCustomers.length})` : ''}</Button>{isAdmin && <Button disabled={selectedCustomers.length === 0} onClick={() => setBatchTransferOpen(true)} type="button" variant="outline"><ArrowRightLeft aria-hidden="true" />批量转交{selectedCustomers.length > 0 ? ` (${selectedCustomers.length})` : ''}</Button>}<Button onClick={() => setCustomerImportOpen(true)} type="button" variant="outline"><Upload aria-hidden="true" />导入客户</Button><Button onClick={() => void exportCustomers()} type="button" variant="outline"><Download aria-hidden="true" />导出客户</Button><Button className="bg-emerald-600 shadow-sm shadow-emerald-200 hover:bg-emerald-700" onClick={() => setDirectWonDialogOpen(true)} type="button"><Zap aria-hidden="true" />直接录入成交客户</Button><Button className="shadow-sm shadow-indigo-200" onClick={() => setCreateDialogOpen(true)} type="button"><Plus aria-hidden="true" />新建客户</Button></div>
       </div>
       <Card className="gap-0 py-0">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row">
@@ -180,6 +183,7 @@ export default function CustomersPage() {
       <DirectWonCustomerModal onOpenChange={setDirectWonDialogOpen} open={directWonDialogOpen} />
       <CustomerImportSheet onOpenChange={setCustomerImportOpen} open={customerImportOpen} />
       <BatchTaskSheet customers={selectedCustomers} onCreated={() => setSelectedCustomerIds(new Set())} onOpenChange={setBatchTaskOpen} open={batchTaskOpen} />
+      <BatchTransferCustomersSheet customers={selectedCustomers} onOpenChange={setBatchTransferOpen} onTransferred={() => setSelectedCustomerIds(new Set())} open={batchTransferOpen} />
     </section>
   )
 }
