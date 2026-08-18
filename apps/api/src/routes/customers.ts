@@ -1,7 +1,7 @@
 // apps/api/src/routes/customers.ts
 import { createDb } from '@crm/db/client'
 import { activities, attachments, contacts, customerStatuses, customerTagAssignments, customerTags, customers, dealSplits, deals, tasks, users } from '@crm/db/schema'
-import { and, asc, count, desc, eq, gt, gte, inArray, like, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, like, lt, lte, or, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { jwt } from 'hono/jwt'
 import { z } from 'zod'
@@ -259,10 +259,10 @@ function wonCustomerExpiryCondition(buckets: string[], now: Date) {
   const day90 = new Date(now)
   day90.setDate(day90.getDate() + 90)
   return or(
-    buckets.includes('expired') ? sql`${customers.saasExpireDate} < ${now}` : undefined,
-    buckets.includes('within_30') ? and(gte(customers.saasExpireDate, now), lte(customers.saasExpireDate, day30)) : undefined,
-    buckets.includes('within_90') ? and(gt(customers.saasExpireDate, day30), lte(customers.saasExpireDate, day90)) : undefined,
-    buckets.includes('beyond_90') ? gt(customers.saasExpireDate, day90) : undefined,
+    buckets.includes('expired') ? and(isNotNull(customers.saasExpireDate), lt(customers.saasExpireDate, now)) : undefined,
+    buckets.includes('within_30') ? and(isNotNull(customers.saasExpireDate), gte(customers.saasExpireDate, now), lte(customers.saasExpireDate, day30)) : undefined,
+    buckets.includes('within_90') ? and(isNotNull(customers.saasExpireDate), gt(customers.saasExpireDate, day30), lte(customers.saasExpireDate, day90)) : undefined,
+    buckets.includes('beyond_90') ? and(isNotNull(customers.saasExpireDate), gt(customers.saasExpireDate, day90)) : undefined,
     buckets.includes('unspecified') ? sql`${customers.saasExpireDate} is null` : undefined,
   )
 }
