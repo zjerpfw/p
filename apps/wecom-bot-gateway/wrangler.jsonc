@@ -10,6 +10,9 @@
   "vars": {
     "WEWORK_WS_URL": "wss://openws.work.weixin.qq.com"
   },
+  "ai": {
+    "binding": "AI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
