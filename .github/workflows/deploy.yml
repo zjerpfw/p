@@ -45,13 +45,11 @@ jobs:
             GITHUB_TOKEN
             SUPABASE_S3_ACCESS_KEY_ID
             SUPABASE_S3_SECRET_ACCESS_KEY
-            WECOM_BOT_GATEWAY_SECRET
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GITHUB_TOKEN: ${{ secrets.IMAGE_STORAGE_GITHUB_PAT }}
           SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY }}
           SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_KEY }}
-          WECOM_BOT_GATEWAY_SECRET: ${{ secrets.WECOM_BOT_GATEWAY_SECRET }}
 
   deploy-web:
     name: Deploy Web
@@ -117,11 +115,3 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: apps/wecom-bot-gateway
-
-      - name: Configure gateway shared secret
-        if: ${{ secrets.WECOM_BOT_GATEWAY_SECRET != '' }}
-        run: printf '%s' "$WECOM_BOT_GATEWAY_SECRET" | pnpm --filter @crm/wecom-bot-gateway exec wrangler secret put CRM_GATEWAY_SECRET
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          WECOM_BOT_GATEWAY_SECRET: ${{ secrets.WECOM_BOT_GATEWAY_SECRET }}

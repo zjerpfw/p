@@ -4,25 +4,11 @@
 
 ## 配置
 
-```powershell
-pnpm --filter @crm/wecom-bot-gateway exec wrangler secret put CRM_GATEWAY_SECRET
-```
-
-通过 GitHub Actions 自动部署时，请在仓库的 `Settings → Secrets and variables → Actions` 新增：
-
-- `WECOM_BOT_GATEWAY_SECRET`：自行生成的高强度随机字符串，CRM API 与本网关必须使用同一值。
-
-企业微信 BotID 和长连接 Secret 不需要配置为部署 Secret，直接在 CRM 前端“系统设置 → 企业微信提醒”中填写。网关通过同一个 D1 数据库读取这两个值。
-
-同时在 CRM API Worker 设置网关共享密钥：
-
-```powershell
-pnpm --filter @crm/api exec wrangler secret put WECOM_BOT_GATEWAY_SECRET
-```
+企业微信 BotID 和长连接 Secret 不需要配置为部署 Secret，直接在 CRM 前端“系统设置 → 企业微信提醒”中填写。CRM API 与网关都从同一个 D1 数据库读取长连接 Secret，并用它签名和校验内部请求。
 
 本项目已将 API 的网关地址配置为当前 Cloudflare 账户的 `crm-wecom-bot-gateway.q84536346.workers.dev`；不要把 BotID、任意 Secret 或 WebSocket 密钥写进 `wrangler.jsonc`。
 
-网关共享密钥未配置时，网关仍会部署，但内部发送接口会拒绝请求；不会影响现有 CRM API 与前端发布。
+未填写 BotID 或长连接 Secret 时，网关仍会部署但不会建立连接；不会影响现有 CRM API 与前端发布。
 
 ## 启动连接
 
@@ -30,7 +16,7 @@ pnpm --filter @crm/api exec wrangler secret put WECOM_BOT_GATEWAY_SECRET
 
 ```text
 X-CRM-Timestamp: Unix 时间戳（秒或毫秒）
-X-CRM-Signature: base64url(HMAC-SHA256(CRM_GATEWAY_SECRET, timestamp + "." + 原始请求体))
+X-CRM-Signature: base64url(HMAC-SHA256(系统设置中的长连接专用 Secret, timestamp + "." + 原始请求体))
 ```
 
 网关会自动发送 `aibot_subscribe`，每 30 秒发送 `ping`，断线后以指数退避自动重连。

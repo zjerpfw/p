@@ -16,5 +16,4 @@ export interface Env {
   SUPABASE_S3_ACCESS_KEY_ID: string
   SUPABASE_S3_SECRET_ACCESS_KEY: string
   WECOM_BOT_GATEWAY_URL: string
-  WECOM_BOT_GATEWAY_SECRET: string
 }

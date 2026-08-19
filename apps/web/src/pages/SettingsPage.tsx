@@ -170,30 +170,6 @@ export default function SettingsPage() {
             <CardContent className="grid gap-5 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="wecom_bot_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>智能机器人 BotID</FormLabel>
-                    <FormControl><Input autoComplete="off" placeholder="在企业微信智能机器人后台复制 BotID" {...field} /></FormControl>
-                    <FormDescription>企业微信后台：智能机器人 → API 模式 → 长连接。</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="wecom_bot_secret"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>长连接专用 Secret</FormLabel>
-                    <FormControl><Input autoComplete="new-password" placeholder="首次填写或输入新 Secret 更新" type="password" {...field} /></FormControl>
-                    <FormDescription>保存后仅显示掩码；保持原值无需改动。</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="amap_key"
                 render={({ field }) => (
                   <FormItem>
@@ -228,6 +204,30 @@ export default function SettingsPage() {
               </div>
             </CardHeader>
             <CardContent className="grid gap-5 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="wecom_bot_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>智能机器人 BotID</FormLabel>
+                    <FormControl><Input autoComplete="off" placeholder="在企业微信智能机器人后台复制 BotID" {...field} /></FormControl>
+                    <FormDescription>企业微信后台：智能机器人 → API 模式 → 长连接。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="wecom_bot_secret"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>长连接专用 Secret</FormLabel>
+                    <FormControl><Input autoComplete="new-password" placeholder="首次填写或输入新 Secret 更新" type="password" {...field} /></FormControl>
+                    <FormDescription>保存后仅显示掩码；保持原值无需改动。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="wechat_group_webhook"

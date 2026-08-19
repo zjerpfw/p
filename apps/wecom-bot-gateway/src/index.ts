@@ -8,12 +8,18 @@ interface Env {
   BOT_CONNECTION: DurableObjectNamespace<WeComBotConnection>
   DB: D1Database
   WEWORK_WS_URL: string
-  CRM_GATEWAY_SECRET: string
 }
 
 function primaryStub(env: Env): DurableObjectStub {
   const id = env.BOT_CONNECTION.idFromName('primary')
   return env.BOT_CONNECTION.get(id)
+}
+
+async function verifyInternalRequest(request: Request, env: Env): Promise<boolean> {
+  const result = await env.DB.prepare(
+    "SELECT config_value FROM system_configs WHERE config_key = 'wecom_bot_secret' LIMIT 1",
+  ).first<{ config_value: string }>()
+  return verifyRequest(request, result?.config_value.trim() ?? '')
 }
 
 export default {
@@ -26,12 +32,12 @@ export default {
     }
 
     if (url.pathname === '/internal/connect' && request.method === 'POST') {
-      if (!(await verifyRequest(request, env.CRM_GATEWAY_SECRET))) return new Response('Unauthorized', { status: 401 })
+      if (!(await verifyInternalRequest(request, env))) return new Response('Unauthorized', { status: 401 })
       return primaryStub(env).fetch('https://do/connect', { method: 'POST' })
     }
 
     if (url.pathname === '/internal/messages' && request.method === 'POST') {
-      if (!(await verifyRequest(request, env.CRM_GATEWAY_SECRET))) return new Response('Unauthorized', { status: 401 })
+      if (!(await verifyInternalRequest(request, env))) return new Response('Unauthorized', { status: 401 })
       const payload = await request.text()
       return primaryStub(env).fetch('https://do/send', {
         method: 'POST',
