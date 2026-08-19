@@ -18,6 +18,16 @@ interface WeChatApiResponse {
   errmsg?: string
 }
 
+export interface WeChatDirectoryUser {
+  userid: string
+  name: string
+  department?: number[]
+}
+
+interface WeChatUserListResponse extends WeChatApiResponse {
+  userlist?: WeChatDirectoryUser[]
+}
+
 interface WeChatConfiguration {
   corpId: string
   corpSecret: string
@@ -112,4 +122,23 @@ export async function sendWeChatMarkdownMessage(
   if (isWeChatApiError(result)) {
     throw new Error(`WeChat message request failed: ${result.errcode ?? 'unknown'} ${result.errmsg ?? ''}`)
   }
+}
+
+export async function listWeChatUsers(env: Env): Promise<WeChatDirectoryUser[]> {
+  const accessToken = await getWeChatAccessToken(env)
+  const url = new URL('https://qyapi.weixin.qq.com/cgi-bin/user/list')
+  url.searchParams.set('access_token', accessToken)
+  url.searchParams.set('department_id', '1')
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`WeChat user list request failed: ${response.status}`)
+
+  const result = (await response.json()) as WeChatUserListResponse
+  if (isWeChatApiError(result)) {
+    throw new Error(`WeChat user list request failed: ${result.errcode ?? 'unknown'} ${result.errmsg ?? ''}`)
+  }
+
+  return (result.userlist ?? [])
+    .filter((user) => Boolean(user.userid?.trim() && user.name?.trim()))
+    .map((user) => ({ userid: user.userid.trim(), name: user.name.trim(), department: user.department }))
 }

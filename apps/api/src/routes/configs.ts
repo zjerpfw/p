@@ -6,7 +6,7 @@ import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
-import { getWeChatAccessToken, sendWeChatMarkdownMessage } from '../services/wechat'
+import { getWeChatAccessToken, listWeChatUsers, sendWeChatMarkdownMessage } from '../services/wechat'
 
 const PUBLIC_CONFIG_KEYS = ['amap_key', 'amap_security_code'] as const
 const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key)/i
@@ -154,5 +154,15 @@ configRoutes.post('/test-wechat', async (c) => {
   } catch (error) {
     console.error('WeChat test message failed', error)
     return c.json({ error: '测试消息发送失败，请检查企业标识、应用密钥、Agent ID 和员工企业微信 UserID' }, 502)
+  }
+})
+
+configRoutes.get('/wechat-users', async (c) => {
+  try {
+    const users = await listWeChatUsers(c.env)
+    return c.json({ users })
+  } catch (error) {
+    console.error('WeChat user directory request failed', error)
+    return c.json({ error: '企业微信成员获取失败，请检查 Corp ID、应用 Secret 及通讯录读取权限' }, 502)
   }
 })

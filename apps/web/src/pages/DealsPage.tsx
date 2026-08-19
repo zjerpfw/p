@@ -1,6 +1,6 @@
 // apps/web/src/pages/DealsPage.tsx
 import { format, isBefore, parseISO, startOfDay } from 'date-fns'
-import { CalendarDays, CircleDollarSign, Download, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
+import { CalendarDays, CircleDollarSign, Download, Filter, Pencil, Plus, Search, Trash2, Trophy, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PaginationControls } from '@/components/PaginationControls'
 import SaaSDealWonModal from '@/components/deals/SaaSDealWonModal'
 import { DealDetailModal } from '@/components/deals/DealDetailModal'
@@ -107,6 +108,8 @@ export default function DealsPage() {
   const isMobile = useIsMobile()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<ActiveDealStage | ''>('')
+  const [mobileStage, setMobileStage] = useState<ActiveDealStage>('Leads')
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [wonAtFrom, setWonAtFrom] = useState('')
   const [wonAtTo, setWonAtTo] = useState('')
   const [page, setPage] = useState(1)
@@ -115,7 +118,8 @@ export default function DealsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const debouncedSearch = useDebouncedValue(search.trim())
-  const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: status || undefined, activeOnly: !status, page, enabled: isMobile })
+  const mobileDealStatus = isMobile ? mobileStage : status
+  const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: mobileDealStatus || undefined, activeOnly: !mobileDealStatus, page, enabled: isMobile })
   const pipelineSummary = useDealPipelineSummary(debouncedSearch, !isMobile)
   const queryClient = useQueryClient()
 
@@ -147,6 +151,11 @@ export default function DealsPage() {
 
   function updateStatus(value: ActiveDealStage | '') {
     setStatus(value)
+    setPage(1)
+  }
+
+  function updateMobileStage(value: ActiveDealStage) {
+    setMobileStage(value)
     setPage(1)
   }
 
@@ -196,16 +205,19 @@ export default function DealsPage() {
           <Input aria-label="搜索商机" className="h-11 bg-white pl-8 pr-11 text-sm md:h-8 md:pr-8" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户名称" value={search} />
           {search && <Button aria-label="清空商机搜索" className="absolute right-0.5 top-0.5" onClick={() => updateSearch('')} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" /></Button>}
         </div>
-        <select aria-label="活跃商机阶段筛选" className="h-11 rounded-md border border-input bg-white px-2.5 text-sm md:h-8" onChange={(event) => updateStatus(event.target.value as ActiveDealStage | '')} value={status}>
+        <select aria-label="活跃商机阶段筛选" className="hidden h-11 rounded-md border border-input bg-white px-2.5 text-sm md:h-8 md:block" onChange={(event) => updateStatus(event.target.value as ActiveDealStage | '')} value={status}>
           <option value="">全部活跃阶段</option>
           {activeDealStages.map((stage) => <option key={stage} value={stage}>{dealStageLabels[stage]}</option>)}
         </select>
-        <Input aria-label="赢单成交开始日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
-        <Input aria-label="赢单成交结束日期" className="h-11 w-auto bg-white text-sm md:h-8" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
-        <Button className="h-11 md:h-8" onClick={() => void exportFilteredDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出当前筛选</Button>
-        <Button className="h-11 md:h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
+        <Input aria-label="赢单成交开始日期" className="hidden h-11 w-auto bg-white text-sm md:block md:h-8" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
+        <Input aria-label="赢单成交结束日期" className="hidden h-11 w-auto bg-white text-sm md:block md:h-8" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
+        <Button className="hidden h-11 md:flex md:h-8" onClick={() => void exportFilteredDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出当前筛选</Button>
+        <Button className="hidden h-11 md:flex md:h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
+        {isMobile && <Button aria-label="打开商机筛选和导出操作" className="h-11 px-3" onClick={() => setMobileFiltersOpen(true)} size="icon-sm" type="button" variant="outline"><Filter aria-hidden="true" /></Button>}
         <Button className="h-11 shadow-sm shadow-indigo-200 md:h-8" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
       </div>
+
+      {isMobile && <div aria-label="商机阶段" className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist">{activeDealStages.map((stage) => <Button aria-selected={mobileStage === stage} className="h-10 text-xs" key={stage} onClick={() => updateMobileStage(stage)} role="tab" type="button" variant={mobileStage === stage ? 'default' : 'ghost'}><span className="truncate">{dealStageLabels[stage]}</span></Button>)}</div>}
 
       {isMobile && isLoading && <div aria-label="正在加载商机" className="grid gap-3" role="status">{[0, 1, 2, 3].map((item) => <DealCardSkeleton key={item} />)}</div>}
       {isMobile && error && <p className="flex-1 py-6 text-sm text-destructive">{error.message}</p>}
@@ -232,6 +244,14 @@ export default function DealsPage() {
         </ul>
         <div className="rounded-lg border border-slate-200 bg-white"><PaginationControls onPageChange={setPage} page={data.page} total={data.total} totalPages={data.totalPages} /></div>
       </div>}
+
+      <Dialog onOpenChange={setMobileFiltersOpen} open={mobileFiltersOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader><DialogTitle>筛选与导出</DialogTitle><DialogDescription>阶段已通过上方 Tabs 切换；日期用于导出赢单历史。</DialogDescription></DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="mobile-won-from">赢单开始日期</label><Input id="mobile-won-from" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} /></div><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="mobile-won-to">赢单结束日期</label><Input id="mobile-won-to" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} /></div></div>
+          <DialogFooter><Button onClick={() => void exportFilteredDeals()} type="button" variant="outline"><Download aria-hidden="true" />导出当前阶段</Button><Button onClick={() => void exportWonDeals()} type="button"><Download aria-hidden="true" />导出赢单</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SaaSDealWonModal deal={dealToConfirm} onOpenChange={(open) => !open && setDealToConfirm(null)} />
       <DealDetailModal deal={dealToEdit} onOpenChange={(open) => !open && setDealToEdit(null)} />
