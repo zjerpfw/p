@@ -17,6 +17,7 @@ export interface WonCustomer {
   ownerName: string | null
   latestWonAt: string | null
   latestProductName: string | null
+  latestWonAmountCents: number | null
 }
 
 export interface WonCustomerFilters {

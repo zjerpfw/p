@@ -700,6 +700,7 @@ customerRoutes.get('/won-customers', async (c) => {
       ownerName: users.name,
       latestWonAt: sql<number | null>`(select max(${deals.wonAt}) from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false)`,
       latestProductName: sql<string | null>`(select ${deals.productName} from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false order by ${deals.wonAt} desc, ${deals.createdAt} desc limit 1)`,
+      latestWonAmountCents: sql<number | null>`(select ${deals.amountCents} from ${deals} where ${deals.customerId} = ${customers.id} and ${deals.stage} = 'Won' and ${deals.isDeleted} = false order by ${deals.wonAt} desc, ${deals.createdAt} desc limit 1)`,
     }).from(customers)
       .leftJoin(users, eq(customers.ownerId, users.id))
       .where(where)

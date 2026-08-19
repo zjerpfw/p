@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { clearAccessToken, getCurrentUserRole } from '@/lib/api'
-import { useIsMobile } from '@/hooks/useIsMobile'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { CommandPalette } from './CommandPalette'
 
 const navigation = [
