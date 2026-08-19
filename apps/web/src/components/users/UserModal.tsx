@@ -1,7 +1,6 @@
 // apps/web/src/components/users/UserModal.tsx
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -9,11 +8,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { InternalUser } from '@/hooks/useUsers'
 import { apiFetch } from '@/lib/api'
-
-interface WeChatDirectoryUser {
-  userid: string
-  name: string
-}
 
 interface UserModalProps {
   user: InternalUser | null
@@ -27,15 +21,7 @@ export function UserModal({ user, open, onOpenChange }: UserModalProps) {
   const [username, setUsername] = useState('')
   const [pinCode, setPinCode] = useState('123456')
   const [role, setRole] = useState<'admin' | 'sales'>('sales')
-  const [wechatUserId, setWechatUserId] = useState('')
-  const [wechatOAuthPending, setWechatOAuthPending] = useState(false)
   const isEditing = Boolean(user)
-  const wechatUsersQuery = useQuery({
-    queryKey: ['wechat-users'],
-    queryFn: () => apiFetch<{ users: WeChatDirectoryUser[] }>('/api/configs/wechat-users'),
-    enabled: open,
-    staleTime: 5 * 60_000,
-  })
 
   useEffect(() => {
     if (!open) return
@@ -43,36 +29,7 @@ export function UserModal({ user, open, onOpenChange }: UserModalProps) {
     setUsername(user?.username ?? '')
     setPinCode(isEditing ? '' : '123456')
     setRole(user?.role === 'admin' ? 'admin' : 'sales')
-    setWechatUserId(user?.wechatUserId ?? '')
   }, [isEditing, open, user])
-
-  useEffect(() => {
-    if (!open) return
-    const handleOAuthMessage = (event: MessageEvent<{ userid?: string; name?: string; error?: string }>) => {
-      if (event.origin !== window.location.origin) return
-      setWechatOAuthPending(false)
-      if (event.data?.userid) {
-        setWechatUserId(event.data.userid)
-        toast.success(`已获取企业微信 UserID：${event.data.name ?? event.data.userid}`)
-      } else if (event.data?.error) {
-        toast.error(event.data.error)
-      }
-    }
-    window.addEventListener('message', handleOAuthMessage)
-    return () => window.removeEventListener('message', handleOAuthMessage)
-  }, [open])
-
-  async function authorizeWeChatUser() {
-    setWechatOAuthPending(true)
-    try {
-      const response = await apiFetch<{ authorizeUrl: string }>('/api/configs/wechat-oauth/start', { method: 'POST' })
-      const popup = window.open(response.authorizeUrl, 'wechat-userid-oauth', 'popup,width=520,height=680')
-      if (!popup) throw new Error('浏览器阻止了授权窗口，请允许弹出窗口后重试')
-    } catch (error) {
-      setWechatOAuthPending(false)
-      toast.error(error instanceof Error ? error.message : '企业微信授权启动失败')
-    }
-  }
 
   const saveUser = useMutation({
     mutationFn: () => apiFetch(isEditing ? `/api/users/${user?.id}` : '/api/users', {
@@ -83,7 +40,8 @@ export function UserModal({ user, open, onOpenChange }: UserModalProps) {
         username: username.trim(),
         ...(pinCode ? { pin_code: pinCode } : {}),
         role,
-        wechat_userid: wechatUserId.trim(),
+        // 群机器人提醒不再使用 UserID；编辑现有员工时保留历史绑定值，避免误清空。
+        wechat_userid: user?.wechatUserId ?? '',
       }),
     }),
     onSuccess: async () => {
@@ -105,7 +63,6 @@ export function UserModal({ user, open, onOpenChange }: UserModalProps) {
           <div className="space-y-1.5"><Label htmlFor="user-username">登录账号 / 手机号</Label><Input id="user-username" onChange={(event) => setUsername(event.target.value)} placeholder="请输入登录账号或手机号" value={username} /></div>
           <div className="space-y-1.5"><Label htmlFor="user-pin">{isEditing ? '重置登录密码' : '初始登录密码'}</Label><Input id="user-pin" onChange={(event) => setPinCode(event.target.value)} placeholder={isEditing ? '留空则保持原密码' : '默认 123456'} type="password" value={pinCode} /></div>
           <div className="space-y-1.5"><Label htmlFor="user-role">系统角色</Label><select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" id="user-role" onChange={(event) => setRole(event.target.value as 'admin' | 'sales')} value={role}><option value="admin">系统管理员</option><option value="sales">普通销售</option></select></div>
-          <div className="space-y-1.5"><Label htmlFor="user-wechat-id">企业微信 UserID</Label><div className="flex gap-2"><select className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm" id="user-wechat-id" onChange={(event) => setWechatUserId(event.target.value)} value={wechatUserId}><option value="">{wechatUsersQuery.isLoading ? '正在读取可见成员...' : '请选择企业微信成员'}</option>{wechatUsersQuery.data?.users.map((wechatUser) => <option key={wechatUser.userid} value={wechatUser.userid}>{wechatUser.name} · {wechatUser.userid}</option>)}</select><Button aria-label="刷新企业微信成员" disabled={wechatUsersQuery.isFetching} onClick={() => void wechatUsersQuery.refetch()} size="icon" title="刷新企业微信成员" type="button" variant="outline"><RefreshCw className={wechatUsersQuery.isFetching ? 'size-4 animate-spin' : 'size-4'} /></Button><Button disabled={wechatOAuthPending} onClick={() => void authorizeWeChatUser()} type="button" variant="outline">{wechatOAuthPending ? '等待授权' : '微信授权获取'}</Button></div>{wechatUsersQuery.isError ? <p className="text-xs text-destructive">{wechatUsersQuery.error instanceof Error ? wechatUsersQuery.error.message : '企业微信成员读取失败'}</p> : null}<Input aria-label="手动填写企业微信 UserID" onChange={(event) => setWechatUserId(event.target.value)} placeholder="也可手动填写，例如 zhangsan" value={wechatUserId} /><p className="text-xs text-muted-foreground">下拉会读取根部门及全部子部门；如应用没有全通讯录权限，会自动读取自建应用的可见人员。也可在企业微信客户端内使用“微信授权获取”，或手动填写 UserID。</p></div>
         </div>
         <DialogFooter><Button onClick={() => onOpenChange(false)} type="button" variant="outline">取消</Button><Button disabled={!canSubmit || saveUser.isPending} onClick={() => saveUser.mutate()} type="button">{saveUser.isPending ? '正在保存' : '保存员工'}</Button></DialogFooter>
       </DialogContent>

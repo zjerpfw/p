@@ -2,6 +2,7 @@
 CORP_ID=wwxxxxxxxxxxxxxxxx
 CORP_SECRET=replace-with-enterprise-wechat-app-secret
 WECHAT_AGENT_ID=1000002
+WECHAT_GROUP_WEBHOOK=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=replace-with-group-robot-key
 FRONTEND_URL=http://localhost:5173,https://crm.jzfwsh.ltd
 JWT_SECRET=replace-with-a-random-32-byte-or-longer-secret
 GITHUB_OWNER=your-github-organization-or-user

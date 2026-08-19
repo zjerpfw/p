@@ -4,7 +4,7 @@ import { customers, notificationLogs, tasks, users } from '@crm/db/schema'
 import { and, eq, gte, inArray, lt } from 'drizzle-orm'
 import type { Env } from '../env'
 import { todayInShanghai } from '../lib/shanghai-date'
-import { getWeChatAccessToken, sendWeChatMarkdownMessage } from '../services/wechat'
+import { sendWeChatGroupMarkdownMessage } from '../services/wechat'
 
 type TaskReminderType = 'TaskUpcomingReminder' | 'TaskDueReminder' | 'TaskOverdueReminder'
 
@@ -55,8 +55,8 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
     ...upcomingHighPriorityTasks.map((task) => ({ task, type: 'TaskUpcomingReminder' as const })),
     ...dueTodayTasks.map((task) => ({ task, type: 'TaskDueReminder' as const })),
     ...overdueTasks.map((task) => ({ task, type: 'TaskOverdueReminder' as const })),
-  ].filter((candidate) => Boolean(candidate.task.wechatUserId?.trim()))
-  const skippedRecipients = upcomingHighPriorityTasks.length + dueTodayTasks.length + overdueTasks.length - candidates.length
+  ]
+  const skippedRecipients = 0
   if (candidates.length === 0) {
     const summary = { upcomingHighPriority: upcomingHighPriorityTasks.length, dueToday: dueTodayTasks.length, overdue: overdueTasks.length, sent: 0, failed: 0, skippedRecipients }
     console.info('Task reminder job completed', summary)
@@ -64,11 +64,11 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
   }
 
   const existingIds = new Set((await db.select({ id: notificationLogs.id }).from(notificationLogs)
-    .where(inArray(notificationLogs.id, candidates.map(({ task, type }) => `task:${type}:${task.id}:${task.recipientUserId}:${reminderDate}`))))
+    .where(inArray(notificationLogs.id, candidates.map(({ task, type }) => `task:${type}:${task.id}:${reminderDate}`))))
     .map((row) => row.id))
   const claimed = [] as Array<(typeof candidates)[number] & { logId: string }>
   for (const candidate of candidates) {
-    const logId = `task:${candidate.type}:${candidate.task.id}:${candidate.task.recipientUserId}:${reminderDate}`
+    const logId = `task:${candidate.type}:${candidate.task.id}:${reminderDate}`
     if (existingIds.has(logId)) continue
     const [inserted] = await db.insert(notificationLogs).values({
       id: logId,
@@ -88,10 +88,9 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
     return summary
   }
 
-  const accessToken = await getWeChatAccessToken(env)
-  const results = await Promise.allSettled(claimed.map(async ({ task, type, logId }) => {
+  const content = claimed.map(({ task, type }) => {
     const overdueDays = Math.max(0, Math.floor((dayStart.getTime() - todayInShanghai(task.dueAt).getTime()) / 86_400_000))
-    const content = [
+    return [
       type === 'TaskUpcomingReminder' ? '⏰ **明日高优先级任务提醒**' : type === 'TaskDueReminder' ? '📌 **今日待办提醒**' : '🚨 **任务逾期提醒**',
       `客户：**${task.customerName}**`,
       `任务：${task.title}`,
@@ -99,26 +98,19 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
       type === 'TaskOverdueReminder' ? `状态：已逾期 ${overdueDays} 天` : type === 'TaskUpcomingReminder' ? '状态：请提前安排处理' : '状态：请在今日完成',
       task.priority === 'High' ? '优先级：**高**' : '',
     ].filter(Boolean).join('\n')
-    try {
-      await sendWeChatMarkdownMessage(env, accessToken, task.wechatUserId!.trim(), content)
-      await db.update(notificationLogs).set({
-        status: 'Sent',
-        sentAt: new Date(),
-        lastError: null,
-        attemptCount: 1,
-      }).where(eq(notificationLogs.id, logId))
-    } catch (error) {
-      await db.update(notificationLogs).set({
-        status: 'Failed',
-        lastError: error instanceof Error ? error.message.slice(0, 1_000) : '企业微信发送失败',
-        attemptCount: 1,
-      }).where(eq(notificationLogs.id, logId))
-      throw error
-    }
-  }))
-  const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-  for (const failure of failures) console.error('Task reminder delivery failed', failure.reason)
-  const summary = { upcomingHighPriority: upcomingHighPriorityTasks.length, dueToday: dueTodayTasks.length, overdue: overdueTasks.length, sent: results.length - failures.length, failed: failures.length, skippedRecipients, deduplicated: candidates.length - claimed.length }
-  console.info('Task reminder job completed', summary)
-  return summary
+  }).join('\n\n---\n\n')
+  try {
+    await sendWeChatGroupMarkdownMessage(env, `📋 **CRM 任务提醒汇总（${claimed.length} 条）**\n\n${content}`)
+    await db.update(notificationLogs).set({ status: 'Sent', sentAt: new Date(), lastError: null, attemptCount: 1 }).where(inArray(notificationLogs.id, claimed.map(({ logId }) => logId)))
+    const summary = { upcomingHighPriority: upcomingHighPriorityTasks.length, dueToday: dueTodayTasks.length, overdue: overdueTasks.length, sent: claimed.length, failed: 0, skippedRecipients, deduplicated: candidates.length - claimed.length }
+    console.info('Task reminder job completed', summary)
+    return summary
+  } catch (error) {
+    const lastError = error instanceof Error ? error.message.slice(0, 1_000) : '企业微信群机器人发送失败'
+    await db.update(notificationLogs).set({ status: 'Failed', lastError, attemptCount: 1 }).where(inArray(notificationLogs.id, claimed.map(({ logId }) => logId)))
+    const summary = { upcomingHighPriority: upcomingHighPriorityTasks.length, dueToday: dueTodayTasks.length, overdue: overdueTasks.length, sent: 0, failed: claimed.length, skippedRecipients, deduplicated: candidates.length - claimed.length }
+    console.error('Task reminder delivery failed', error)
+    console.info('Task reminder job completed', summary)
+    return summary
+  }
 }

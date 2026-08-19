@@ -7,6 +7,7 @@ import type { Env } from '../env'
 const WECHAT_ACCESS_TOKEN_TTL_SECONDS = 7000
 const WECHAT_DIRECTORY_CACHE_TTL_SECONDS = 5 * 60
 const WECHAT_CONFIG_KEYS = ['wechat_corp_id', 'wechat_corp_secret', 'wechat_agent_id'] as const
+const WECHAT_GROUP_WEBHOOK_CONFIG_KEY = 'wechat_group_webhook'
 
 interface WeChatAccessTokenResponse {
   errcode?: number
@@ -75,6 +76,24 @@ async function getWeChatConfiguration(env: Env): Promise<WeChatConfiguration> {
     agentId,
     cacheVersion: await credentialFingerprint(`${corpId}\u0000${corpSecret}\u0000${agentId}`),
   }
+}
+
+export async function getWeChatGroupWebhook(env: Env) {
+  const db = createDb(env.DB)
+  const [config] = await db
+    .select({ value: systemConfigs.configValue })
+    .from(systemConfigs)
+    .where(inArray(systemConfigs.configKey, [WECHAT_GROUP_WEBHOOK_CONFIG_KEY]))
+    .limit(1)
+  const webhook = config?.value.trim() ?? ''
+  if (!webhook) throw new Error('请先在系统设置中配置企业微信群机器人 Webhook 地址')
+
+  let url: URL
+  try { url = new URL(webhook) } catch { throw new Error('企业微信群机器人 Webhook 地址格式无效') }
+  if (url.protocol !== 'https:' || url.hostname !== 'qyapi.weixin.qq.com' || url.pathname !== '/cgi-bin/webhook/send' || !url.searchParams.get('key')) {
+    throw new Error('请填写企业微信自定义群机器人的完整 Webhook 地址')
+  }
+  return url.toString()
 }
 
 export async function getWeChatCorpId(env: Env) {
@@ -183,6 +202,18 @@ export async function sendWeChatMarkdownMessage(
   if (isWeChatApiError(result)) {
     throw new Error(`WeChat message request failed: ${result.errcode ?? 'unknown'} ${result.errmsg ?? ''}`)
   }
+}
+
+export async function sendWeChatGroupMarkdownMessage(env: Env, content: string) {
+  const webhook = await getWeChatGroupWebhook(env)
+  const response = await fetch(webhook, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ msgtype: 'markdown', markdown: { content } }),
+  })
+  if (!response.ok) throw new Error(`企业微信群机器人请求失败：HTTP ${response.status}`)
+  const result = (await response.json()) as WeChatApiResponse
+  assertWeChatApiSuccess('webhook/send', result)
 }
 
 export async function listWeChatUsers(env: Env): Promise<WeChatDirectoryUser[]> {

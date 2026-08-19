@@ -1,15 +1,15 @@
 // apps/api/src/routes/configs.ts
 import { createDb } from '@crm/db/client'
-import { systemConfigs, users } from '@crm/db/schema'
-import { asc, eq, inArray } from 'drizzle-orm'
+import { systemConfigs } from '@crm/db/schema'
+import { asc, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
-import { getWeChatAccessToken, getWeChatCorpId, getWeChatUserByCode, listWeChatUsers, sendWeChatMarkdownMessage } from '../services/wechat'
+import { getWeChatCorpId, getWeChatUserByCode, listWeChatUsers, sendWeChatGroupMarkdownMessage } from '../services/wechat'
 
 const PUBLIC_CONFIG_KEYS = ['amap_key', 'amap_security_code'] as const
-const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key)/i
+const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key|webhook)/i
 const CONFIG_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const MAX_CONFIG_COUNT = 100
 const MAX_CONFIG_VALUE_LENGTH = 10_000
@@ -163,31 +163,12 @@ configRoutes.post('/test-wechat', async (c) => {
   const actor = getAuthenticatedActor(c)
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
-  const db = createDb(c.env.DB)
-  const [user] = await db
-    .select({ name: users.name, wechatUserId: users.wechatUserId })
-    .from(users)
-    .where(eq(users.id, actor.id))
-    .limit(1)
-  const wechatUserId = user?.wechatUserId?.trim()
-  if (!wechatUserId) return c.json({ error: '请先在员工管理中为当前管理员填写企业微信 UserID' }, 400)
-
   try {
-    const accessToken = await getWeChatAccessToken(c.env)
-    await sendWeChatMarkdownMessage(
-      c.env,
-      accessToken,
-      wechatUserId,
-      [
-        '✅ **CRM 企业微信测试消息**',
-        `管理员：${user.name}`,
-        '续费提醒和任务提醒的发送配置已连通。',
-      ].join('\n'),
-    )
+    await sendWeChatGroupMarkdownMessage(c.env, ['✅ **CRM 群提醒测试消息**', '续费提醒和任务提醒将发送到此内部群。'].join('\n'))
     return c.json({ sent: true })
   } catch (error) {
     console.error('WeChat test message failed', error)
-    return c.json({ error: '测试消息发送失败，请检查企业标识、应用密钥、Agent ID 和员工企业微信 UserID' }, 502)
+    return c.json({ error: error instanceof Error ? error.message : '群机器人测试消息发送失败' }, 502)
   }
 })
 

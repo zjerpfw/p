@@ -26,6 +26,7 @@ interface SettingsFormValues {
   wechat_corp_id: string
   wechat_corp_secret: string
   wechat_agent_id: string
+  wechat_group_webhook: string
   ww_verify_code: string
 }
 
@@ -53,6 +54,7 @@ const defaultValues: SettingsFormValues = {
   wechat_corp_id: '',
   wechat_corp_secret: '',
   wechat_agent_id: '',
+  wechat_group_webhook: '',
   ww_verify_code: '',
 }
 
@@ -64,6 +66,7 @@ function toFormValues(configs: ConfigItem[]): SettingsFormValues {
     wechat_corp_id: values.wechat_corp_id ?? '',
     wechat_corp_secret: values.wechat_corp_secret ?? '',
     wechat_agent_id: values.wechat_agent_id ?? '',
+    wechat_group_webhook: values.wechat_group_webhook ?? '',
     ww_verify_code: values.ww_verify_code ?? '',
   }
 }
@@ -189,43 +192,20 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3">
                 <KeyRound aria-hidden="true" className="size-5 text-primary" />
                 <div>
-                  <CardTitle>企业微信设置</CardTitle>
-                  <CardDescription className="mt-1">用于企业身份和应用消息服务</CardDescription>
+                  <CardTitle>企业微信群提醒</CardTitle>
+                  <CardDescription className="mt-1">续费和任务提醒统一发送到内部群，不需要固定可信 IP</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="grid gap-5 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="wechat_corp_id"
+                name="wechat_group_webhook"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>企业标识</FormLabel>
-                    <FormControl><Input autoComplete="off" placeholder="请输入企业标识" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="wechat_corp_secret"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>企业微信应用密钥</FormLabel>
-                    <FormControl><Input autoComplete="new-password" placeholder="请输入应用密钥" type="password" {...field} /></FormControl>
-                    <FormDescription>已保存的应用密钥会以掩码显示，保留原值不会覆盖。</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="wechat_agent_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>应用 Agent ID</FormLabel>
-                    <FormControl><Input autoComplete="off" inputMode="numeric" placeholder="请输入应用 Agent ID" {...field} /></FormControl>
-                    <FormDescription>用于向员工发送续费和任务提醒。</FormDescription>
+                    <FormLabel>群机器人 Webhook 地址</FormLabel>
+                    <FormControl><Input autoComplete="new-password" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." type="password" {...field} /></FormControl>
+                    <FormDescription>该地址包含群机器人的唯一密钥，会以掩码显示；留空不会覆盖已保存的地址。</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -235,14 +215,12 @@ export default function SettingsPage() {
               <div className="space-y-3 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
                 <p className="font-semibold">企业微信配置获取说明</p>
                 <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-5">
-                  <li>打开<a className="mx-1 inline-flex items-center gap-1 font-medium underline" href="https://work.weixin.qq.com/" rel="noreferrer" target="_blank">企业微信管理后台<ExternalLink aria-hidden="true" className="size-3" /></a>，进入“我的企业”查看企业标识（Corp ID）。</li>
-                  <li>进入“应用管理 → 自建应用”，打开本 CRM 应用，在“开发者接口凭证”中复制应用 Secret，并在应用详情顶部获取 Agent ID。</li>
-                  <li>员工提醒使用的是企业微信成员 <strong>UserID</strong>，不是 CRM 数据库 UUID。进入“通讯录 → 成员”，打开成员详情，在“账号 / UserID”处复制；也可以在“员工管理 → 编辑员工”中直接从通讯录下拉选择。</li>
-                  <li>员工管理弹窗会通过企业微信通讯录接口自动读取成员。若读取失败，请确认自建应用的可见范围覆盖成员，并拥有通讯录读取权限；管理员可在弹窗中手动填写 UserID。</li>
-                  <li>如果通讯录接口仍无结果，在企业微信内打开员工编辑弹窗并点击“微信授权获取”。系统会通过网页授权接口读取当前登录成员的真实 UserID，不依赖通讯录全量读取权限；需在企业微信应用中配置网页授权域名为 <code className="break-all rounded bg-white px-1 py-0.5">serverless-crm-api.q84536346.workers.dev</code>。</li>
-                  <li>如需域名验证，在“企业微信设置”中填写验证文件代码，并将文件原样上传到 API 根地址：<code className="break-all rounded bg-white px-1 py-0.5">https://serverless-crm-api.q84536346.workers.dev/WW_verify_验证代码.txt</code>，例如代码为 <code className="rounded bg-white px-1 py-0.5">123456</code> 时地址为 <code className="break-all rounded bg-white px-1 py-0.5">https://serverless-crm-api.q84536346.workers.dev/WW_verify_123456.txt</code>。</li>
+                  <li>在企业微信中创建内部群，打开群设置，选择“群机器人 → 添加机器人 → 新建机器人”。</li>
+                  <li>复制机器人生成的 Webhook 完整地址，粘贴到上方后保存。该地址以 <code className="rounded bg-white px-1 py-0.5">https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=</code> 开头。</li>
+                  <li>点击“发送测试消息”，确认群内收到消息后，定时任务和续费提醒将统一发送到此群。</li>
+                  <li>群机器人不依赖企业可信 IP，也不需要配置 Corp ID、Secret、Agent ID 或员工 UserID。</li>
                 </ol>
-                <p className="text-xs text-sky-800">保存配置后点击“发送测试消息”；若失败，请先确认应用已启用、可见范围包含该成员，且 UserID 与通讯录中的值完全一致。</p>
+                <p className="text-xs text-sky-800">请妥善保管 Webhook 地址；机器人被移除、地址泄露或群被解散后，需要重新创建并更新地址。</p>
               </div>
             </CardContent>
           </Card>
@@ -276,7 +254,7 @@ export default function SettingsPage() {
           <div className="flex flex-wrap justify-end gap-2">
             <Button disabled={testWeChatMutation.isPending || updateMutation.isPending} onClick={() => testWeChatMutation.mutate()} type="button" variant="outline">
               <Send aria-hidden="true" className="size-4" />
-              {testWeChatMutation.isPending ? '正在发送' : '发送测试消息'}
+              {testWeChatMutation.isPending ? '正在发送' : '发送群测试消息'}
             </Button>
             <Button disabled={updateMutation.isPending || testWeChatMutation.isPending} type="submit">
               <Save aria-hidden="true" className="size-4" />
