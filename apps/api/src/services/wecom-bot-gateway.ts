@@ -18,12 +18,10 @@ async function sign(secret: string, timestamp: string, body: string) {
 }
 
 async function signedGatewayRequest(env: Env, path: string, method: 'GET' | 'POST', body = '') {
-  const gateway = await configuredGateway(env)
-  if (!gateway) throw new Error('企业微信智能机器人网关未配置')
   const { botSecret } = await getBotCredentials(env)
   if (!botSecret) throw new Error('请先在系统设置中配置智能机器人的长连接专用 Secret')
   const timestamp = String(Date.now())
-  const response = await fetch(`${gateway.baseUrl}${path}`, {
+  const response = await env.WECOM_BOT_GATEWAY.fetch(`https://crm-wecom-bot-gateway.internal${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -45,15 +43,6 @@ export async function getWeComBotGatewayStatus(env: Env) {
   return signedGatewayRequest(env, '/internal/status', 'GET')
 }
 
-async function configuredGateway(env: Env) {
-  const baseUrl = env.WECOM_BOT_GATEWAY_URL?.trim()
-  if (!baseUrl) return undefined
-  let url: URL
-  try { url = new URL(baseUrl) } catch { throw new Error('WECOM_BOT_GATEWAY_URL 格式无效') }
-  if (url.protocol !== 'https:') throw new Error('WECOM_BOT_GATEWAY_URL 必须使用 HTTPS')
-  return { baseUrl: url.toString().replace(/\/$/u, '') }
-}
-
 async function getBotCredentials(env: Env) {
   const db = createDb(env.DB)
   const configs = await db.select({ key: systemConfigs.configKey, value: systemConfigs.configValue })
@@ -63,7 +52,6 @@ async function getBotCredentials(env: Env) {
 }
 
 export async function isWeComBotGatewayConfigured(env: Env) {
-  if (!(await configuredGateway(env))) return false
   const credentials = await getBotCredentials(env)
   return Boolean(credentials.botId && credentials.botSecret)
 }
