@@ -114,7 +114,7 @@ export async function sendRenewalReminders(env: Env, now = new Date()) {
       ].join('\n')).join('\n\n---\n\n')
   try {
     const message = `🔔 **CRM 续费提醒汇总（${claimedReminders.length} 条）**\n\n${content}`
-    if (isWeComBotGatewayConfigured(env)) await sendWeComBotGroupMarkdownMessage(env, message)
+    if (await isWeComBotGatewayConfigured(env)) await sendWeComBotGroupMarkdownMessage(env, message)
     else await sendWeChatGroupMarkdownMessage(env, message)
     await db.update(notificationLogs).set({ status: 'Sent', sentAt: new Date(), lastError: null, attemptCount: 1 }).where(inArray(notificationLogs.id, claimedReminders.map(({ logId }) => logId)))
     const summary = { matched: expiringServices.length, sent: claimedReminders.length, failed: 0, skippedRecipients, deduplicated: reminders.length - claimedReminders.length }

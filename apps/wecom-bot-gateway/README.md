@@ -5,18 +5,16 @@
 ## 配置
 
 ```powershell
-pnpm --filter @crm/wecom-bot-gateway exec wrangler secret put WEWORK_BOT_ID
-pnpm --filter @crm/wecom-bot-gateway exec wrangler secret put WEWORK_BOT_SECRET
 pnpm --filter @crm/wecom-bot-gateway exec wrangler secret put CRM_GATEWAY_SECRET
 ```
 
 通过 GitHub Actions 自动部署时，请在仓库的 `Settings → Secrets and variables → Actions` 新增：
 
-- `WEWORK_BOT_ID`：企业微信智能机器人的 BotID。
-- `WEWORK_BOT_SECRET`：机器人“API 模式 → 长连接”的专用 Secret。
 - `WECOM_BOT_GATEWAY_SECRET`：自行生成的高强度随机字符串，CRM API 与本网关必须使用同一值。
 
-同时在 CRM API Worker 设置两个绑定：
+企业微信 BotID 和长连接 Secret 不需要配置为部署 Secret，直接在 CRM 前端“系统设置 → 企业微信提醒”中填写。网关通过同一个 D1 数据库读取这两个值。
+
+同时在 CRM API Worker 设置网关共享密钥：
 
 ```powershell
 pnpm --filter @crm/api exec wrangler secret put WECOM_BOT_GATEWAY_SECRET
@@ -24,7 +22,7 @@ pnpm --filter @crm/api exec wrangler secret put WECOM_BOT_GATEWAY_SECRET
 
 本项目已将 API 的网关地址配置为当前 Cloudflare 账户的 `crm-wecom-bot-gateway.q84536346.workers.dev`；不要把 BotID、任意 Secret 或 WebSocket 密钥写进 `wrangler.jsonc`。
 
-网关 Secrets 未配置时，GitHub Actions 会跳过网关部署，不会影响现有 CRM API 与前端发布。
+网关共享密钥未配置时，网关仍会部署，但内部发送接口会拒绝请求；不会影响现有 CRM API 与前端发布。
 
 ## 启动连接
 

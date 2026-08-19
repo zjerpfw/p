@@ -166,7 +166,7 @@ configRoutes.post('/test-wechat', async (c) => {
 
   try {
     const message = ['✅ **CRM 群提醒测试消息**', '续费提醒和任务提醒将发送到此内部群。'].join('\n')
-    if (isWeComBotGatewayConfigured(c.env)) await sendWeComBotGroupMarkdownMessage(c.env, message)
+    if (await isWeComBotGatewayConfigured(c.env)) await sendWeComBotGroupMarkdownMessage(c.env, message)
     else await sendWeChatGroupMarkdownMessage(c.env, message)
     return c.json({ sent: true })
   } catch (error) {

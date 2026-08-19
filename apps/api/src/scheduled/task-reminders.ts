@@ -102,7 +102,7 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
   }).join('\n\n---\n\n')
   try {
     const message = `📋 **CRM 任务提醒汇总（${claimed.length} 条）**\n\n${content}`
-    if (isWeComBotGatewayConfigured(env)) await sendWeComBotGroupMarkdownMessage(env, message)
+    if (await isWeComBotGatewayConfigured(env)) await sendWeComBotGroupMarkdownMessage(env, message)
     else await sendWeChatGroupMarkdownMessage(env, message)
     await db.update(notificationLogs).set({ status: 'Sent', sentAt: new Date(), lastError: null, attemptCount: 1 }).where(inArray(notificationLogs.id, claimed.map(({ logId }) => logId)))
     const summary = { upcomingHighPriority: upcomingHighPriorityTasks.length, dueToday: dueTodayTasks.length, overdue: overdueTasks.length, sent: claimed.length, failed: 0, skippedRecipients, deduplicated: candidates.length - claimed.length }

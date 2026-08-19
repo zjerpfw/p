@@ -10,6 +10,13 @@
   "vars": {
     "WEWORK_WS_URL": "wss://openws.work.weixin.qq.com"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crm_db",
+      "database_id": "2d22512b-69dd-47ea-bb89-7f776847eff4"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "BOT_CONNECTION", "class_name": "WeComBotConnection" }

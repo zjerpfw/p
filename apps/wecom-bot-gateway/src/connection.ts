@@ -20,6 +20,8 @@ interface ConnectionState {
 export class WeComBotConnection extends DurableObject<Env> {
   private socket?: WebSocket
   private heartbeatTimer?: ReturnType<typeof setInterval>
+  private botId = ''
+  private botSecret = ''
   private state: ConnectionState = { connected: false, connecting: false, reconnectAttempt: 0 }
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -30,6 +32,7 @@ export class WeComBotConnection extends DurableObject<Env> {
         // WebSocket 不能跨 Durable Object 进程恢复；仅保留诊断信息。
         this.state = { ...saved, connected: false, connecting: false }
       }
+      await this.loadBotCredentials()
     })
   }
 
@@ -54,6 +57,7 @@ export class WeComBotConnection extends DurableObject<Env> {
       if (!chatid || !content || (chatType !== 1 && chatType !== 2)) {
         return Response.json({ error: '请先在目标群 @CRM 智能机器人发送任意消息完成群绑定，或提供 chatid、chat_type、content。' }, { status: 400 })
       }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) await this.ensureConnection()
       const sent = this.send(activeMessage({ chatid, chatType, content }))
       if (!sent) return Response.json({ error: '机器人长连接尚未建立' }, { status: 503 })
       return Response.json({ ok: true })
@@ -71,8 +75,9 @@ export class WeComBotConnection extends DurableObject<Env> {
 
   private async ensureConnection(): Promise<void> {
     if (this.state.connecting || (this.socket && this.socket.readyState === WebSocket.OPEN)) return
-    if (!this.env.WEWORK_BOT_ID || !this.env.WEWORK_BOT_SECRET) {
-      this.state.lastError = 'WEWORK_BOT_ID 或 WEWORK_BOT_SECRET 未配置'
+    await this.loadBotCredentials()
+    if (!this.botId || !this.botSecret) {
+      this.state.lastError = '请先在 CRM 系统设置中配置智能机器人 BotID 和长连接 Secret'
       await this.persist()
       return
     }
@@ -87,7 +92,7 @@ export class WeComBotConnection extends DurableObject<Env> {
         this.state.connectedAt = Date.now()
         this.state.lastError = undefined
         this.state.reconnectAttempt = 0
-        this.send(subscribe(this.env.WEWORK_BOT_ID, this.env.WEWORK_BOT_SECRET))
+        this.send(subscribe(this.botId, this.botSecret))
         this.startHeartbeat()
         void this.persist()
       })
@@ -162,6 +167,15 @@ export class WeComBotConnection extends DurableObject<Env> {
 
   private snapshot(): ConnectionState {
     return { ...this.state }
+  }
+
+  private async loadBotCredentials(): Promise<void> {
+    const rows = await this.env.DB.prepare(
+      "SELECT config_key, config_value FROM system_configs WHERE config_key IN ('wecom_bot_id', 'wecom_bot_secret')",
+    ).all<{ config_key: string; config_value: string }>()
+    const values = new Map((rows.results ?? []).map((row) => [row.config_key, row.config_value.trim()]))
+    this.botId = values.get('wecom_bot_id') ?? ''
+    this.botSecret = values.get('wecom_bot_secret') ?? ''
   }
 
   private async persist(): Promise<void> {

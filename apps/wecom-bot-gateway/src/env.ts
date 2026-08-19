@@ -3,8 +3,7 @@ import type { WeComBotConnection } from './connection'
 
 export interface Env {
   BOT_CONNECTION: DurableObjectNamespace<WeComBotConnection>
+  DB: D1Database
   WEWORK_WS_URL: string
-  WEWORK_BOT_ID: string
-  WEWORK_BOT_SECRET: string
   CRM_GATEWAY_SECRET: string
 }

@@ -27,6 +27,8 @@ interface SettingsFormValues {
   wechat_corp_secret: string
   wechat_agent_id: string
   wechat_group_webhook: string
+  wecom_bot_id: string
+  wecom_bot_secret: string
   ww_verify_code: string
 }
 
@@ -55,6 +57,8 @@ const defaultValues: SettingsFormValues = {
   wechat_corp_secret: '',
   wechat_agent_id: '',
   wechat_group_webhook: '',
+  wecom_bot_id: '',
+  wecom_bot_secret: '',
   ww_verify_code: '',
 }
 
@@ -67,6 +71,8 @@ function toFormValues(configs: ConfigItem[]): SettingsFormValues {
     wechat_corp_secret: values.wechat_corp_secret ?? '',
     wechat_agent_id: values.wechat_agent_id ?? '',
     wechat_group_webhook: values.wechat_group_webhook ?? '',
+    wecom_bot_id: values.wecom_bot_id ?? '',
+    wecom_bot_secret: values.wecom_bot_secret ?? '',
     ww_verify_code: values.ww_verify_code ?? '',
   }
 }
@@ -164,6 +170,30 @@ export default function SettingsPage() {
             <CardContent className="grid gap-5 md:grid-cols-2">
               <FormField
                 control={form.control}
+                name="wecom_bot_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>智能机器人 BotID</FormLabel>
+                    <FormControl><Input autoComplete="off" placeholder="在企业微信智能机器人后台复制 BotID" {...field} /></FormControl>
+                    <FormDescription>企业微信后台：智能机器人 → API 模式 → 长连接。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="wecom_bot_secret"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>长连接专用 Secret</FormLabel>
+                    <FormControl><Input autoComplete="new-password" placeholder="首次填写或输入新 Secret 更新" type="password" {...field} /></FormControl>
+                    <FormDescription>保存后仅显示掩码；保持原值无需改动。</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="amap_key"
                 render={({ field }) => (
                   <FormItem>
@@ -215,7 +245,7 @@ export default function SettingsPage() {
               <div className="space-y-3 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
                 <p className="font-semibold">推荐：智能机器人长连接</p>
                 <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-5">
-                  <li>管理员在企业微信后台创建“智能机器人”，开启“API 模式 → 长连接”，并由运维配置 BotID 与长连接专用 Secret。</li>
+                  <li>管理员在企业微信后台创建“智能机器人”，开启“API 模式 → 长连接”，将 BotID 和长连接专用 Secret 填入上方并保存。</li>
                   <li>将 CRM 智能机器人加入目标内部群，在群内 @机器人发送任意消息，系统会自动绑定该提醒群。</li>
                   <li>点击“发送测试消息”，确认群内收到消息后，续费和任务提醒将优先通过智能机器人发送。</li>
                   <li>智能机器人不依赖企业可信 IP。员工单独提醒前，员工必须先与机器人发起过会话。</li>
