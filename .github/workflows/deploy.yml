@@ -117,7 +117,6 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: apps/wecom-bot-gateway
-        env:
 
       - name: Configure gateway shared secret
         if: ${{ secrets.WECOM_BOT_GATEWAY_SECRET != '' }}
