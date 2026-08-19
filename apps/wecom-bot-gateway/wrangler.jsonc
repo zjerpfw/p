@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crm-wecom-bot-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-08-22",
+  "observability": { "enabled": true },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "WEWORK_WS_URL": "wss://openws.work.weixin.qq.com"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "BOT_CONNECTION", "class_name": "WeComBotConnection" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["WeComBotConnection"] }
+  ]
+}

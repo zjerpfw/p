@@ -17,7 +17,8 @@
     "GITHUB_REPOSITORY": "crm-images-storage",
     "SUPABASE_S3_ENDPOINT": "https://idtxusyasdmnozfdzmuj.storage.supabase.co/storage/v1/s3",
     "SUPABASE_S3_BUCKET": "crm-contracts",
-    "SUPABASE_S3_REGION": "ap-south-1"
+    "SUPABASE_S3_REGION": "ap-south-1",
+    "WECOM_BOT_GATEWAY_URL": "https://crm-wecom-bot-gateway.q84536346.workers.dev"
   },
   "d1_databases": [
     {

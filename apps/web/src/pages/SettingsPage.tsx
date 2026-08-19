@@ -192,7 +192,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3">
                 <KeyRound aria-hidden="true" className="size-5 text-primary" />
                 <div>
-                  <CardTitle>企业微信群提醒</CardTitle>
+                  <CardTitle>企业微信提醒</CardTitle>
                   <CardDescription className="mt-1">续费和任务提醒统一发送到内部群，不需要固定可信 IP</CardDescription>
                 </div>
               </div>
@@ -203,9 +203,9 @@ export default function SettingsPage() {
                 name="wechat_group_webhook"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>群机器人 Webhook 地址</FormLabel>
+                    <FormLabel>群消息推送 Webhook 地址（备用）</FormLabel>
                     <FormControl><Input autoComplete="new-password" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." type="password" {...field} /></FormControl>
-                    <FormDescription>该地址包含群机器人的唯一密钥，会以掩码显示；留空不会覆盖已保存的地址。</FormDescription>
+                    <FormDescription>未启用智能机器人网关时使用。该地址包含消息推送机器人的唯一密钥，会以掩码显示；留空不会覆盖已保存的地址。</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -213,14 +213,14 @@ export default function SettingsPage() {
             </CardContent>
             <CardContent className="border-t border-border pt-5">
               <div className="space-y-3 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
-                <p className="font-semibold">企业微信配置获取说明</p>
+                <p className="font-semibold">推荐：智能机器人长连接</p>
                 <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-5">
-                  <li>在企业微信中创建内部群，打开群设置，选择“群机器人 → 添加机器人 → 新建机器人”。</li>
-                  <li>复制机器人生成的 Webhook 完整地址，粘贴到上方后保存。该地址以 <code className="rounded bg-white px-1 py-0.5">https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=</code> 开头。</li>
-                  <li>点击“发送测试消息”，确认群内收到消息后，定时任务和续费提醒将统一发送到此群。</li>
-                  <li>群机器人不依赖企业可信 IP，也不需要配置 Corp ID、Secret、Agent ID 或员工 UserID。</li>
+                  <li>管理员在企业微信后台创建“智能机器人”，开启“API 模式 → 长连接”，并由运维配置 BotID 与长连接专用 Secret。</li>
+                  <li>将 CRM 智能机器人加入目标内部群，在群内 @机器人发送任意消息，系统会自动绑定该提醒群。</li>
+                  <li>点击“发送测试消息”，确认群内收到消息后，续费和任务提醒将优先通过智能机器人发送。</li>
+                  <li>智能机器人不依赖企业可信 IP。员工单独提醒前，员工必须先与机器人发起过会话。</li>
                 </ol>
-                <p className="text-xs text-sky-800">请妥善保管 Webhook 地址；机器人被移除、地址泄露或群被解散后，需要重新创建并更新地址。</p>
+                <p className="text-xs text-sky-800">备用方式：在内部群设置中选择“消息推送 → 添加机器人”，将生成的 Webhook 地址填入上方。智能机器人未配置时，系统会使用此备用地址。</p>
               </div>
             </CardContent>
           </Card>

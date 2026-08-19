@@ -7,6 +7,7 @@ import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { getWeChatCorpId, getWeChatUserByCode, listWeChatUsers, sendWeChatGroupMarkdownMessage } from '../services/wechat'
+import { isWeComBotGatewayConfigured, sendWeComBotGroupMarkdownMessage } from '../services/wecom-bot-gateway'
 
 const PUBLIC_CONFIG_KEYS = ['amap_key', 'amap_security_code'] as const
 const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key|webhook)/i
@@ -164,7 +165,9 @@ configRoutes.post('/test-wechat', async (c) => {
   if (!actor) return c.json({ error: '登录凭证无效' }, 401)
 
   try {
-    await sendWeChatGroupMarkdownMessage(c.env, ['✅ **CRM 群提醒测试消息**', '续费提醒和任务提醒将发送到此内部群。'].join('\n'))
+    const message = ['✅ **CRM 群提醒测试消息**', '续费提醒和任务提醒将发送到此内部群。'].join('\n')
+    if (isWeComBotGatewayConfigured(c.env)) await sendWeComBotGroupMarkdownMessage(c.env, message)
+    else await sendWeChatGroupMarkdownMessage(c.env, message)
     return c.json({ sent: true })
   } catch (error) {
     console.error('WeChat test message failed', error)

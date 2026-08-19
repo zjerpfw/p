@@ -1,0 +1,6 @@
+# 企业微信智能机器人后台「API模式 -> 长连接」中的凭据
+WEWORK_BOT_ID=replace-with-bot-id
+WEWORK_BOT_SECRET=replace-with-long-connection-secret
+
+# CRM Worker 调用本网关时使用的共享密钥（不要提交真实值）
+CRM_GATEWAY_SECRET=replace-with-random-secret

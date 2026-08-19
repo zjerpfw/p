@@ -45,11 +45,13 @@ jobs:
             GITHUB_TOKEN
             SUPABASE_S3_ACCESS_KEY_ID
             SUPABASE_S3_SECRET_ACCESS_KEY
+            WECOM_BOT_GATEWAY_SECRET
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GITHUB_TOKEN: ${{ secrets.IMAGE_STORAGE_GITHUB_PAT }}
           SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY }}
           SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_KEY }}
+          WECOM_BOT_GATEWAY_SECRET: ${{ secrets.WECOM_BOT_GATEWAY_SECRET }}
 
   deploy-web:
     name: Deploy Web
@@ -85,3 +87,42 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           command: pages deploy apps/web/dist --project-name="crm-web"
+
+  deploy-wecom-bot-gateway:
+    name: Deploy WeCom Bot Gateway
+    runs-on: ubuntu-latest
+    needs: deploy-api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Deploy WeCom Bot Gateway
+        if: ${{ env.WEWORK_BOT_ID != '' && env.WEWORK_BOT_SECRET != '' && env.CRM_GATEWAY_SECRET != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          workingDirectory: apps/wecom-bot-gateway
+          secrets: |
+            WEWORK_BOT_ID
+            WEWORK_BOT_SECRET
+            CRM_GATEWAY_SECRET
+        env:
+          WEWORK_BOT_ID: ${{ secrets.WEWORK_BOT_ID }}
+          WEWORK_BOT_SECRET: ${{ secrets.WEWORK_BOT_SECRET }}
+          CRM_GATEWAY_SECRET: ${{ secrets.WECOM_BOT_GATEWAY_SECRET }}

@@ -5,6 +5,7 @@ import { and, eq, gte, inArray, lt } from 'drizzle-orm'
 import type { Env } from '../env'
 import { todayInShanghai } from '../lib/shanghai-date'
 import { sendWeChatGroupMarkdownMessage } from '../services/wechat'
+import { isWeComBotGatewayConfigured, sendWeComBotGroupMarkdownMessage } from '../services/wecom-bot-gateway'
 
 type TaskReminderType = 'TaskUpcomingReminder' | 'TaskDueReminder' | 'TaskOverdueReminder'
 
@@ -100,7 +101,9 @@ export async function sendTaskReminders(env: Env, now = new Date()) {
     ].filter(Boolean).join('\n')
   }).join('\n\n---\n\n')
   try {
-    await sendWeChatGroupMarkdownMessage(env, `📋 **CRM 任务提醒汇总（${claimed.length} 条）**\n\n${content}`)
+    const message = `📋 **CRM 任务提醒汇总（${claimed.length} 条）**\n\n${content}`
+    if (isWeComBotGatewayConfigured(env)) await sendWeComBotGroupMarkdownMessage(env, message)
+    else await sendWeChatGroupMarkdownMessage(env, message)
     await db.update(notificationLogs).set({ status: 'Sent', sentAt: new Date(), lastError: null, attemptCount: 1 }).where(inArray(notificationLogs.id, claimed.map(({ logId }) => logId)))
     const summary = { upcomingHighPriority: upcomingHighPriorityTasks.length, dueToday: dueTodayTasks.length, overdue: overdueTasks.length, sent: claimed.length, failed: 0, skippedRecipients, deduplicated: candidates.length - claimed.length }
     console.info('Task reminder job completed', summary)

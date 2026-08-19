@@ -1,0 +1,17 @@
+{
+  "name": "@crm/wecom-bot-gateway",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run",
+    "check": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20250816.0",
+    "typescript": "^5.8.3",
+    "wrangler": "4.31.0"
+  }
+}
