@@ -13,6 +13,7 @@ import { BatchTaskDialog } from '@/components/customers/BatchTaskDialog'
 import { BatchTransferCustomersDialog } from '@/components/customers/BatchTransferCustomersDialog'
 import { CustomerImportDialog } from '@/components/customers/CustomerImportDialog'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useCustomerTags } from '@/hooks/useCustomerTags'
@@ -147,7 +148,7 @@ export default function CustomersPage() {
         </select>
         </CardContent>
       </Card>
-      {isLoading && <p className="mt-8 text-sm text-muted-foreground">正在加载客户数据...</p>}
+      {isLoading && <div aria-label="正在加载客户" className="grid gap-3" role="status">{[0, 1, 2, 3].map((item) => <Card className="gap-0 py-0" key={item}><CardContent className="space-y-3 p-4"><div className="flex items-center justify-between gap-3"><Skeleton className="h-5 w-2/5" /><Skeleton className="h-5 w-16" /></div><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-1/3" /></CardContent></Card>)}</div>}
       {error && <p className="mt-8 text-sm text-destructive">{error.message}</p>}
       {data && !isMobile && (
         <Card className="gap-0 overflow-hidden py-0">

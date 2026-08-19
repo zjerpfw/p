@@ -25,7 +25,7 @@ interface PipelineColumnPage {
   }
 }
 
-export function useDealPipelineSummary(search: string) {
+export function useDealPipelineSummary(search: string, enabled = true) {
   const params = new URLSearchParams()
   if (search) params.set('search', search)
   const query = params.toString()
@@ -33,6 +33,7 @@ export function useDealPipelineSummary(search: string) {
   return useQuery({
     queryKey: ['deals', 'pipeline', 'summary', search],
     queryFn: () => apiFetch<PipelineSummary>(`/api/deals/pipeline${query ? `?${query}` : ''}`),
+    enabled,
   })
 }
 

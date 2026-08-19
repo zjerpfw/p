@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PaginationControls } from '@/components/PaginationControls'
 import SaaSDealWonModal from '@/components/deals/SaaSDealWonModal'
 import { DealDetailModal } from '@/components/deals/DealDetailModal'
@@ -35,6 +36,14 @@ function isOverdue(value: string | null, stage: DealStage) {
   // Expected-close-date alerts only apply to open opportunities. Won/Lost are final outcomes.
   if (!value || stage === 'Won' || stage === 'Lost') return false
   return isBefore(parseISO(value), startOfDay(new Date()))
+}
+
+function DealCardSkeleton() {
+  return <Card className="gap-0 py-0"><CardContent className="space-y-3 p-3"><Skeleton className="h-4 w-3/5" /><Skeleton className="h-3 w-2/5" /><Skeleton className="h-6 w-1/2" /><div className="flex gap-2"><Skeleton className="h-5 w-14" /><Skeleton className="h-5 w-16" /></div><Skeleton className="h-8 w-full" /></CardContent></Card>
+}
+
+function PipelineSkeleton() {
+  return <div className="grid min-h-0 flex-1 gap-3 rounded-xl bg-slate-100/80 p-2 md:grid-cols-3">{[0, 1, 2].map((column) => <div className="min-h-0 rounded-lg border border-slate-200 bg-slate-100 p-2.5" key={column}><Skeleton className="mb-4 h-20 w-full bg-white" /><div className="space-y-2.5"><DealCardSkeleton /><DealCardSkeleton /></div></div>)}</div>
 }
 
 interface PipelineColumnProps {
@@ -107,7 +116,7 @@ export default function DealsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const debouncedSearch = useDebouncedValue(search.trim())
   const { data, error, isLoading } = useDeals({ search: debouncedSearch, status: status || undefined, activeOnly: !status, page, enabled: isMobile })
-  const pipelineSummary = useDealPipelineSummary(debouncedSearch)
+  const pipelineSummary = useDealPipelineSummary(debouncedSearch, !isMobile)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -198,9 +207,9 @@ export default function DealsPage() {
         <Button className="h-11 shadow-sm shadow-indigo-200 md:h-8" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
       </div>
 
-      {isMobile && isLoading && <p className="flex-1 py-6 text-sm text-muted-foreground">正在加载商机数据...</p>}
+      {isMobile && isLoading && <div aria-label="正在加载商机" className="grid gap-3" role="status">{[0, 1, 2, 3].map((item) => <DealCardSkeleton key={item} />)}</div>}
       {isMobile && error && <p className="flex-1 py-6 text-sm text-destructive">{error.message}</p>}
-      {!isMobile && pipelineSummary.isLoading && <p className="flex-1 py-6 text-sm text-muted-foreground">正在加载商机管道...</p>}
+      {!isMobile && pipelineSummary.isLoading && <PipelineSkeleton />}
       {!isMobile && pipelineSummary.error && <p className="flex-1 py-6 text-sm text-destructive">{pipelineSummary.error.message}</p>}
       {pipelineSummary.data && !isMobile && <>
         <div className={`flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl bg-slate-100/80 p-2 touch-pan-x md:grid md:overflow-hidden md:snap-none ${pipelineGridColumns}`}>

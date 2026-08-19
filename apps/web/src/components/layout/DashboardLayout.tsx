@@ -45,13 +45,14 @@ function DesktopNavigation() {
 }
 
 const mobileNavigation = [
+  { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { to: '/deals', label: '看板', icon: BriefcaseBusiness },
   { to: '/won-customers', label: '成交', icon: MapPinned },
   { to: '/my-work', label: '我的', icon: UserRound },
 ]
 
 function MobileTabBar() {
-  return <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-3 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
+  return <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-4 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
     {mobileNavigation.map(({ icon: Icon, label, to }) => <NavLink className={({ isActive }) => cn('flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors', isActive ? 'text-indigo-600' : 'text-slate-500')} key={to} to={to}><Icon aria-hidden="true" className="size-5" /><span>{label}</span></NavLink>)}
   </nav>
 }
