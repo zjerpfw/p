@@ -220,6 +220,7 @@ configRoutes.get('/wechat-users', async (c) => {
     return c.json({ users })
   } catch (error) {
     console.error('WeChat user directory request failed', error)
-    return c.json({ error: '企业微信成员获取失败，请检查 Corp ID、应用 Secret 及通讯录读取权限' }, 502)
+    const detail = error instanceof Error ? error.message : '未知错误'
+    return c.json({ error: `企业微信成员获取失败：${detail}` }, 502)
   }
 })

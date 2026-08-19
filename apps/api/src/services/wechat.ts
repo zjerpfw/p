@@ -5,6 +5,7 @@ import { inArray } from 'drizzle-orm'
 import type { Env } from '../env'
 
 const WECHAT_ACCESS_TOKEN_TTL_SECONDS = 7000
+const WECHAT_DIRECTORY_CACHE_TTL_SECONDS = 5 * 60
 const WECHAT_CONFIG_KEYS = ['wechat_corp_id', 'wechat_corp_secret', 'wechat_agent_id'] as const
 
 interface WeChatAccessTokenResponse {
@@ -22,11 +23,21 @@ export interface WeChatDirectoryUser {
   userid: string
   name: string
   department?: number[]
+  status?: number
 }
 
 interface WeChatUserListResponse extends WeChatApiResponse {
   userlist?: WeChatDirectoryUser[]
 }
+
+interface WeChatAgentResponse extends WeChatApiResponse {
+  allow_userinfos?: WeChatVisibleUsers
+  allow_users?: WeChatVisibleUsers
+  allow_partys?: Array<number | string | { id?: number | string }>
+}
+
+type WeChatVisibleUser = { userid?: string } | string
+type WeChatVisibleUsers = WeChatVisibleUser[] | { user?: WeChatVisibleUser[] }
 
 interface WeChatUserInfoResponse extends WeChatApiResponse {
   UserId?: string
@@ -75,6 +86,47 @@ export function isWeChatApiError(response: WeChatApiResponse) {
   return response.errcode !== undefined && response.errcode !== 0
 }
 
+class WeChatApiError extends Error {
+  constructor(readonly operation: string, readonly errcode?: number, readonly errmsg?: string) {
+    super(`企业微信 ${operation} 失败：${errcode ?? 'unknown'}${errmsg ? ` ${errmsg}` : ''}`)
+  }
+}
+
+function assertWeChatApiSuccess(operation: string, response: WeChatApiResponse) {
+  if (isWeChatApiError(response)) throw new WeChatApiError(operation, response.errcode, response.errmsg)
+}
+
+function normalizeDirectoryUsers(users: WeChatDirectoryUser[]) {
+  const result = new Map<string, WeChatDirectoryUser>()
+  for (const user of users) {
+    const userid = user.userid?.trim()
+    const name = user.name?.trim()
+    // 2=已禁用，5=已退出企业；其余状态仍可由管理员按需绑定。
+    if (!userid || !name || user.status === 2 || user.status === 5 || result.has(userid)) continue
+    result.set(userid, { userid, name, department: user.department, status: user.status })
+  }
+  return [...result.values()].sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+}
+
+function extractVisibleUserIds(value: WeChatVisibleUsers | undefined) {
+  const entries = Array.isArray(value) ? value : value?.user ?? []
+  return entries
+    .map((item) => typeof item === 'string' ? item : item.userid)
+    .filter((userid): userid is string => Boolean(userid?.trim()))
+}
+
+async function getWeChatApi<T extends WeChatApiResponse>(path: string, accessToken: string, params: Record<string, string> = {}) {
+  const url = new URL(`https://qyapi.weixin.qq.com/cgi-bin/${path}`)
+  url.searchParams.set('access_token', accessToken)
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`企业微信 ${path} 请求失败：HTTP ${response.status}`)
+  const data = (await response.json()) as T
+  assertWeChatApiSuccess(path, data)
+  return data
+}
+
 export async function getWeChatAccessToken(env: Env): Promise<string> {
   const configuration = await getWeChatConfiguration(env)
   const cacheKey = `wechat_access_token:${configuration.cacheVersion}`
@@ -89,9 +141,7 @@ export async function getWeChatAccessToken(env: Env): Promise<string> {
   if (!response.ok) throw new Error('WeChat token request failed')
 
   const data = (await response.json()) as WeChatAccessTokenResponse
-  if (isWeChatApiError(data) || !data.access_token) {
-    throw new Error(`WeChat token request failed: ${data.errcode ?? 'unknown'}`)
-  }
+  if (isWeChatApiError(data) || !data.access_token) throw new WeChatApiError('gettoken', data.errcode, data.errmsg)
 
   await env.CACHE.put(cacheKey, data.access_token, {
     expirationTtl: WECHAT_ACCESS_TOKEN_TTL_SECONDS,
@@ -136,22 +186,52 @@ export async function sendWeChatMarkdownMessage(
 }
 
 export async function listWeChatUsers(env: Env): Promise<WeChatDirectoryUser[]> {
-  const accessToken = await getWeChatAccessToken(env)
-  const url = new URL('https://qyapi.weixin.qq.com/cgi-bin/user/list')
-  url.searchParams.set('access_token', accessToken)
-  url.searchParams.set('department_id', '1')
-
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`WeChat user list request failed: ${response.status}`)
-
-  const result = (await response.json()) as WeChatUserListResponse
-  if (isWeChatApiError(result)) {
-    throw new Error(`WeChat user list request failed: ${result.errcode ?? 'unknown'} ${result.errmsg ?? ''}`)
+  const configuration = await getWeChatConfiguration(env)
+  const cacheKey = `wechat_directory_users:${configuration.cacheVersion}`
+  const cached = await env.CACHE.get(cacheKey)
+  if (cached) {
+    try { return JSON.parse(cached) as WeChatDirectoryUser[] } catch { /* Ignore stale malformed cache. */ }
   }
 
-  return (result.userlist ?? [])
-    .filter((user) => Boolean(user.userid?.trim() && user.name?.trim()))
-    .map((user) => ({ userid: user.userid.trim(), name: user.name.trim(), department: user.department }))
+  const accessToken = await getWeChatAccessToken(env)
+  let directoryUsers: WeChatDirectoryUser[]
+  try {
+    // 与旧项目一致：根部门加 fetch_child=1，覆盖全部子部门，而不是只读取根节点直属成员。
+    const result = await getWeChatApi<WeChatUserListResponse>('user/list', accessToken, { department_id: '1', fetch_child: '1' })
+    directoryUsers = result.userlist ?? []
+  } catch (error) {
+    if (!(error instanceof WeChatApiError) || error.errcode !== 60011) throw error
+
+    // 60011 表示没有全通讯录权限。退回到当前自建应用配置的可见人员和可见部门。
+    const agentId = configuration.agentId.trim()
+    if (!agentId) throw new Error('企业微信 Agent ID 未配置，无法读取应用可见范围')
+    const agent = await getWeChatApi<WeChatAgentResponse>('agent/get', accessToken, { agentid: agentId })
+    const directUsers = [...new Set([
+      ...extractVisibleUserIds(agent.allow_userinfos),
+      ...extractVisibleUserIds(agent.allow_users),
+    ])]
+    const visibleDepartments = (agent.allow_partys ?? [])
+      .map((item) => typeof item === 'object' ? item.id : item)
+      .map((id) => String(id ?? '').trim())
+      .filter(Boolean)
+
+    const departmentResults = await Promise.all(visibleDepartments.map((departmentId) =>
+      getWeChatApi<WeChatUserListResponse>('user/list', accessToken, { department_id: departmentId, fetch_child: '1' }),
+    ))
+    const directProfiles = await Promise.all(directUsers.map(async (userid) => {
+      try {
+        return await getWeChatApi<WeChatDirectoryUser & WeChatApiResponse>('user/get', accessToken, { userid })
+      } catch {
+        // 某些权限组合只会暴露 UserID；保留该 ID，管理员仍可完成绑定。
+        return { userid, name: userid }
+      }
+    }))
+    directoryUsers = [...directProfiles, ...departmentResults.flatMap((result) => result.userlist ?? [])]
+  }
+
+  const users = normalizeDirectoryUsers(directoryUsers)
+  await env.CACHE.put(cacheKey, JSON.stringify(users), { expirationTtl: WECHAT_DIRECTORY_CACHE_TTL_SECONDS })
+  return users
 }
 
 export async function getWeChatUserByCode(env: Env, code: string) {
@@ -163,9 +243,7 @@ export async function getWeChatUserByCode(env: Env, code: string) {
   if (!response.ok) throw new Error(`WeChat OAuth request failed: ${response.status}`)
 
   const result = (await response.json()) as WeChatUserInfoResponse
-  if (isWeChatApiError(result)) {
-    throw new Error(`WeChat OAuth request failed: ${result.errcode ?? 'unknown'} ${result.errmsg ?? ''}`)
-  }
+  assertWeChatApiSuccess('auth/getuserinfo', result)
 
   const userid = result.UserId?.trim() || result.user_info?.userid?.trim()
   if (!userid) throw new Error('WeChat OAuth did not return a UserID')
