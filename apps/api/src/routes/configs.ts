@@ -7,7 +7,7 @@ import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
 import { getWeChatCorpId, getWeChatUserByCode, listWeChatUsers, sendWeChatGroupMarkdownMessage } from '../services/wechat'
-import { isWeComBotGatewayConfigured, sendWeComBotGroupMarkdownMessage } from '../services/wecom-bot-gateway'
+import { connectWeComBotGateway, getWeComBotGatewayStatus, isWeComBotGatewayConfigured, sendWeComBotGroupMarkdownMessage } from '../services/wecom-bot-gateway'
 
 const PUBLIC_CONFIG_KEYS = ['amap_key', 'amap_security_code'] as const
 const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key|webhook)/i
@@ -172,6 +172,24 @@ configRoutes.post('/test-wechat', async (c) => {
   } catch (error) {
     console.error('WeChat test message failed', error)
     return c.json({ error: error instanceof Error ? error.message : '群机器人测试消息发送失败' }, 502)
+  }
+})
+
+configRoutes.post('/wecom-bot/connect', async (c) => {
+  try {
+    if (!await isWeComBotGatewayConfigured(c.env)) return c.json({ error: '请先填写 BotID 和长连接专用 Secret' }, 400)
+    return c.json(await connectWeComBotGateway(c.env))
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : '机器人连接失败' }, 502)
+  }
+})
+
+configRoutes.get('/wecom-bot/status', async (c) => {
+  try {
+    if (!await isWeComBotGatewayConfigured(c.env)) return c.json({ configured: false, connected: false, connecting: false })
+    return c.json({ configured: true, ...(await getWeComBotGatewayStatus(c.env)) })
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : '机器人状态获取失败' }, 502)
   }
 })
 

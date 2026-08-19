@@ -70,6 +70,9 @@ export class WeComBotConnection extends DurableObject<Env> {
         return Response.json({ error: '请先在目标群 @CRM 智能机器人发送任意消息完成群绑定，或提供 chatid、chat_type、content。' }, { status: 400 })
       }
       if (!this.socket || this.socket.readyState !== WebSocket.OPEN) await this.ensureConnection()
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        await this.waitForConnection(5000)
+      }
       const sent = this.send(activeMessage({ chatid, chatType, content }))
       if (!sent) return Response.json({ error: '机器人长连接尚未建立' }, { status: 503 })
       return Response.json({ ok: true })
@@ -132,6 +135,13 @@ export class WeComBotConnection extends DurableObject<Env> {
     }
   }
 
+  private async waitForConnection(timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while ((!this.socket || this.socket.readyState !== WebSocket.OPEN) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+
   private send(payload: string): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false
     this.socket.send(payload)
@@ -166,7 +176,8 @@ export class WeComBotConnection extends DurableObject<Env> {
       }
     }
     if (parsed.cmd === 'aibot_msg_callback' && parsed.body?.msgtype === 'text') {
-      const content = String((parsed.body.text as { content?: string } | undefined)?.content || '').trim()
+      const text = parsed.body.text as { content?: string } | string | undefined
+      const content = (typeof text === 'string' ? text : text?.content || String(parsed.body.content || '')).trim()
       if (content) {
         const isGroup = parsed.body.chattype === 'group'
         const reply = await this.handleCrmMessage(content, isGroup)

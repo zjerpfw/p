@@ -22,6 +22,15 @@ async function verifyInternalRequest(request: Request, env: Env): Promise<boolea
   return verifyRequest(request, result?.config_value.trim() ?? '')
 }
 
+async function signedRequest(request: Request, env: Env, path: string, body = ''): Promise<Response> {
+  if (!(await verifyInternalRequest(request, env))) return new Response('Unauthorized', { status: 401 })
+  return primaryStub(env).fetch(`https://do${path}`, {
+    method: request.method,
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body || undefined,
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -32,18 +41,16 @@ export default {
     }
 
     if (url.pathname === '/internal/connect' && request.method === 'POST') {
-      if (!(await verifyInternalRequest(request, env))) return new Response('Unauthorized', { status: 401 })
-      return primaryStub(env).fetch('https://do/connect', { method: 'POST' })
+      return signedRequest(request, env, '/connect')
+    }
+
+    if (url.pathname === '/internal/status' && request.method === 'GET') {
+      return signedRequest(request, env, '/status')
     }
 
     if (url.pathname === '/internal/messages' && request.method === 'POST') {
-      if (!(await verifyInternalRequest(request, env))) return new Response('Unauthorized', { status: 401 })
       const payload = await request.text()
-      return primaryStub(env).fetch('https://do/send', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: payload,
-      })
+      return signedRequest(request, env, '/send', payload)
     }
 
     return new Response('Not found', { status: 404 })

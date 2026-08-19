@@ -17,6 +17,34 @@ async function sign(secret: string, timestamp: string, body: string) {
   return toBase64Url(await crypto.subtle.sign('HMAC', key, encoder.encode(`${timestamp}.${body}`)))
 }
 
+async function signedGatewayRequest(env: Env, path: string, method: 'GET' | 'POST', body = '') {
+  const gateway = await configuredGateway(env)
+  if (!gateway) throw new Error('企业微信智能机器人网关未配置')
+  const { botSecret } = await getBotCredentials(env)
+  if (!botSecret) throw new Error('请先在系统设置中配置智能机器人的长连接专用 Secret')
+  const timestamp = String(Date.now())
+  const response = await fetch(`${gateway.baseUrl}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CRM-Timestamp': timestamp,
+      'X-CRM-Signature': await sign(botSecret, timestamp, body),
+    },
+    body: body || undefined,
+  })
+  const payload = await response.text()
+  if (!response.ok) throw new Error(`企业微信智能机器人网关请求失败：HTTP ${response.status}${payload ? ` ${payload.slice(0, 300)}` : ''}`)
+  try { return JSON.parse(payload) as Record<string, unknown> } catch { return {} }
+}
+
+export async function connectWeComBotGateway(env: Env) {
+  return signedGatewayRequest(env, '/internal/connect', 'POST')
+}
+
+export async function getWeComBotGatewayStatus(env: Env) {
+  return signedGatewayRequest(env, '/internal/status', 'GET')
+}
+
 async function configuredGateway(env: Env) {
   const baseUrl = env.WECOM_BOT_GATEWAY_URL?.trim()
   if (!baseUrl) return undefined
@@ -41,23 +69,6 @@ export async function isWeComBotGatewayConfigured(env: Env) {
 }
 
 export async function sendWeComBotGroupMarkdownMessage(env: Env, content: string) {
-  const gateway = await configuredGateway(env)
-  if (!gateway) throw new Error('企业微信智能机器人网关未配置')
-  const { botSecret } = await getBotCredentials(env)
-  if (!botSecret) throw new Error('请先在系统设置中配置智能机器人的长连接专用 Secret')
   const body = JSON.stringify({ content })
-  const timestamp = String(Date.now())
-  const response = await fetch(`${gateway.baseUrl}/internal/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CRM-Timestamp': timestamp,
-      'X-CRM-Signature': await sign(botSecret, timestamp, body),
-    },
-    body,
-  })
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300)
-    throw new Error(`企业微信智能机器人网关发送失败：HTTP ${response.status}${detail ? ` ${detail}` : ''}`)
-  }
+  await signedGatewayRequest(env, '/internal/messages', 'POST', body)
 }

@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, KeyRound, MapPinned, Save, Send, ShieldCheck } from 'lucide-react'
+import { ExternalLink, KeyRound, Link2, Loader2, MapPinned, Save, Send, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +50,15 @@ interface WeChatTestResponse {
   sent: boolean
 }
 
+interface WeComBotStatus {
+  configured?: boolean
+  connected?: boolean
+  connecting?: boolean
+  lastError?: string
+  defaultGroupChatId?: string
+  lastMessageAt?: number
+}
+
 const defaultValues: SettingsFormValues = {
   amap_key: '',
   amap_security_code: '',
@@ -84,6 +93,11 @@ export default function SettingsPage() {
     queryKey: CONFIG_QUERY_KEY,
     queryFn: () => apiFetch<ConfigResponse>('/api/configs'),
   })
+  const botStatusQuery = useQuery({
+    queryKey: ['wecom-bot-status'],
+    queryFn: () => apiFetch<WeComBotStatus>('/api/configs/wecom-bot/status'),
+    refetchInterval: 10_000,
+  })
   const loadedValues = useMemo(
     () => toFormValues(configsQuery.data?.configs ?? []),
     [configsQuery.data],
@@ -115,6 +129,15 @@ export default function SettingsPage() {
     mutationFn: () => apiFetch<WeChatTestResponse>('/api/configs/test-wechat', { method: 'POST' }),
     onSuccess: () => toast.success('测试消息已发送，请检查当前管理员的企业微信'),
     onError: (error) => toast.error(error instanceof Error ? error.message : '测试消息发送失败'),
+  })
+
+  const connectBotMutation = useMutation({
+    mutationFn: () => apiFetch<WeComBotStatus>('/api/configs/wecom-bot/connect', { method: 'POST' }),
+    onSuccess: () => {
+      void botStatusQuery.refetch()
+      toast.success('已发起机器人连接，请稍候在群内 @机器人发送“帮助”完成绑定')
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : '机器人连接失败'),
   })
 
   function handleSubmit(values: SettingsFormValues) {
@@ -242,6 +265,18 @@ export default function SettingsPage() {
               />
             </CardContent>
             <CardContent className="border-t border-border pt-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className={`size-2 rounded-full ${botStatusQuery.data?.connected ? 'bg-emerald-500' : botStatusQuery.data?.connecting ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                  <span>{botStatusQuery.isLoading ? '正在读取连接状态' : botStatusQuery.data?.connected ? '机器人已连接' : botStatusQuery.data?.connecting ? '正在连接机器人' : '机器人未连接'}</span>
+                  {botStatusQuery.data?.defaultGroupChatId && <span className="text-xs text-muted-foreground">已绑定提醒群</span>}
+                </div>
+                <Button disabled={connectBotMutation.isPending || updateMutation.isPending} onClick={() => connectBotMutation.mutate()} size="sm" type="button" variant="outline">
+                  {connectBotMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+                  连接机器人
+                </Button>
+              </div>
+              {botStatusQuery.data?.lastError && <p className="mb-4 text-xs text-destructive">连接提示：{botStatusQuery.data.lastError}</p>}
               <div className="space-y-3 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
                 <p className="font-semibold">推荐：智能机器人长连接</p>
                 <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-5">
