@@ -6,7 +6,7 @@ import { Hono } from 'hono'
 import { jwt } from 'hono/jwt'
 import type { Env } from '../env'
 import { getAuthenticatedActor } from '../lib/auth'
-import { getWeChatAccessToken, listWeChatUsers, sendWeChatMarkdownMessage } from '../services/wechat'
+import { getWeChatAccessToken, getWeChatCorpId, getWeChatUserByCode, listWeChatUsers, sendWeChatMarkdownMessage } from '../services/wechat'
 
 const PUBLIC_CONFIG_KEYS = ['amap_key', 'amap_security_code'] as const
 const SENSITIVE_KEY_PATTERN = /(secret|token|password|pin|verify|access_key|private_key)/i
@@ -25,11 +25,45 @@ interface ConfigPayload {
 
 export const configRoutes = new Hono<{ Bindings: Env }>()
 
+const WECHAT_OAUTH_STATE_TTL_SECONDS = 10 * 60
+
 function maskConfigValue(key: string, value: string) {
   if (!SENSITIVE_KEY_PATTERN.test(key)) return value
   if (value.length <= 4) return '****'
   return `${value.slice(0, 2)}${'*'.repeat(Math.min(value.length - 4, 8))}${value.slice(-2)}`
 }
+
+function frontendOrigin(env: Env) {
+  return env.FRONTEND_URL.split(',').map((origin) => origin.trim()).find(Boolean) ?? 'https://crm.jzfwsh.ltd'
+}
+
+function oauthCallbackHtml(origin: string, payload: { userid?: string; name?: string; error?: string }) {
+  const safePayload = JSON.stringify(payload).replace(/</g, '\\u003c')
+  const safeOrigin = JSON.stringify(origin).replace(/</g, '\\u003c')
+  return `<!doctype html><meta charset="utf-8"><title>企业微信授权</title><script>window.opener&&window.opener.postMessage(${safePayload},${safeOrigin});window.close();</script><p>授权结果已返回 CRM，可以关闭此窗口。</p>`
+}
+
+// OAuth callback is opened by WeCom and therefore cannot carry the CRM JWT.
+configRoutes.get('/wechat-oauth/callback', async (c) => {
+  const code = c.req.query('code')?.trim()
+  const state = c.req.query('state')?.trim()
+  if (!code || !state) return c.html(oauthCallbackHtml(frontendOrigin(c.env), { error: '企业微信授权参数缺失' }), 400)
+
+  const rawState = await c.env.CACHE.get(`wechat_oauth_state:${state}`)
+  if (!rawState) return c.html(oauthCallbackHtml(frontendOrigin(c.env), { error: '授权已过期，请重新发起授权' }), 400)
+  await c.env.CACHE.delete(`wechat_oauth_state:${state}`)
+
+  let stateData: { origin?: string }
+  try { stateData = JSON.parse(rawState) as { origin?: string } } catch { stateData = {} }
+  const origin = stateData.origin || frontendOrigin(c.env)
+  try {
+    const user = await getWeChatUserByCode(c.env, code)
+    return c.html(oauthCallbackHtml(origin, user))
+  } catch (error) {
+    console.error('WeChat OAuth callback failed', error)
+    return c.html(oauthCallbackHtml(origin, { error: '企业微信授权失败，请确认应用已配置网页授权域名' }), 502)
+  }
+})
 
 configRoutes.get('/public', async (c) => {
   const db = createDb(c.env.DB)
@@ -155,6 +189,29 @@ configRoutes.post('/test-wechat', async (c) => {
     console.error('WeChat test message failed', error)
     return c.json({ error: '测试消息发送失败，请检查企业标识、应用密钥、Agent ID 和员工企业微信 UserID' }, 502)
   }
+})
+
+configRoutes.post('/wechat-oauth/start', async (c) => {
+  const payload = c.get('jwtPayload') as { sub?: unknown }
+  if (typeof payload.sub !== 'string' || payload.sub.length === 0) return c.json({ error: '登录凭证无效' }, 401)
+
+  let requestedOrigin = c.req.header('Origin')?.trim() || frontendOrigin(c.env)
+  const allowedOrigins = new Set(c.env.FRONTEND_URL.split(',').map((origin) => origin.trim()).filter(Boolean))
+  if (!allowedOrigins.has(requestedOrigin)) requestedOrigin = frontendOrigin(c.env)
+
+  const state = crypto.randomUUID()
+  const callbackUrl = new URL('/api/configs/wechat-oauth/callback', new URL(c.req.url).origin)
+  const corpId = (await getWeChatCorpId(c.env)).trim()
+  if (!corpId || corpId.startsWith('REPLACE_WITH_')) return c.json({ error: '请先配置企业微信 Corp ID' }, 400)
+  const authorizeUrl = new URL('https://open.weixin.qq.com/connect/oauth2/authorize')
+  authorizeUrl.searchParams.set('appid', corpId)
+  authorizeUrl.searchParams.set('redirect_uri', callbackUrl.toString())
+  authorizeUrl.searchParams.set('response_type', 'code')
+  authorizeUrl.searchParams.set('scope', 'snsapi_base')
+  authorizeUrl.searchParams.set('state', state)
+  await c.env.CACHE.put(`wechat_oauth_state:${state}`, JSON.stringify({ actorId: payload.sub, origin: requestedOrigin }), { expirationTtl: WECHAT_OAUTH_STATE_TTL_SECONDS })
+
+  return c.json({ authorizeUrl: `${authorizeUrl.toString()}#wechat_redirect` })
 })
 
 configRoutes.get('/wechat-users', async (c) => {

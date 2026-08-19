@@ -239,6 +239,7 @@ export default function SettingsPage() {
                   <li>进入“应用管理 → 自建应用”，打开本 CRM 应用，在“开发者接口凭证”中复制应用 Secret，并在应用详情顶部获取 Agent ID。</li>
                   <li>员工提醒使用的是企业微信成员 <strong>UserID</strong>，不是 CRM 数据库 UUID。进入“通讯录 → 成员”，打开成员详情，在“账号 / UserID”处复制；也可以在“员工管理 → 编辑员工”中直接从通讯录下拉选择。</li>
                   <li>员工管理弹窗会通过企业微信通讯录接口自动读取成员。若读取失败，请确认自建应用的可见范围覆盖成员，并拥有通讯录读取权限；管理员可在弹窗中手动填写 UserID。</li>
+                  <li>如果通讯录接口仍无结果，在企业微信内打开员工编辑弹窗并点击“微信授权获取”。系统会通过网页授权接口读取当前登录成员的真实 UserID，不依赖通讯录全量读取权限；需在企业微信应用中配置网页授权域名为 <code className="break-all rounded bg-white px-1 py-0.5">serverless-crm-api.q84536346.workers.dev</code>。</li>
                   <li>如需域名验证，在“企业微信设置”中填写验证文件代码，并将文件原样上传到 API 根地址：<code className="break-all rounded bg-white px-1 py-0.5">https://serverless-crm-api.q84536346.workers.dev/WW_verify_验证代码.txt</code>，例如代码为 <code className="rounded bg-white px-1 py-0.5">123456</code> 时地址为 <code className="break-all rounded bg-white px-1 py-0.5">https://serverless-crm-api.q84536346.workers.dev/WW_verify_123456.txt</code>。</li>
                 </ol>
                 <p className="text-xs text-sky-800">保存配置后点击“发送测试消息”；若失败，请先确认应用已启用、可见范围包含该成员，且 UserID 与通讯录中的值完全一致。</p>

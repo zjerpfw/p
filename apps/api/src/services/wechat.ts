@@ -28,6 +28,12 @@ interface WeChatUserListResponse extends WeChatApiResponse {
   userlist?: WeChatDirectoryUser[]
 }
 
+interface WeChatUserInfoResponse extends WeChatApiResponse {
+  UserId?: string
+  DeviceId?: string
+  user_info?: { userid?: string; name?: string }
+}
+
 interface WeChatConfiguration {
   corpId: string
   corpSecret: string
@@ -58,6 +64,11 @@ async function getWeChatConfiguration(env: Env): Promise<WeChatConfiguration> {
     agentId,
     cacheVersion: await credentialFingerprint(`${corpId}\u0000${corpSecret}\u0000${agentId}`),
   }
+}
+
+export async function getWeChatCorpId(env: Env) {
+  const configuration = await getWeChatConfiguration(env)
+  return configuration.corpId
 }
 
 export function isWeChatApiError(response: WeChatApiResponse) {
@@ -141,4 +152,22 @@ export async function listWeChatUsers(env: Env): Promise<WeChatDirectoryUser[]> 
   return (result.userlist ?? [])
     .filter((user) => Boolean(user.userid?.trim() && user.name?.trim()))
     .map((user) => ({ userid: user.userid.trim(), name: user.name.trim(), department: user.department }))
+}
+
+export async function getWeChatUserByCode(env: Env, code: string) {
+  const accessToken = await getWeChatAccessToken(env)
+  const url = new URL('https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo')
+  url.searchParams.set('access_token', accessToken)
+  url.searchParams.set('code', code)
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`WeChat OAuth request failed: ${response.status}`)
+
+  const result = (await response.json()) as WeChatUserInfoResponse
+  if (isWeChatApiError(result)) {
+    throw new Error(`WeChat OAuth request failed: ${result.errcode ?? 'unknown'} ${result.errmsg ?? ''}`)
+  }
+
+  const userid = result.UserId?.trim() || result.user_info?.userid?.trim()
+  if (!userid) throw new Error('WeChat OAuth did not return a UserID')
+  return { userid, name: result.user_info?.name?.trim() || userid }
 }
