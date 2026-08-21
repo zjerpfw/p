@@ -50,15 +50,205 @@ export default function WonCustomersPage() {
     setPage(1)
   }
 
-  return <section className="space-y-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-emerald-600">客户经营</p><h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold text-slate-900"><MapPinned aria-hidden="true" className="size-6" />成交客户</h1><p className="mt-1 text-sm text-muted-foreground">按地域和服务到期时间规划拜访，成交历史不会混入活跃商机看板。</p></div><div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">{wonCustomersQuery.data?.total ?? 0} 位已成交客户</div></div>
-    <Card className="gap-0 py-0"><CardContent className="space-y-4 p-4"><div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input className="pl-9 pr-9" onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="搜索客户名称、电话或联系人" value={search} />{search && <Button aria-label="清空成交客户搜索" className="absolute right-1 top-0.5" onClick={() => { setSearch(''); setPage(1) }} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" /></Button>}</div>
-      <div className="space-y-2"><p className="text-xs font-semibold text-slate-500">省份（可多选）</p><div className="flex flex-wrap gap-2">{provinceOptions.map((province) => <Button aria-pressed={provinces.includes(province)} key={province} onClick={() => toggleValue(provinces, province, setProvinces)} size="sm" type="button" variant={provinces.includes(province) ? 'default' : 'outline'}>{province}</Button>)}{provinceOptions.length === 0 && <span className="text-sm text-muted-foreground">暂无已填写省份的成交客户</span>}</div></div>
-      <div className="space-y-2"><p className="text-xs font-semibold text-slate-500">城市（可多选）</p><div className="flex flex-wrap gap-2">{cityOptions.map((city) => <Button aria-pressed={cities.includes(city)} key={city} onClick={() => toggleValue(cities, city, setCities)} size="sm" type="button" variant={cities.includes(city) ? 'default' : 'outline'}>{city}</Button>)}{cityOptions.length === 0 && <span className="text-sm text-muted-foreground">先录入成交客户的城市信息即可按城市规划拜访</span>}</div></div>
-      <div className="space-y-2"><p className="text-xs font-semibold text-slate-500">服务到期时间（可多选）</p><div className="flex flex-wrap gap-2">{expiryOptions.map((option) => <Button aria-pressed={expiry.includes(option.value)} key={option.value} onClick={() => toggleValue(expiry, option.value, setExpiry)} size="sm" type="button" variant={expiry.includes(option.value) ? 'default' : 'outline'}>{option.label}</Button>)}</div></div>
-    </CardContent></Card>
-    {wonCustomersQuery.isLoading && <p className="py-10 text-sm text-muted-foreground">正在加载成交客户...</p>}
-    {wonCustomersQuery.isError && <p className="py-10 text-sm text-destructive">{wonCustomersQuery.error instanceof Error ? wonCustomersQuery.error.message : '成交客户加载失败'}</p>}
-    {wonCustomersQuery.data && (isMobile ? <div className="space-y-3">{wonCustomersQuery.data.data.map((customer) => { const expiryInfo = expiryState(customer.saasExpireDate); return <Link className="block" key={customer.id} to={`/customers/${customer.id}`}><Card className="gap-0 border-slate-200 py-0 transition-colors active:bg-slate-50"><CardContent className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-semibold text-slate-900">{customer.name}</h2><p className="mt-1 text-sm text-slate-600">{[customer.province, customer.city].filter(Boolean).join(' ') || '地域待完善'}</p></div><Badge className="shrink-0" tone={expiryInfo.tone}>{expiryInfo.label}</Badge></div><div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-3"><div><p className="text-xs text-muted-foreground">成交金额</p><p className="mt-0.5 font-semibold text-slate-900">{formatAmount(customer.latestWonAmountCents)}</p></div><div className="text-right text-xs text-muted-foreground"><p>{customer.latestProductName ?? '产品待补充'}</p>{customer.saasExpireDate && <p className="mt-1 inline-flex items-center gap-1"><CalendarClock aria-hidden="true" className="size-3.5" />{format(new Date(customer.saasExpireDate), 'yyyy-MM-dd')}</p>}</div></div></CardContent></Card></Link> })}{wonCustomersQuery.data.data.length === 0 && <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">当前筛选条件下暂无成交客户</CardContent></Card>}<PaginationControls onPageChange={setPage} page={wonCustomersQuery.data.page} total={wonCustomersQuery.data.total} totalPages={wonCustomersQuery.data.totalPages} /></div> : <Card className="gap-0 overflow-hidden py-0"><CardContent className="divide-y divide-border p-0">{wonCustomersQuery.data.data.map((customer) => { const expiryInfo = expiryState(customer.saasExpireDate); return <Link className="block p-5 transition-colors hover:bg-slate-50" key={customer.id} to={`/customers/${customer.id}`}><div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-slate-900">{customer.name}</h2><Badge tone={expiryInfo.tone}>{expiryInfo.label}</Badge>{customer.latestProductName && <Badge tone="info">{customer.latestProductName}</Badge>}</div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600"><span className="inline-flex items-center gap-1"><MapPinned aria-hidden="true" className="size-4 text-emerald-600" />{[customer.province, customer.city, customer.address].filter(Boolean).join(' ') || '地域待完善'}</span><span className="inline-flex items-center gap-1"><Phone aria-hidden="true" className="size-4 text-slate-400" />{customer.contactPhone ?? '未填写电话'}</span></div></div><div className="shrink-0 text-right text-xs text-muted-foreground"><p className="font-semibold text-slate-800">{formatAmount(customer.latestWonAmountCents)}</p><p>归属：{customer.ownerName ?? customer.ownerId}</p>{customer.saasExpireDate && <p className="mt-1 inline-flex items-center gap-1"><CalendarClock aria-hidden="true" className="size-3.5" />到期 {format(new Date(customer.saasExpireDate), 'yyyy-MM-dd')}</p>}</div></div></Link> })}{wonCustomersQuery.data.data.length === 0 && <p className="py-14 text-center text-sm text-muted-foreground">当前筛选条件下暂无成交客户</p>}<PaginationControls onPageChange={setPage} page={wonCustomersQuery.data.page} total={wonCustomersQuery.data.total} totalPages={wonCustomersQuery.data.totalPages} /></CardContent></Card>)}
-  </section>
+  return (
+    <section className="space-y-3.5 md:space-y-6">
+      {/* 桌面端大标题 */}
+      <div className="hidden md:flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-emerald-600">客户经营</p>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold text-slate-900">
+            <MapPinned aria-hidden="true" className="size-6 text-emerald-600" />
+            成交客户
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">按地域和服务到期时间规划拜访，成交历史不会混入活跃商机看板。</p>
+        </div>
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+          {wonCustomersQuery.data?.total ?? 0} 位已成交客户
+        </div>
+      </div>
+
+      {/* 搜索与筛选卡片 */}
+      <Card className="gap-0 py-0 border-slate-200/80 shadow-sm">
+        <CardContent className="p-3 md:p-4 space-y-2.5">
+          {/* 搜索框 */}
+          <div className="relative">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="h-10 pl-9 pr-9 text-sm bg-white border-slate-200 rounded-lg shadow-sm"
+              onChange={(event) => { setSearch(event.target.value); setPage(1) }}
+              placeholder="搜索客户名称、电话或联系人..."
+              value={search}
+            />
+            {search && (
+              <Button aria-label="清空搜索" className="absolute right-1 top-1 size-8" onClick={() => { setSearch(''); setPage(1) }} size="icon-xs" type="button" variant="ghost">
+                <X aria-hidden="true" className="size-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* 服务到期时间 - 移动端横向滑动胶囊 */}
+          <div>
+            <p className="hidden md:block text-xs font-semibold text-slate-500 mb-1.5">服务到期时间</p>
+            <div className="flex overflow-x-auto gap-1.5 no-scrollbar py-0.5" role="tablist">
+              <button
+                className={`shrink-0 h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
+                  expiry.length === 0
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 active:bg-slate-50'
+                }`}
+                onClick={() => { setExpiry([]); setPage(1) }}
+                type="button"
+              >
+                全部到期状态 ({wonCustomersQuery.data?.total ?? 0})
+              </button>
+              {expiryOptions.map((option) => {
+                const isSelected = expiry.includes(option.value)
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={`shrink-0 h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
+                      isSelected
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 active:bg-slate-50'
+                    }`}
+                    key={option.value}
+                    onClick={() => toggleValue(expiry, option.value, setExpiry)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 省份与城市 (桌面端全展开，移动端横向滑动) */}
+          {provinceOptions.length > 0 && (
+            <div className="hidden md:block space-y-2 pt-1 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500">省份（可多选）</p>
+              <div className="flex flex-wrap gap-1.5">
+                {provinceOptions.map((province) => (
+                  <Button
+                    aria-pressed={provinces.includes(province)}
+                    className="h-7 text-xs"
+                    key={province}
+                    onClick={() => toggleValue(provinces, province, setProvinces)}
+                    size="sm"
+                    type="button"
+                    variant={provinces.includes(province) ? 'default' : 'outline'}
+                  >
+                    {province}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {wonCustomersQuery.isLoading && <p className="py-10 text-center text-xs text-muted-foreground">正在加载成交客户...</p>}
+      {wonCustomersQuery.isError && <p className="py-10 text-center text-xs text-destructive">{wonCustomersQuery.error instanceof Error ? wonCustomersQuery.error.message : '成交客户加载失败'}</p>}
+
+      {wonCustomersQuery.data && (isMobile ? (
+        <div className="space-y-2.5">
+          {wonCustomersQuery.data.data.map((customer) => {
+            const expiryInfo = expiryState(customer.saasExpireDate)
+            return (
+              <Card className="gap-0 border-slate-200/80 bg-white py-0 shadow-sm active:bg-slate-50 transition-colors" key={customer.id}>
+                <CardContent className="space-y-2.5 p-3.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link to={`/customers/${customer.id}`} className="min-w-0 flex-1">
+                      <h2 className="truncate font-bold text-sm text-slate-900 leading-snug">{customer.name}</h2>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                        <MapPinned className="size-3 shrink-0 text-emerald-600" />
+                        {[customer.province, customer.city].filter(Boolean).join(' ') || '地域待完善'}
+                      </p>
+                    </Link>
+                    <Badge className="shrink-0 text-[10px]" tone={expiryInfo.tone}>
+                      {expiryInfo.label}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs">
+                    <div>
+                      <span className="text-slate-400">成交额: </span>
+                      <span className="font-bold text-slate-900">{formatAmount(customer.latestWonAmountCents)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {customer.contactPhone && (
+                        <a
+                          href={`tel:${customer.contactPhone}`}
+                          className="flex h-7 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-emerald-700 active:bg-emerald-100 font-medium"
+                        >
+                          <Phone className="size-3" />
+                          拨打
+                        </a>
+                      )}
+                      <Button asChild size="sm" variant="ghost" className="h-7 text-xs px-2">
+                        <Link to={`/customers/${customer.id}`}>详情 &rarr;</Link>
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+          {wonCustomersQuery.data.data.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-xs text-muted-foreground">
+              当前筛选条件下暂无成交客户
+            </div>
+          )}
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
+            <PaginationControls onPageChange={setPage} page={wonCustomersQuery.data.page} total={wonCustomersQuery.data.total} totalPages={wonCustomersQuery.data.totalPages} />
+          </div>
+        </div>
+      ) : (
+        <Card className="gap-0 overflow-hidden py-0 shadow-sm">
+          <CardContent className="divide-y divide-border p-0">
+            {wonCustomersQuery.data.data.map((customer) => {
+              const expiryInfo = expiryState(customer.saasExpireDate)
+              return (
+                <Link className="block p-5 transition-colors hover:bg-slate-50" key={customer.id} to={`/customers/${customer.id}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-semibold text-slate-900">{customer.name}</h2>
+                        <Badge tone={expiryInfo.tone}>{expiryInfo.label}</Badge>
+                        {customer.latestProductName && <Badge tone="info">{customer.latestProductName}</Badge>}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+                        <span className="inline-flex items-center gap-1">
+                          <MapPinned aria-hidden="true" className="size-4 text-emerald-600" />
+                          {[customer.province, customer.city, customer.address].filter(Boolean).join(' ') || '地域待完善'}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Phone aria-hidden="true" className="size-4 text-slate-400" />
+                          {customer.contactPhone ?? '未填写电话'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right text-xs text-muted-foreground">
+                      <p className="font-semibold text-slate-800">{formatAmount(customer.latestWonAmountCents)}</p>
+                      <p>归属：{customer.ownerName ?? customer.ownerId}</p>
+                      {customer.saasExpireDate && (
+                        <p className="mt-1 inline-flex items-center gap-1">
+                          <CalendarClock aria-hidden="true" className="size-3.5" />
+                          到期 {format(new Date(customer.saasExpireDate), 'yyyy-MM-dd')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+            {wonCustomersQuery.data.data.length === 0 && (
+              <p className="py-14 text-center text-sm text-muted-foreground">当前筛选条件下暂无成交客户</p>
+            )}
+            <PaginationControls onPageChange={setPage} page={wonCustomersQuery.data.page} total={wonCustomersQuery.data.total} totalPages={wonCustomersQuery.data.totalPages} />
+          </CardContent>
+        </Card>
+      ))}
+    </section>
+  )
 }

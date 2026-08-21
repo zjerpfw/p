@@ -45,16 +45,46 @@ function DesktopNavigation() {
 }
 
 const mobileNavigation = [
-  { to: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
-  { to: '/deals', label: '看板', icon: BriefcaseBusiness },
+  { to: '/dashboard', label: '概览', icon: LayoutDashboard },
+  { to: '/deals', label: '商机', icon: BriefcaseBusiness },
+  { to: '/customers', label: '客户池', icon: UsersRound },
   { to: '/won-customers', label: '成交', icon: MapPinned },
-  { to: '/my-work', label: '我的', icon: UserRound },
+  { to: '/my-work', label: '工作台', icon: UserRound },
 ]
 
 function MobileTabBar() {
-  return <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(4rem+env(safe-area-inset-bottom))] grid-cols-4 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
-    {mobileNavigation.map(({ icon: Icon, label, to }) => <NavLink className={({ isActive }) => cn('flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors', isActive ? 'text-indigo-600' : 'text-slate-500')} key={to} to={to}><Icon aria-hidden="true" className="size-5" /><span>{label}</span></NavLink>)}
-  </nav>
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(3.75rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-slate-200/80 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur-md">
+      {mobileNavigation.map(({ icon: Icon, label, to }) => (
+        <NavLink
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-all select-none',
+              isActive
+                ? 'font-semibold text-indigo-600'
+                : 'text-slate-500 active:scale-95 active:text-slate-800',
+            )
+          }
+          key={to}
+          to={to}
+        >
+          {({ isActive }) => (
+            <>
+              <div
+                className={cn(
+                  'flex h-7 w-10 items-center justify-center rounded-full transition-colors',
+                  isActive ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500',
+                )}
+              >
+                <Icon aria-hidden="true" className="size-4.5" />
+              </div>
+              <span className="leading-none">{label}</span>
+            </>
+          )}
+        </NavLink>
+      ))}
+    </nav>
+  )
 }
 
 function DesktopShell({ currentLabel, isAdmin, logout }: { currentLabel: string; isAdmin: boolean; logout: () => void }) {
@@ -72,12 +102,36 @@ function DesktopShell({ currentLabel, isAdmin, logout }: { currentLabel: string;
   </div>
 }
 
-function MobileShell({ currentLabel, logout }: { currentLabel: string; logout: () => void }) {
-  return <div className="min-h-dvh bg-slate-50 text-foreground">
-    <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur"><h1 className="truncate text-base font-semibold text-slate-900">{currentLabel}</h1><Button aria-label="退出登录" onClick={logout} size="icon-sm" type="button" variant="ghost"><LogOut aria-hidden="true" /></Button></header>
-    <main className="w-full px-3 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))]"><Outlet /></main>
-    <MobileTabBar />
-  </div>
+function MobileShell({ currentLabel, isAdmin, logout }: { currentLabel: string; isAdmin: boolean; logout: () => void }) {
+  return (
+    <div className="min-h-dvh bg-slate-50 text-foreground">
+      <header className="sticky top-0 z-40 flex h-13 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white shadow-sm shadow-indigo-500/30">C</span>
+          <h1 className="truncate text-base font-bold text-slate-900">{currentLabel}</h1>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+            {isAdmin ? '管理员' : '销售'}
+          </span>
+          <Button
+            aria-label="退出登录"
+            className="size-8 text-slate-500 hover:text-slate-900 active:bg-slate-100"
+            onClick={logout}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <LogOut aria-hidden="true" className="size-4" />
+          </Button>
+        </div>
+      </header>
+      <main className="w-full px-3 py-3.5 pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+        <Outlet />
+      </main>
+      <MobileTabBar />
+    </div>
+  )
 }
 
 export default function DashboardLayout() {
@@ -93,5 +147,5 @@ export default function DashboardLayout() {
     navigate('/login', { replace: true })
   }
 
-  return isMobile ? <MobileShell currentLabel={currentLabel} logout={logout} /> : <DesktopShell currentLabel={currentLabel} isAdmin={isAdmin} logout={logout} />
+  return isMobile ? <MobileShell currentLabel={currentLabel} isAdmin={isAdmin} logout={logout} /> : <DesktopShell currentLabel={currentLabel} isAdmin={isAdmin} logout={logout} />
 }

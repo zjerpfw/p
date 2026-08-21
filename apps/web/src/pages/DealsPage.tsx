@@ -195,55 +195,181 @@ export default function DealsPage() {
   }
 
   return (
-    <section className={isMobile ? 'space-y-4' : 'flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3 overflow-hidden'}>
-      <div className="flex min-h-[3.25rem] shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+    <section className={isMobile ? 'space-y-3 pb-8' : 'flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3 overflow-hidden'}>
+      {/* 桌面端顶栏 */}
+      <div className="hidden md:flex min-h-[3.25rem] shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         <h1 className="mr-1 text-lg font-semibold tracking-tight text-slate-900">商机看板</h1>
-        <span className="hidden text-xs text-slate-400 sm:inline">·</span>
+        <span className="text-xs text-slate-400">·</span>
         <span className="mr-auto text-sm font-semibold text-indigo-700">预计总额 {formatCents(visibleTotalAmountCents)}</span>
-        <div className="relative w-full sm:w-52 lg:w-64">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-3.5 size-4 text-muted-foreground md:top-2" />
-          <Input aria-label="搜索商机" className="h-11 bg-white pl-8 pr-11 text-sm md:h-8 md:pr-8" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户名称" value={search} />
+        <div className="relative w-52 lg:w-64">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-2 size-4 text-muted-foreground" />
+          <Input aria-label="搜索商机" className="h-8 bg-white pl-8 pr-8 text-sm" onChange={(event) => updateSearch(event.target.value)} placeholder="搜索客户名称" value={search} />
           {search && <Button aria-label="清空商机搜索" className="absolute right-0.5 top-0.5" onClick={() => updateSearch('')} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" /></Button>}
         </div>
-        <select aria-label="活跃商机阶段筛选" className="hidden h-11 rounded-md border border-input bg-white px-2.5 text-sm md:h-8 md:block" onChange={(event) => updateStatus(event.target.value as ActiveDealStage | '')} value={status}>
+        <select aria-label="活跃商机阶段筛选" className="h-8 rounded-md border border-input bg-white px-2.5 text-sm" onChange={(event) => updateStatus(event.target.value as ActiveDealStage | '')} value={status}>
           <option value="">全部活跃阶段</option>
           {activeDealStages.map((stage) => <option key={stage} value={stage}>{dealStageLabels[stage]}</option>)}
         </select>
-        <Input aria-label="赢单成交开始日期" className="hidden h-11 w-auto bg-white text-sm md:block md:h-8" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
-        <Input aria-label="赢单成交结束日期" className="hidden h-11 w-auto bg-white text-sm md:block md:h-8" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
-        <Button className="hidden h-11 md:flex md:h-8" onClick={() => void exportFilteredDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出当前筛选</Button>
-        <Button className="hidden h-11 md:flex md:h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
-        {isMobile && <Button aria-label="打开商机筛选和导出操作" className="h-11 px-3" onClick={() => setMobileFiltersOpen(true)} size="icon-sm" type="button" variant="outline"><Filter aria-hidden="true" /></Button>}
-        <Button className="h-11 shadow-sm shadow-indigo-200 md:h-8" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
+        <Input aria-label="赢单成交开始日期" className="h-8 w-auto bg-white text-sm" onChange={(event) => setWonAtFrom(event.target.value)} type="date" value={wonAtFrom} />
+        <Input aria-label="赢单成交结束日期" className="h-8 w-auto bg-white text-sm" onChange={(event) => setWonAtTo(event.target.value)} type="date" value={wonAtTo} />
+        <Button className="h-8" onClick={() => void exportFilteredDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出当前筛选</Button>
+        <Button className="h-8" onClick={() => void exportWonDeals()} size="sm" type="button" variant="outline"><Download aria-hidden="true" />导出赢单</Button>
+        <Button className="h-8 shadow-sm shadow-indigo-200" onClick={() => setCreateDialogOpen(true)} size="sm" type="button"><Plus aria-hidden="true" />新建商机</Button>
       </div>
 
-      {isMobile && <div aria-label="商机阶段" className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist">{activeDealStages.map((stage) => <Button aria-selected={mobileStage === stage} className="h-10 text-xs" key={stage} onClick={() => updateMobileStage(stage)} role="tab" type="button" variant={mobileStage === stage ? 'default' : 'ghost'}><span className="truncate">{dealStageLabels[stage]}</span></Button>)}</div>}
+      {/* 移动端专属搜索栏与新建按钮 */}
+      {isMobile && (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                aria-label="搜索商机"
+                className="h-10 bg-white pl-9 pr-9 text-sm rounded-lg border-slate-200 shadow-sm"
+                onChange={(event) => updateSearch(event.target.value)}
+                placeholder="搜索客户或产品..."
+                value={search}
+              />
+              {search && (
+                <Button aria-label="清空商机搜索" className="absolute right-1 top-1 size-8" onClick={() => updateSearch('')} size="icon-xs" type="button" variant="ghost">
+                  <X aria-hidden="true" className="size-4" />
+                </Button>
+              )}
+            </div>
+            <Button
+              className="h-10 px-3 bg-indigo-600 font-medium text-white shadow-sm active:scale-95 shrink-0"
+              onClick={() => setCreateDialogOpen(true)}
+              size="sm"
+              type="button"
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              新建
+            </Button>
+          </div>
 
-      {isMobile && isLoading && <div aria-label="正在加载商机" className="grid gap-3" role="status">{[0, 1, 2, 3].map((item) => <DealCardSkeleton key={item} />)}</div>}
-      {isMobile && error && <p className="flex-1 py-6 text-sm text-destructive">{error.message}</p>}
+          {/* 移动端分段 Tab 切换器 */}
+          <div aria-label="商机阶段" className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200/80 bg-slate-200/50 p-1 shadow-inner" role="tablist">
+            {activeDealStages.map((stage) => {
+              const isSelected = mobileStage === stage
+              return (
+                <button
+                  aria-selected={isSelected}
+                  className={`flex h-9 items-center justify-center rounded-lg text-xs font-semibold transition-all select-none ${
+                    isSelected
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 active:text-slate-900'
+                  }`}
+                  key={stage}
+                  onClick={() => updateMobileStage(stage)}
+                  role="tab"
+                  type="button"
+                >
+                  <span className="truncate">{dealStageLabels[stage]}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {isMobile && isLoading && <div aria-label="正在加载商机" className="grid gap-2.5" role="status">{[0, 1, 2].map((item) => <DealCardSkeleton key={item} />)}</div>}
+      {isMobile && error && <p className="py-6 text-center text-xs text-destructive">{error.message}</p>}
+
+      {/* 桌面端看板列渲染 */}
       {!isMobile && pipelineSummary.isLoading && <PipelineSkeleton />}
       {!isMobile && pipelineSummary.error && <p className="flex-1 py-6 text-sm text-destructive">{pipelineSummary.error.message}</p>}
-      {pipelineSummary.data && !isMobile && <>
+      {pipelineSummary.data && !isMobile && (
         <div className={`flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl bg-slate-100/80 p-2 touch-pan-x md:grid md:overflow-hidden md:snap-none ${pipelineGridColumns}`}>
-          {visibleStages.map((stage) => <PipelineColumn deletePending={deleteDeal.isPending} key={stage} onConfirmWon={setDealToConfirm} onDelete={confirmDeleteDeal} onEdit={setDealToEdit} search={debouncedSearch} stage={stage} summary={pipelineSummary.data.stages.find((item) => item.stage === stage) ?? { stage, count: 0, totalAmountCents: 0, weightedAmountCents: 0 }} />)}
+          {visibleStages.map((stage) => (
+            <PipelineColumn
+              deletePending={deleteDeal.isPending}
+              key={stage}
+              onConfirmWon={setDealToConfirm}
+              onDelete={confirmDeleteDeal}
+              onEdit={setDealToEdit}
+              search={debouncedSearch}
+              stage={stage}
+              summary={pipelineSummary.data.stages.find((item) => item.stage === stage) ?? { stage, count: 0, totalAmountCents: 0, weightedAmountCents: 0 }}
+            />
+          ))}
         </div>
-      </>}
-      {data && isMobile && <div className="space-y-3">
-        <ul className="space-y-3">
+      )}
+
+      {/* 移动端专属单列流式卡片列表 */}
+      {data && isMobile && (
+        <div className="space-y-2.5">
           {data.data.map((deal) => {
             const dateValue = deal.expectedCloseDate
             const overdue = isOverdue(dateValue, deal.stage)
-            return <li key={deal.id}><Card className="gap-0 py-0"><CardContent className="space-y-3 p-4">
-              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-bold text-slate-900">{deal.productName}</h2><p className="mt-1 truncate text-sm text-slate-500">客户：{deal.customerName}</p><div className="mt-2 flex flex-wrap gap-1.5"><Badge tone={getDealStageTone(deal.stage)}>{dealStageLabels[deal.stage]}</Badge>{deal.channel && <Badge tone="info">{deal.channel}</Badge>}</div></div><div className="flex shrink-0"><Button aria-label={`编辑${deal.productName}商机`} onClick={() => setDealToEdit(deal)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button><Button aria-label={`作废${deal.productName}商机`} className="text-rose-600" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-sm" type="button" variant="ghost"><Trash2 aria-hidden="true" /></Button></div></div>
-              <div className="flex items-center gap-2 text-xl font-bold text-indigo-700"><CircleDollarSign aria-hidden="true" className="size-5 shrink-0" />{deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && <span className="text-xs font-normal text-slate-400 line-through">{formatCents(deal.originalPriceCents)}</span>}{formatCents(deal.amountCents)}{deal.stage !== 'Won' && deal.stage !== 'Lost' && <span className="text-xs font-medium text-indigo-500">· {deal.probability}%</span>}</div>
-              {(deal.stage === 'Won' ? deal.wonAt : dateValue) && <p className={`flex items-center gap-1.5 text-sm ${overdue ? 'font-medium text-red-500' : 'text-slate-500'}`}><CalendarDays aria-hidden="true" className="size-4 shrink-0" />{deal.stage === 'Won' ? '实际成交' : '预计成交'}：{formatDate(deal.stage === 'Won' ? deal.wonAt! : dateValue)}{overdue && ' · 已逾期'}</p>}
-              {deal.stage !== 'Won' && deal.stage !== 'Lost' && <Button className="w-full border-indigo-200 text-indigo-700" onClick={() => setDealToConfirm(deal)} type="button" variant="outline"><Trophy aria-hidden="true" />确认赢单</Button>}
-            </CardContent></Card></li>
+            return (
+              <Card className="gap-0 border-slate-200/80 bg-white py-0 shadow-sm active:bg-slate-50 transition-colors" key={deal.id}>
+                <CardContent className="space-y-2.5 p-3.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h2 className="truncate font-bold text-sm text-slate-900 leading-snug">{deal.productName}</h2>
+                      <p className="mt-0.5 truncate text-xs text-slate-500">客户：{deal.customerName}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-0.5">
+                      <Button aria-label={`编辑${deal.productName}商机`} onClick={() => setDealToEdit(deal)} size="icon-xs" type="button" variant="ghost">
+                        <Pencil aria-hidden="true" className="size-3.5 text-slate-400" />
+                      </Button>
+                      <Button aria-label={`作废${deal.productName}商机`} className="text-rose-600 hover:bg-rose-50" disabled={deleteDeal.isPending} onClick={() => confirmDeleteDeal(deal)} size="icon-xs" type="button" variant="ghost">
+                        <Trash2 aria-hidden="true" className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-center gap-1 text-lg font-bold tracking-tight text-indigo-700">
+                      <CircleDollarSign aria-hidden="true" className="size-4 shrink-0" />
+                      {deal.originalPriceCents && deal.originalPriceCents > deal.amountCents && (
+                        <span className="text-xs font-normal text-slate-400 line-through mr-1">{formatCents(deal.originalPriceCents)}</span>
+                      )}
+                      {formatCents(deal.amountCents)}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {deal.channel && <Badge tone="neutral" className="text-[10px] px-1.5 py-0">{deal.channel}</Badge>}
+                      <Badge tone="info" className="text-[10px] px-1.5 py-0">概率 {deal.probability}%</Badge>
+                    </div>
+                  </div>
+
+                  {(deal.stage === 'Won' ? deal.wonAt : dateValue) && (
+                    <p className={`flex items-center gap-1 text-[11px] ${overdue ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
+                      <CalendarDays aria-hidden="true" className="size-3 shrink-0" />
+                      {deal.stage === 'Won' ? '实际成交：' : '预计成交：'}
+                      {formatDate(deal.stage === 'Won' ? deal.wonAt! : dateValue)}
+                      {overdue && ' · 已逾期'}
+                    </p>
+                  )}
+
+                  {deal.stage !== 'Won' && deal.stage !== 'Lost' && (
+                    <Button
+                      className="mt-1 h-8 w-full border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100/70 active:scale-98 text-xs font-medium"
+                      onClick={() => setDealToConfirm(deal)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Trophy aria-hidden="true" className="size-3.5" />
+                      确认赢单
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )
           })}
-          {data.data.length === 0 && <li className="rounded-lg border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-muted-foreground">未找到匹配的商机</li>}
-        </ul>
-        <div className="rounded-lg border border-slate-200 bg-white"><PaginationControls onPageChange={setPage} page={data.page} total={data.total} totalPages={data.totalPages} /></div>
-      </div>}
+
+          {data.data.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-xs text-muted-foreground">
+              当前阶段暂无商机 📭
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
+            <PaginationControls onPageChange={setPage} page={data.page} total={data.total} totalPages={data.totalPages} />
+          </div>
+        </div>
+      )}
 
       <Dialog onOpenChange={setMobileFiltersOpen} open={mobileFiltersOpen}>
         <DialogContent className="sm:max-w-[520px]">
