@@ -80,6 +80,7 @@ export default function CustomerDetailPage() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
+  const [mobileTab, setMobileTab] = useState<'activities' | 'deals_finance' | 'tasks_contacts' | 'attachments'>('activities')
 
   const customer = data?.customer
   const assetCustomerId = customer?.id ?? ''
@@ -292,13 +293,397 @@ export default function CustomerDetailPage() {
   const isAdmin = getCurrentUserRole() === 'admin'
 
   return (
-    <section className="space-y-6">
-      <Link className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground" to="/customers">
-        <ChevronLeft aria-hidden="true" className="size-4" />
-        返回客户池
-      </Link>
+    <section className="space-y-3.5 md:space-y-6 pb-8">
+      {/* 顶部返回导航 */}
+      <div className="flex items-center justify-between">
+        <Link className="inline-flex items-center text-xs md:text-sm font-medium text-muted-foreground hover:text-foreground" to="/customers">
+          <ChevronLeft aria-hidden="true" className="size-4 mr-0.5" />
+          返回客户池
+        </Link>
+        <div className="flex items-center gap-1.5 md:hidden">
+          <Button aria-label="编辑客户" onClick={() => setEditCustomerOpen(true)} size="icon-xs" type="button" variant="outline">
+            <Pencil aria-hidden="true" className="size-3.5" />
+          </Button>
+          {customer.contactPhone && (
+            <a
+              href={`tel:${customer.contactPhone}`}
+              className="flex h-7 items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 text-xs text-indigo-700 active:bg-indigo-100 font-medium"
+            >
+              <Phone className="size-3" />
+              呼叫
+            </a>
+          )}
+        </div>
+      </div>
 
-      <div className="flex flex-col items-stretch gap-4 md:flex-row md:items-start md:gap-5">
+      {/* 移动端专属客户信息紧凑卡片 */}
+      <div className="block md:hidden">
+        <Card className="gap-0 py-0 border-slate-200/80 shadow-sm bg-white">
+          <CardContent className="p-3.5 space-y-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-slate-900 leading-snug truncate">{customer.name}</h1>
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                  <MapPin className="size-3 shrink-0 text-slate-400" />
+                  {[customer.province, customer.city, customer.address].filter(Boolean).join(' ') || '地址待完善'}
+                </p>
+              </div>
+              <Badge tone={getCustomerStatusTone(customer.status)} className="shrink-0 text-[10px]">
+                {getCustomerStatusLabel(customer.status)}
+              </Badge>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-xs">
+              <span className="text-slate-500">归属: <strong className="font-medium text-slate-800">{customer.ownerName ?? customer.ownerId}</strong></span>
+              <div className="flex items-center gap-1 text-[11px]">
+                <Badge className={currentServiceStatus.className}>{currentServiceStatus.label}</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 移动端 4 大分段 Tab 切换 */}
+        <div className="mt-3 grid grid-cols-4 gap-1 rounded-xl border border-slate-200/80 bg-slate-200/50 p-1 shadow-inner" role="tablist">
+          {([
+            { id: 'activities', label: '跟进记录', count: data?.activities.length ?? 0 },
+            { id: 'deals_finance', label: '商机财务', count: (data?.deals.length ?? 0) + (customerContracts.data?.data.length ?? 0) },
+            { id: 'tasks_contacts', label: '任务联系人', count: (data?.tasks.length ?? 0) + (data?.contacts.length ?? 0) },
+            { id: 'attachments', label: '资料附件', count: data?.attachments.length ?? 0 },
+          ] as const).map((tab) => {
+            const isSelected = mobileTab === tab.id
+            return (
+              <button
+                aria-selected={isSelected}
+                className={`flex h-8.5 items-center justify-center rounded-lg text-xs font-semibold transition-all select-none ${
+                  isSelected
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-600 active:text-slate-900'
+                }`}
+                key={tab.id}
+                onClick={() => setMobileTab(tab.id)}
+                role="tab"
+                type="button"
+              >
+                <span className="truncate">{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 移动端 Tab 内容渲染 */}
+      <div className="block md:hidden space-y-3">
+        {/* Tab 1: 跟进记录 */}
+        {mobileTab === 'activities' && (
+          <div className="space-y-3">
+            <Card className="gap-0 py-0 shadow-sm border-slate-200/80">
+              <CardHeader className="border-b border-border p-3.5 pb-2">
+                <CardTitle className="text-sm font-semibold text-slate-900">快捷写跟进</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2.5 p-3.5">
+                <Textarea
+                  className="min-h-20 text-xs"
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="记录本次沟通重点、客户需求和下一步计划..."
+                  value={notes}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="w-32">
+                    <Select onValueChange={(value) => setActivityType(value as CreateActivityPayload['type'])} value={activityType}>
+                      <SelectTrigger aria-label="跟进方式" className="h-8 text-xs">
+                        <SelectValue placeholder="跟进方式" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(activityTypeLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="h-8 px-3 text-xs bg-indigo-600 text-white shadow-sm active:scale-95"
+                    disabled={createActivity.isPending || !notes.trim() || !activityType}
+                    onClick={submitQuickNote}
+                    size="sm"
+                    type="button"
+                  >
+                    <Send aria-hidden="true" className="size-3 mr-1" />
+                    {createActivity.isPending ? '保存中' : '发送跟进'}
+                  </Button>
+                </div>
+                {createActivity.error && <p className="text-xs text-destructive">{createActivity.error.message}</p>}
+              </CardContent>
+            </Card>
+
+            {/* 跟进时间轴 */}
+            <Card className="gap-0 py-0 shadow-sm border-slate-200/80">
+              <CardHeader className="border-b border-border p-3.5">
+                <CardTitle className="text-sm font-semibold text-slate-900">跟进动态历史</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                <ol className="relative space-y-4 border-l border-border pl-4">
+                  {data?.activities.map((activity) => (
+                    <li className="relative" key={activity.id}>
+                      <span className="absolute -left-[21px] top-1 size-2 rounded-full border-2 border-background bg-indigo-600" />
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="font-semibold text-xs text-slate-900">{activityTypeLabels[activity.type]}</span>
+                        {activity.dealStage && <Badge tone={getDealStageTone(activity.dealStage)} className="text-[10px] px-1.5 py-0">{dealStageLabels[activity.dealStage]}</Badge>}
+                        <time className="text-[11px] text-muted-foreground">{format(new Date(activity.createdAt), 'MM-dd HH:mm')}</time>
+                      </div>
+                      {activity.notes && <p className="mt-1 text-xs leading-relaxed text-slate-700">{activity.notes}</p>}
+                      {activity.checkInAddress && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                          <MapPin aria-hidden="true" className="size-3 shrink-0 text-emerald-600" />
+                          {activity.checkInAddress}
+                        </p>
+                      )}
+                      {(isAdmin || currentUserId === activity.createdBy) && (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <Button aria-label="编辑跟进记录" onClick={() => setEditingActivity(activity)} size="icon-xs" type="button" variant="ghost">
+                            <Pencil aria-hidden="true" className="size-3 text-slate-400" />
+                          </Button>
+                          <Button aria-label="删除跟进记录" disabled={deleteActivity.isPending} onClick={() => confirmDeleteActivity(activity)} size="icon-xs" type="button" variant="ghost" className="text-rose-600">
+                            <Trash2 aria-hidden="true" className="size-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                  {data?.activities.length === 0 && <p className="py-6 text-center text-xs text-muted-foreground">暂无跟进记录</p>}
+                </ol>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tab 2: 商机与财务 */}
+        {mobileTab === 'deals_finance' && (
+          <div className="space-y-3">
+            {/* SaaS 服务状态卡片 */}
+            <Card className="gap-0 py-0 border-slate-200/80 shadow-sm">
+              <CardContent className="p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1 text-xs font-semibold text-slate-800">
+                    <CurrentServiceIcon aria-hidden="true" className="size-3.5 text-indigo-600" />
+                    SaaS 到期日
+                  </span>
+                  <Badge className={currentServiceStatus.className}>{currentServiceStatus.label}</Badge>
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <p className="text-base font-bold text-slate-900">
+                    {customer.saasExpireDate ? format(parseISO(customer.saasExpireDate), 'yyyy-MM-dd') : '尚未开通'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{currentServiceStatus.detail}</p>
+                </div>
+                {customer.saasExpireDate && latestWonDeal && (
+                  <Button
+                    className="mt-1 h-7.5 w-full text-xs text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => setRenewTarget({ customerId: customer.id, customerName: customer.name, currentExpireDate: customer.saasExpireDate!, productName: latestWonDeal.productName, channel: latestWonDeal.channel })}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <CalendarSync aria-hidden="true" className="size-3.5" />
+                    立即续费
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 关联商机列表 */}
+            <Card className="gap-0 py-0 border-slate-200/80 shadow-sm">
+              <CardHeader className="border-b border-border p-3.5">
+                <CardTitle className="text-sm font-semibold text-slate-900">关联商机</CardTitle>
+              </CardHeader>
+              <CardContent className="p-3.5 space-y-2">
+                {data?.deals.map((deal) => (
+                  <div key={deal.id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2.5 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-xs text-slate-900 truncate">{deal.productName}</p>
+                      <Badge tone={getDealStageTone(deal.stage)} className="text-[10px]">{dealStageLabels[deal.stage]}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-0.5">
+                      <span className="font-bold text-indigo-700">{formatCents(deal.amountCents)}</span>
+                      <span className="text-[11px] text-muted-foreground">{format(new Date(deal.createdAt), 'yyyy-MM-dd')}</span>
+                    </div>
+                  </div>
+                ))}
+                {data?.deals.length === 0 && <p className="py-4 text-center text-xs text-muted-foreground">暂无关联商机</p>}
+              </CardContent>
+            </Card>
+
+            {/* 财务与合同面板 */}
+            <div id="finance-mobile">
+              <CustomerFinancePanel
+                canManage={canManageFinance}
+                customerId={customer.id}
+                onCreateContract={() => setContractDialogOpen(true)}
+                onCreateInvoice={() => setInvoiceDialogOpen(true)}
+                onCreatePayment={() => setPaymentDialogOpen(true)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: 任务与联系人 */}
+        {mobileTab === 'tasks_contacts' && (
+          <div className="space-y-3">
+            {/* 联系人 */}
+            <Card className="gap-0 overflow-hidden py-0 border-slate-200/80 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-border p-3.5">
+                <CardTitle className="text-sm font-semibold text-slate-900">客户联系人</CardTitle>
+                <Button aria-label="添加联系人" onClick={openCreateContact} size="icon-xs" type="button" variant="outline">
+                  <Plus aria-hidden="true" className="size-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent className="divide-y divide-border p-0">
+                {data?.contacts.map((contact) => (
+                  <article className="p-3.5 space-y-1.5" key={contact.id}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex items-center gap-1.5">
+                        <p className="font-semibold text-xs text-slate-900">{contact.name}</p>
+                        {contact.isPrimary && <Badge tone="success" className="text-[10px] px-1 py-0">主要</Badge>}
+                        {contact.position && <span className="text-xs text-muted-foreground truncate">· {contact.position}</span>}
+                      </div>
+                      <div className="flex shrink-0 gap-0.5">
+                        <Button aria-label={`编辑联系人 ${contact.name}`} onClick={() => openEditContact(contact)} size="icon-xs" type="button" variant="ghost">
+                          <Pencil aria-hidden="true" className="size-3 text-slate-400" />
+                        </Button>
+                        <Button aria-label={`删除联系人 ${contact.name}`} className="text-rose-600" disabled={deleteContact.isPending} onClick={() => confirmDeleteContact(contact)} size="icon-xs" type="button" variant="ghost">
+                          <Trash2 aria-hidden="true" className="size-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    {contact.phone && (
+                      <a className="flex items-center gap-1 text-xs text-indigo-600 font-medium" href={`tel:${contact.phone}`}>
+                        <Phone aria-hidden="true" className="size-3" />
+                        {contact.phone}
+                      </a>
+                    )}
+                  </article>
+                ))}
+                {data?.contacts.length === 0 && (
+                  <div className="p-6 text-center text-xs text-muted-foreground">
+                    <p>暂无联系人</p>
+                    <Button className="mt-2 h-7 text-xs" onClick={openCreateContact} size="sm" type="button" variant="outline">
+                      <Plus aria-hidden="true" className="size-3" />
+                      添加联系人
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 跟进任务 */}
+            <Card className="gap-0 overflow-hidden py-0 border-slate-200/80 shadow-sm" id="tasks-mobile">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-border p-3.5">
+                <CardTitle className="text-sm font-semibold text-slate-900">跟进任务</CardTitle>
+                <Button aria-label="新建跟进任务" onClick={() => setTaskDialogOpen(true)} size="icon-xs" type="button" variant="outline">
+                  <Plus aria-hidden="true" className="size-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent className="divide-y divide-border p-0">
+                {data?.tasks.map((task) => (
+                  <article className="flex items-start gap-2.5 p-3.5" key={task.id}>
+                    <button
+                      aria-label={task.status === 'Completed' ? `任务 ${task.title} 已完成` : `完成任务 ${task.title}`}
+                      className="mt-0.5 shrink-0 text-muted-foreground"
+                      disabled={task.status === 'Completed' || updateTask.isPending}
+                      onClick={() => updateTask.mutate(task.id)}
+                      type="button"
+                    >
+                      {task.status === 'Completed' ? (
+                        <Check aria-hidden="true" className="size-4 text-emerald-600" />
+                      ) : (
+                        <Square aria-hidden="true" className="size-4 text-slate-400" />
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs font-semibold ${task.status === 'Completed' ? 'text-muted-foreground line-through' : 'text-slate-900'}`}>
+                        {task.title}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {task.status === 'Completed' ? '已完成' : `截止 ${format(new Date(task.dueAt), 'MM-dd HH:mm')}`}
+                        {task.priority === 'High' && task.status !== 'Completed' ? ' · 高优先级' : ''}
+                      </p>
+                    </div>
+                    <Button aria-label={`编辑任务 ${task.title}`} onClick={() => setEditingTask(task)} size="icon-xs" type="button" variant="ghost">
+                      <Pencil aria-hidden="true" className="size-3 text-slate-400" />
+                    </Button>
+                  </article>
+                ))}
+                {data?.tasks.length === 0 && (
+                  <div className="p-6 text-center text-xs text-muted-foreground">
+                    <p>暂无跟进任务</p>
+                    <Button className="mt-2 h-7 text-xs" onClick={() => setTaskDialogOpen(true)} size="sm" type="button" variant="outline">
+                      <Plus aria-hidden="true" className="size-3" />
+                      创建任务
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tab 4: 资料与附件 */}
+        {mobileTab === 'attachments' && (
+          <div className="space-y-3">
+            <Card className="gap-0 py-0 border-slate-200/80 shadow-sm">
+              <CardHeader className="border-b border-border p-3.5">
+                <CardTitle className="text-sm font-semibold text-slate-900">客户标签</CardTitle>
+              </CardHeader>
+              <CardContent className="p-3.5">
+                <CustomerTagManager customerId={customer.id} tags={data?.tags ?? []} />
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0 overflow-hidden py-0 border-slate-200/80 shadow-sm">
+              <CardHeader className="border-b border-border p-3.5">
+                <CardTitle className="text-sm font-semibold text-slate-900">附件列表</CardTitle>
+              </CardHeader>
+              <CardContent className="divide-y divide-border p-0">
+                {data?.attachments.map((attachment) => (
+                  <div className="flex items-center justify-between gap-2 p-3" key={attachment.id}>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-slate-900">{attachment.fileName}</p>
+                      <p className="text-[10px] text-muted-foreground">{format(new Date(attachment.createdAt), 'MM-dd HH:mm')}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button aria-label={`预览 ${attachment.fileName}`} onClick={() => previewAttachment(attachment.id)} size="xs" type="button" variant="ghost">
+                        <Eye aria-hidden="true" className="size-3" />
+                      </Button>
+                      <Button aria-label={`删除 ${attachment.fileName}`} disabled={deleteAttachment.isPending} onClick={() => confirmDeleteAttachment(attachment.id)} size="icon-xs" type="button" variant="ghost" className="text-rose-600">
+                        <Trash2 aria-hidden="true" className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {data?.attachments.length === 0 && <p className="p-6 text-center text-xs text-muted-foreground">暂无附件</p>}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-2">
+              <Button className="w-full h-9 text-xs" disabled={isUploading} onClick={() => fileInputRef.current?.click()} type="button" variant="outline">
+                <Upload aria-hidden="true" className="size-3.5" />
+                {isUploading ? '正在上传...' : '上传新附件'}
+              </Button>
+              <input className="sr-only" onChange={uploadAttachment} ref={fileInputRef} type="file" />
+              {uploadMessage && <p className="text-xs text-center text-muted-foreground">{uploadMessage}</p>}
+            </div>
+
+            <div className="pt-4 border-t border-slate-200">
+              <Button className="w-full text-xs text-rose-600 hover:bg-rose-50" disabled={deleteCustomer.isPending} onClick={confirmDeleteCustomer} size="sm" type="button" variant="ghost">
+                <Trash2 aria-hidden="true" className="size-3.5" />
+                作废该客户
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 桌面端 3 列完整布局 */}
+      <div className="hidden md:flex flex-col items-stretch gap-4 md:flex-row md:items-start md:gap-5">
         <aside className="order-1 min-w-0 space-y-4 md:sticky md:top-4 md:w-[28%] md:shrink-0">
           <Card className="gap-0 py-0">
             <CardHeader className="border-b border-border px-5 py-4"><div className="flex items-center justify-between gap-3"><div><CardTitle>{customer.name}</CardTitle><div className="mt-2"><Badge tone={getCustomerStatusTone(customer.status)}>{getCustomerStatusLabel(customer.status)}</Badge></div></div><Button aria-label="编辑客户" onClick={() => setEditCustomerOpen(true)} size="icon-sm" type="button" variant="ghost"><Pencil aria-hidden="true" /></Button></div></CardHeader>
